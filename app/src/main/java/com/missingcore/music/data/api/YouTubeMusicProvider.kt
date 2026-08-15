@@ -477,9 +477,8 @@ class YouTubeMusicProvider(
                 val artistObj = Artist(id = "yt_artist_${artistName.hashCode()}", name = artistName, imageUrl = artUrl)
                 val albumObj = Album(id = "yt_album_${videoId.hashCode()}", name = title, artist = artistObj, artworkUrl = artUrl)
 
-                val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
-                val streamUrl = obj.get("url")?.asString
-                    ?: "$targetRenderUrl/stream?id=$videoId"
+                val targetRenderUrl = (customBaseUrl ?: DEFAULT_RENDER_URL).trimEnd('/')
+                val streamUrl = "$targetRenderUrl/stream?id=$videoId"
 
                 tracks.add(
                     Track(
