@@ -1,4 +1,4 @@
-﻿package com.musync.app.data.database
+package com.musync.app.data.database
 
 import android.content.Context
 import androidx.room.Database
@@ -14,18 +14,23 @@ import com.musync.app.data.database.entity.PlaylistEntity
 import com.musync.app.data.database.entity.PlaylistItemEntity
 import com.musync.app.data.database.entity.RecentlyPlayedEntity
 
+import com.musync.app.data.database.dao.UserDao
+import com.musync.app.data.database.entity.UserEntity
+
 @Database(
     entities = [
+        UserEntity::class,
         FavoriteEntity::class,
         PlaylistEntity::class,
         PlaylistItemEntity::class,
         RecentlyPlayedEntity::class,
         CachedTrackEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class MusyncDatabase : RoomDatabase() {
+    abstract fun userDao(): UserDao
     abstract fun favoritesDao(): FavoritesDao
     abstract fun playlistDao(): PlaylistDao
     abstract fun recentlyPlayedDao(): RecentlyPlayedDao

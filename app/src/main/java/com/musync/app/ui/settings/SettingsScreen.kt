@@ -550,17 +550,14 @@ fun SettingsScreen(
             confirmButton = {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(Color(0xFF6366F1), Color(0xFF8B5CF6))
-                            )
-                        )
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0x351E222D))
+                        .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(12.dp))
                         .clickable { showTermsDialog = false }
                         .padding(horizontal = 18.dp, vertical = 9.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("I Understand", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("I Understand", color = TextWhite, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                 }
             },
             containerColor = SurfaceBlack,
@@ -584,17 +581,14 @@ fun SettingsScreen(
             confirmButton = {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(Color(0xFF6366F1), Color(0xFF8B5CF6))
-                            )
-                        )
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0x351E222D))
+                        .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(12.dp))
                         .clickable { showPrivacyDialog = false }
                         .padding(horizontal = 18.dp, vertical = 9.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Got It", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("Got It", color = TextWhite, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                 }
             },
             containerColor = SurfaceBlack,

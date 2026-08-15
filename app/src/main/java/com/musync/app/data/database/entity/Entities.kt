@@ -1,4 +1,4 @@
-﻿package com.musync.app.data.database.entity
+package com.musync.app.data.database.entity
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -6,6 +6,18 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.musync.app.domain.model.Artist
 import com.musync.app.domain.model.Track
+
+@Entity(tableName = "user_profile")
+data class UserEntity(
+    @PrimaryKey val uid: String,
+    val displayName: String?,
+    val email: String?,
+    val photoUrl: String?,
+    val provider: String,
+    val isAnonymous: Boolean = false,
+    val lastLoginAt: Long = System.currentTimeMillis(),
+    val createdAt: Long = System.currentTimeMillis()
+)
 
 @Entity(tableName = "favorites")
 data class FavoriteEntity(

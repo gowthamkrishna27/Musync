@@ -50,6 +50,9 @@ class CloudSyncManager(
         syncJob = scope.launch {
             authManager.setSyncStatus(CloudSyncStatus.SYNCING)
             try {
+                // 0. Sync and store User Profile in local Room DB & Firestore
+                syncUserProfile(userId)
+
                 // 1. Sync Favorites (Two-Way Merge)
                 syncFavorites(userId)
 
@@ -66,6 +69,34 @@ class CloudSyncManager(
                 authManager.setSyncStatus(CloudSyncStatus.ERROR)
             }
         }
+    }
+
+    private suspend fun syncUserProfile(userId: String) {
+        val user = authManager.currentUser.value ?: return
+        val userEntity = com.musync.app.data.database.entity.UserEntity(
+            uid = user.uid,
+            displayName = user.displayName,
+            email = user.email,
+            photoUrl = user.photoUrl,
+            provider = user.provider.name,
+            isAnonymous = user.isAnonymous,
+            lastLoginAt = System.currentTimeMillis()
+        )
+        // Store in local SQLite Room DB
+        database.userDao().insertUser(userEntity)
+
+        // Store in Firestore cloud profile document
+        val userDoc = firestore.collection("users").document(userId)
+        val data = mapOf(
+            "uid" to user.uid,
+            "displayName" to (user.displayName ?: "Musync User"),
+            "email" to (user.email ?: ""),
+            "photoUrl" to (user.photoUrl ?: ""),
+            "provider" to user.provider.name,
+            "isAnonymous" to user.isAnonymous,
+            "lastLoginAt" to System.currentTimeMillis()
+        )
+        userDoc.set(data, SetOptions.merge()).await()
     }
 
     private suspend fun syncFavorites(userId: String) {

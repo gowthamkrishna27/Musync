@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.player
+package com.musync.app.ui.player
 
 import android.content.Intent
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -37,7 +37,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import com.musync.app.ui.components.AddToPlaylistDialog
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Favorite
@@ -139,6 +141,7 @@ fun NowPlayingSheet(
     var bassLevel by remember { mutableFloatStateOf(0.7f) }
     var midLevel by remember { mutableFloatStateOf(0.5f) }
     var trebleLevel by remember { mutableFloatStateOf(0.6f) }
+    var showAddToPlaylistDialog by remember { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -537,7 +540,7 @@ fun NowPlayingSheet(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // 6. Bottom Tool Row (Queue, Equalizer/Tune, Devices)
+            // 6. Bottom Tool Row (Queue, Add to Playlist, Equalizer/Tune, Devices)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -547,6 +550,15 @@ fun NowPlayingSheet(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.QueueMusic,
                         contentDescription = "Queue",
+                        tint = IconGrey,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                IconButton(onClick = { showAddToPlaylistDialog = true }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
+                        contentDescription = "Add to Playlist",
                         tint = IconGrey,
                         modifier = Modifier.size(22.dp)
                     )
@@ -571,6 +583,16 @@ fun NowPlayingSheet(
                 }
             }
         }
+    }
+
+    // Add to Playlist Dialog
+    if (showAddToPlaylistDialog) {
+        val app = context.applicationContext as com.musync.app.MusyncApplication
+        AddToPlaylistDialog(
+            track = track,
+            playlistRepository = app.container.playlistRepository,
+            onDismiss = { showAddToPlaylistDialog = false }
+        )
     }
 
     // 1. Equalizer Modal Bottom Sheet

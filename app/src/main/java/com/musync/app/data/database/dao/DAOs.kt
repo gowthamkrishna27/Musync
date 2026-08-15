@@ -1,4 +1,4 @@
-﻿package com.musync.app.data.database.dao
+package com.musync.app.data.database.dao
 
 import androidx.room.Dao
 import androidx.room.Insert
@@ -87,5 +87,20 @@ interface TrackCacheDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCachedTracks(tracks: List<CachedTrackEntity>)
+}
+
+@Dao
+interface UserDao {
+    @Query("SELECT * FROM user_profile LIMIT 1")
+    fun getCurrentUserFlow(): Flow<com.musync.app.data.database.entity.UserEntity?>
+
+    @Query("SELECT * FROM user_profile LIMIT 1")
+    suspend fun getCurrentUser(): com.musync.app.data.database.entity.UserEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertUser(user: com.musync.app.data.database.entity.UserEntity)
+
+    @Query("DELETE FROM user_profile")
+    suspend fun clearUser()
 }
 

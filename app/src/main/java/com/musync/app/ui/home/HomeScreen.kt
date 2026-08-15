@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.home
+package com.musync.app.ui.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -50,6 +50,7 @@ import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.musync.app.domain.model.Track
+import com.musync.app.ui.components.AddToPlaylistDialog
 import com.musync.app.ui.components.ErrorView
 import com.musync.app.ui.components.LoadingView
 import com.musync.app.ui.components.SectionHeader
@@ -67,9 +68,15 @@ fun HomeScreen(
     onNavigateToSearch: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val app = context.applicationContext as com.musync.app.MusyncApplication
+    val playlistRepository = app.container.playlistRepository
+
     val uiState by viewModel.uiState.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
     val playbackState by viewModel.playbackManager.playbackState.collectAsState()
+
+    var trackForPlaylist by remember { mutableStateOf<Track?>(null) }
 
     val favoriteIds = favorites.map { it.id }.toSet()
     val languagePills = listOf("All", "Telugu", "Tamil", "Hindi", "English", "Malayalam", "Kannada", "Punjabi")
@@ -299,7 +306,8 @@ fun HomeScreen(
                                     onClick = { viewModel.playTrack(track, uiState.searchResults) },
                                     onFavoriteToggle = { viewModel.toggleFavorite(track) },
                                     onPlayNext = { viewModel.playNext(track) },
-                                    onAddToQueue = { viewModel.addToQueue(track) }
+                                    onAddToQueue = { viewModel.addToQueue(track) },
+                                    onAddToPlaylist = { trackForPlaylist = track }
                                 )
                             }
                         }
@@ -321,7 +329,8 @@ fun HomeScreen(
                                     onClick = { viewModel.playTrack(track, uiState.localTracks) },
                                     onFavoriteToggle = { viewModel.toggleFavorite(track) },
                                     onPlayNext = { viewModel.playNext(track) },
-                                    onAddToQueue = { viewModel.addToQueue(track) }
+                                    onAddToQueue = { viewModel.addToQueue(track) },
+                                    onAddToPlaylist = { trackForPlaylist = track }
                                 )
                             }
                         }
@@ -458,13 +467,23 @@ fun HomeScreen(
                                     onClick = { viewModel.playTrack(track, uiState.trendingTracks) },
                                     onFavoriteToggle = { viewModel.toggleFavorite(track) },
                                     onPlayNext = { viewModel.playNext(track) },
-                                    onAddToQueue = { viewModel.addToQueue(track) }
+                                    onAddToQueue = { viewModel.addToQueue(track) },
+                                    onAddToPlaylist = { trackForPlaylist = track }
                                 )
                             }
                         }
                     }
                 }
             }
+        }
+
+        // Add to Playlist Dialog
+        trackForPlaylist?.let { tr ->
+            AddToPlaylistDialog(
+                track = tr,
+                playlistRepository = playlistRepository,
+                onDismiss = { trackForPlaylist = null }
+            )
         }
     }
 }

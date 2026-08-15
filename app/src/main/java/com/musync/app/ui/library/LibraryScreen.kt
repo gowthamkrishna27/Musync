@@ -84,12 +84,14 @@ fun LibraryScreen(
     val app = context.applicationContext as com.musync.app.MusyncApplication
     val authManager = app.container.authManager
     val cloudSyncManager = app.container.cloudSyncManager
+    val playlistRepository = app.container.playlistRepository
     val currentUser by authManager.currentUser.collectAsState()
     val syncStatus by authManager.syncStatus.collectAsState()
 
     var selectedTab by remember { mutableStateOf(LibraryNavTab.FAVORITES) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var showAuthSheet by remember { mutableStateOf(false) }
+    var trackForPlaylist by remember { mutableStateOf<com.musync.app.domain.model.Track?>(null) }
     var newPlaylistName by remember { mutableStateOf("") }
 
     val favorites by viewModel.favorites.collectAsState()
@@ -247,7 +249,8 @@ fun LibraryScreen(
                                 onClick = { viewModel.playTrack(track, favorites) },
                                 onFavoriteToggle = { viewModel.toggleFavorite(track) },
                                 onPlayNext = { viewModel.playbackManager.playNext(track) },
-                                onAddToQueue = { viewModel.playbackManager.addToQueue(track) }
+                                onAddToQueue = { viewModel.playbackManager.addToQueue(track) },
+                                onAddToPlaylist = { trackForPlaylist = track }
                             )
                         }
                     }
@@ -274,7 +277,8 @@ fun LibraryScreen(
                                 onClick = { viewModel.playTrack(track, recents) },
                                 onFavoriteToggle = { viewModel.toggleFavorite(track) },
                                 onPlayNext = { viewModel.playbackManager.playNext(track) },
-                                onAddToQueue = { viewModel.playbackManager.addToQueue(track) }
+                                onAddToQueue = { viewModel.playbackManager.addToQueue(track) },
+                                onAddToPlaylist = { trackForPlaylist = track }
                             )
                         }
                     }
@@ -386,7 +390,8 @@ fun LibraryScreen(
                             onClick = { viewModel.playTrack(track, recents) },
                             onFavoriteToggle = { viewModel.toggleFavorite(track) },
                             onPlayNext = { viewModel.playbackManager.playNext(track) },
-                            onAddToQueue = { viewModel.playbackManager.addToQueue(track) }
+                            onAddToQueue = { viewModel.playbackManager.addToQueue(track) },
+                            onAddToPlaylist = { trackForPlaylist = track }
                         )
                     }
                 }
@@ -448,12 +453,12 @@ fun LibraryScreen(
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Grant storage access to scan and play music files saved on your phone.",
+                                text = "Grant storage permission to scan and play music from your device storage.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextGreyMuted,
                                 textAlign = TextAlign.Center
                             )
-                            Spacer(modifier = Modifier.height(18.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
                             Button(
                                 onClick = {
                                     val perm = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -476,14 +481,16 @@ fun LibraryScreen(
                     }
                 } else if (isScanning) {
                     Box(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        androidx.compose.material3.CircularProgressIndicator(
-                            color = TextWhite,
-                            strokeWidth = 2.5.dp,
-                            modifier = Modifier.size(36.dp)
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(color = TextWhite, modifier = Modifier.size(32.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text("Scanning device audio...", color = TextGreySecondary, fontSize = 13.sp)
+                        }
                     }
                 } else if (localTracks.isEmpty()) {
                     Box(
@@ -546,7 +553,8 @@ fun LibraryScreen(
                                 onClick = { viewModel.playTrack(track, localTracks) },
                                 onFavoriteToggle = { viewModel.toggleFavorite(track) },
                                 onPlayNext = { viewModel.playbackManager.playNext(track) },
-                                onAddToQueue = { viewModel.playbackManager.addToQueue(track) }
+                                onAddToQueue = { viewModel.playbackManager.addToQueue(track) },
+                                onAddToPlaylist = { trackForPlaylist = track }
                             )
                         }
                     }
@@ -582,11 +590,7 @@ fun LibraryScreen(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(Color(0xFF6366F1), Color(0xFF8B5CF6))
-                            )
-                        )
+                        .background(Color.White)
                         .clickable {
                             if (newPlaylistName.isNotBlank()) {
                                 viewModel.createPlaylist(newPlaylistName.trim())
@@ -597,7 +601,7 @@ fun LibraryScreen(
                         .padding(horizontal = 18.dp, vertical = 9.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Create", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text("Create", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             },
             dismissButton = {
@@ -623,5 +627,13 @@ fun LibraryScreen(
             onDismiss = { showAuthSheet = false }
         )
     }
-}
 
+    // Add to Playlist Dialog
+    trackForPlaylist?.let { tr ->
+        com.musync.app.ui.components.AddToPlaylistDialog(
+            track = tr,
+            playlistRepository = playlistRepository,
+            onDismiss = { trackForPlaylist = null }
+        )
+    }
+}

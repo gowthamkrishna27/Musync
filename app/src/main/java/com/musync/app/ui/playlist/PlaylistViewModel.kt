@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.playlist
+package com.musync.app.ui.playlist
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -43,6 +43,13 @@ class PlaylistViewModel(
     fun removeTrack(trackId: String) {
         viewModelScope.launch {
             playlistRepository.removeTrackFromPlaylist(playlistId, trackId)
+        }
+    }
+
+    fun deletePlaylist(onDeleted: () -> Unit) {
+        viewModelScope.launch {
+            playlistRepository.deletePlaylist(playlistId)
+            onDeleted()
         }
     }
 

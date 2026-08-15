@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.search
+package com.musync.app.ui.search
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -57,6 +57,11 @@ import com.musync.app.ui.theme.TextGreyMuted
 import com.musync.app.ui.theme.TextGreySecondary
 import com.musync.app.ui.theme.TextWhite
 import androidx.compose.foundation.layout.statusBarsPadding
+import com.musync.app.domain.model.Track
+import com.musync.app.ui.components.AddToPlaylistDialog
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -64,9 +69,15 @@ fun SearchScreen(
     viewModel: SearchViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val app = context.applicationContext as com.musync.app.MusyncApplication
+    val playlistRepository = app.container.playlistRepository
+
     val uiState by viewModel.uiState.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
     val playbackState by viewModel.playbackManager.playbackState.collectAsState()
+
+    var trackForPlaylist by remember { mutableStateOf<Track?>(null) }
 
     val favoriteIds = favorites.map { it.id }.toSet()
 
@@ -322,12 +333,22 @@ fun SearchScreen(
                                 onClick = { viewModel.playTrack(track) },
                                 onFavoriteToggle = { viewModel.toggleFavorite(track) },
                                 onPlayNext = { viewModel.playbackManager.playNext(track) },
-                                onAddToQueue = { viewModel.playbackManager.addToQueue(track) }
+                                onAddToQueue = { viewModel.playbackManager.addToQueue(track) },
+                                onAddToPlaylist = { trackForPlaylist = track }
                             )
                         }
                     }
                 }
             }
+        }
+
+        // Add to Playlist Dialog
+        trackForPlaylist?.let { tr ->
+            AddToPlaylistDialog(
+                track = tr,
+                playlistRepository = playlistRepository,
+                onDismiss = { trackForPlaylist = null }
+            )
         }
     }
 }

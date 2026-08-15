@@ -161,9 +161,9 @@ fun AuthBottomSheet(
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.AccountCircle,
+                            painter = androidx.compose.ui.res.painterResource(id = com.musync.app.R.drawable.ic_google_logo),
                             contentDescription = "Google",
-                            tint = Color(0xFF4285F4),
+                            tint = Color.Unspecified,
                             modifier = Modifier.size(22.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
@@ -204,10 +204,10 @@ fun AuthBottomSheet(
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Code,
+                            painter = androidx.compose.ui.res.painterResource(id = com.musync.app.R.drawable.ic_github_logo),
                             contentDescription = "GitHub",
                             tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(

@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.playlist
+package com.musync.app.ui.playlist
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -49,6 +49,8 @@ import com.musync.app.ui.theme.TextGreyMuted
 import com.musync.app.ui.theme.TextGreySecondary
 import com.musync.app.ui.theme.TextWhite
 
+import androidx.compose.foundation.layout.statusBarsPadding
+
 @Composable
 fun PlaylistDetailScreen(
     viewModel: PlaylistViewModel,
@@ -59,37 +61,52 @@ fun PlaylistDetailScreen(
     val favorites by viewModel.favorites.collectAsState()
     val playbackState by viewModel.playbackManager.playbackState.collectAsState()
 
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
     val favoriteIds = favorites.map { it.id }.toSet()
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(BackgroundBlack)
-            .padding(top = 14.dp)
+            .statusBarsPadding()
+            .padding(top = 8.dp)
     ) {
         // Top Back Row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onNavigateBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = IconWhite,
-                    modifier = Modifier.size(22.dp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onNavigateBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = IconWhite,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Text(
+                    text = playlist?.name ?: "Playlist",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    ),
+                    color = TextWhite
                 )
             }
-            Text(
-                text = playlist?.name ?: "Playlist",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                ),
-                color = TextWhite
-            )
+
+            IconButton(onClick = { showDeleteDialog = true }) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete Playlist",
+                    tint = IconGrey,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -105,14 +122,14 @@ fun PlaylistDetailScreen(
                 modifier = Modifier
                     .size(80.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(CardElevated)
-                    .border(1.dp, BorderStroke, RoundedCornerShape(12.dp)),
+                    .background(Color(0x351E222D))
+                    .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.QueueMusic,
                     contentDescription = null,
-                    tint = IconGrey,
+                    tint = IconWhite,
                     modifier = Modifier.size(36.dp)
                 )
             }
@@ -139,11 +156,7 @@ fun PlaylistDetailScreen(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(Color(0xFF6366F1), Color(0xFF8B5CF6))
-                                )
-                            )
+                            .background(Color.White)
                             .clickable { viewModel.playAll() }
                             .padding(horizontal = 18.dp, vertical = 9.dp),
                         contentAlignment = Alignment.Center
@@ -152,11 +165,11 @@ fun PlaylistDetailScreen(
                             Icon(
                                 imageVector = Icons.Default.PlayArrow,
                                 contentDescription = null,
-                                tint = Color.White,
+                                tint = Color.Black,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Play All", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text("Play All", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                     }
                 }
@@ -200,6 +213,51 @@ fun PlaylistDetailScreen(
                 }
             }
         }
+    }
+
+    if (showDeleteDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete Playlist", color = TextWhite, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    text = "Are you sure you want to delete \"${playlist?.name ?: "this playlist"}\"? This action cannot be undone.",
+                    color = TextGreySecondary,
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFE53935))
+                        .clickable {
+                            showDeleteDialog = false
+                            viewModel.deletePlaylist {
+                                onNavigateBack()
+                            }
+                        }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Delete", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            },
+            dismissButton = {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0x22FFFFFF))
+                        .clickable { showDeleteDialog = false }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Cancel", color = Color(0xFFCCCCCC), fontSize = 12.sp)
+                }
+            },
+            containerColor = com.musync.app.ui.theme.SurfaceBlack,
+            shape = RoundedCornerShape(14.dp)
+        )
     }
 }
 
