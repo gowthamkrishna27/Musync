@@ -79,6 +79,10 @@ class MusyncContainer(private val context: Context) {
         com.missingcore.music.playback.AudioEffectManager(context, preferencesManager)
     }
 
+    val appUpdateManager: com.missingcore.music.update.AppUpdateManager by lazy {
+        com.missingcore.music.update.AppUpdateManager(context, preferencesManager)
+    }
+
     val playbackManager: PlaybackManager by lazy {
         PlaybackManager(context)
     }

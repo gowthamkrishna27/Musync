@@ -195,6 +195,46 @@ app.get("/debug/env", async (_req: Request, res: Response) => {
   res.json(diagnostics);
 });
 
+// In-App OTA Update endpoints
+app.get("/update/check", async (req: Request, res: Response) => {
+  const reqHost = `${req.protocol}://${req.get("host")}`;
+  try {
+    const ghRes = await axios.get("https://api.github.com/repos/gowthamkrishna27/Musync/releases/latest", {
+      headers: { "User-Agent": "Musync-Server/1.0" },
+      timeout: 5000
+    });
+    const tagName = ghRes.data.tag_name || "v1.0.0";
+    const version = tagName.replace(/^v/, "");
+    const changelog = ghRes.data.body || "New performance updates and fixes";
+    let downloadUrl = "https://github.com/gowthamkrishna27/Musync/releases/latest/download/Musync.apk";
+    
+    if (ghRes.data.assets && ghRes.data.assets.length > 0) {
+      const apkAsset = ghRes.data.assets.find((a: any) => a.name.endsWith(".apk"));
+      if (apkAsset) downloadUrl = apkAsset.browser_download_url;
+    }
+
+    res.json({
+      version,
+      tag_name: tagName,
+      changelog,
+      download_url: downloadUrl,
+      direct_url: `${reqHost}/update/latest.apk`
+    });
+  } catch (_e: any) {
+    res.json({
+      version: "1.0.0",
+      tag_name: "v1.0.0",
+      changelog: "Musync release update",
+      download_url: "https://github.com/gowthamkrishna27/Musync/releases/latest/download/Musync.apk",
+      direct_url: `${reqHost}/update/latest.apk`
+    });
+  }
+});
+
+app.get("/update/latest.apk", (_req: Request, res: Response) => {
+  res.redirect("https://github.com/gowthamkrishna27/Musync/releases/latest/download/Musync.apk");
+});
+
 // 4. Search endpoint
 app.get(["/search", "/result/"], async (req: Request, res: Response) => {
   const query = (req.query.query || req.query.q || "Trending") as string;

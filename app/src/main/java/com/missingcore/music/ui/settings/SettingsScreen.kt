@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +32,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -65,6 +67,9 @@ fun SettingsScreen(
     val app = context.applicationContext as com.missingcore.music.MusyncApplication
     val audioEffectManager = app.container.audioEffectManager
     val eqState by audioEffectManager.state.collectAsState()
+    val appUpdateManager = app.container.appUpdateManager
+    val updateState by appUpdateManager.updateState.collectAsState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     val uiState by viewModel.uiState.collectAsState()
     var showCustomApiDialog by remember { mutableStateOf(false) }
@@ -72,6 +77,7 @@ fun SettingsScreen(
     var showCrossfadeDialog by remember { mutableStateOf(false) }
     var selectedCrossfade by remember { mutableStateOf("5 sec") }
     var showEqDialog by remember { mutableStateOf(false) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
     var showTermsDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var showHapticsDialog by remember { mutableStateOf(false) }
@@ -175,9 +181,15 @@ fun SettingsScreen(
                 SettingsSectionTitle("About")
                 SettingsCardContainer {
                     SettingsRow(
-                        title = "Version",
-                        value = "1.0.0",
-                        onClick = { }
+                        title = "Check for Updates",
+                        value = "v${com.missingcore.music.BuildConfig.VERSION_NAME}",
+                        valueColor = StatusGreen,
+                        onClick = {
+                            showUpdateDialog = true
+                            scope.launch {
+                                appUpdateManager.checkForUpdates(silent = false)
+                            }
+                        }
                     )
                     SettingsDivider()
                     SettingsRow(
@@ -525,6 +537,205 @@ fun SettingsScreen(
             confirmButton = {
                 TextButton(onClick = { showHapticsDialog = false }) {
                     Text("Done", color = TextGreySecondary)
+                }
+            },
+            containerColor = SurfaceBlack,
+            shape = RoundedCornerShape(14.dp)
+        )
+    }
+
+    // In-App OTA Update Dialog
+    if (showUpdateDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (updateState !is com.missingcore.music.update.UpdateDownloadState.Downloading) {
+                    showUpdateDialog = false
+                    appUpdateManager.resetState()
+                }
+            },
+            title = {
+                Text(
+                    text = when (updateState) {
+                        is com.missingcore.music.update.UpdateDownloadState.Checking -> "Checking for Updates"
+                        is com.missingcore.music.update.UpdateDownloadState.Available -> "Update Available! 🚀"
+                        is com.missingcore.music.update.UpdateDownloadState.Downloading -> "Downloading Update..."
+                        is com.missingcore.music.update.UpdateDownloadState.ReadyToInstall -> "Ready to Install"
+                        is com.missingcore.music.update.UpdateDownloadState.UpToDate -> "You're Up to Date!"
+                        is com.missingcore.music.update.UpdateDownloadState.Error -> "Update Check Failed"
+                        else -> "App Updates"
+                    },
+                    color = TextWhite,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    when (val state = updateState) {
+                        is com.missingcore.music.update.UpdateDownloadState.Checking -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 12.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    color = StatusGreen,
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Text("Connecting to update server...", color = TextGreySecondary, fontSize = 13.sp)
+                            }
+                        }
+                        is com.missingcore.music.update.UpdateDownloadState.UpToDate -> {
+                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                Text(
+                                    text = "Musync v${com.missingcore.music.BuildConfig.VERSION_NAME} is currently the latest version.",
+                                    color = TextWhite,
+                                    fontSize = 13.sp
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "You have all the newest features, sound equalizer improvements, and performance patches.",
+                                    color = TextGreyMuted,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                        is com.missingcore.music.update.UpdateDownloadState.Available -> {
+                            val info = state.info
+                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Installed: v${info.currentVersion}", color = TextGreyMuted, fontSize = 12.sp)
+                                    Text("Latest: v${info.latestVersion}", color = StatusGreen, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text("What's New:", color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(CardElevated)
+                                        .padding(10.dp)
+                                ) {
+                                    Text(
+                                        text = info.changelog.ifBlank { "Performance improvements and bug fixes." },
+                                        color = TextGreySecondary,
+                                        fontSize = 11.sp,
+                                        lineHeight = 15.sp,
+                                        maxLines = 6,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                        is com.missingcore.music.update.UpdateDownloadState.Downloading -> {
+                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Downloading APK...", color = TextWhite, fontSize = 12.sp)
+                                    Text("${state.progressPercent}%", color = StatusGreen, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                androidx.compose.material3.LinearProgressIndicator(
+                                    progress = { state.progressPercent / 100f },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = StatusGreen,
+                                    trackColor = CardElevated
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                val mbDownloaded = "%.1f".format(state.bytesDownloaded / (1024.0 * 1024.0))
+                                val mbTotal = if (state.totalBytes > 0) "%.1f".format(state.totalBytes / (1024.0 * 1024.0)) else "?"
+                                Text("$mbDownloaded MB / $mbTotal MB", color = TextGreyMuted, fontSize = 10.sp)
+                            }
+                        }
+                        is com.missingcore.music.update.UpdateDownloadState.ReadyToInstall -> {
+                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                Text(
+                                    text = "✓ Update downloaded successfully!",
+                                    color = StatusGreen,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Tap 'Install Now' to open Android package installer and complete the update.",
+                                    color = TextGreySecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                        is com.missingcore.music.update.UpdateDownloadState.Error -> {
+                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                Text(
+                                    text = state.message,
+                                    color = Color(0xFFFF5252),
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                        else -> {}
+                    }
+                }
+            },
+            confirmButton = {
+                when (val state = updateState) {
+                    is com.missingcore.music.update.UpdateDownloadState.Available -> {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    appUpdateManager.downloadAndInstallUpdate(state.info.downloadUrl, state.info.fileName)
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = StatusGreen),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Update Now", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
+                    is com.missingcore.music.update.UpdateDownloadState.ReadyToInstall -> {
+                        Button(
+                            onClick = {
+                                appUpdateManager.launchPackageInstaller(state.apkFile)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = StatusGreen),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Install Now", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
+                    is com.missingcore.music.update.UpdateDownloadState.Error -> {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    appUpdateManager.checkForUpdates(silent = false)
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x33FFFFFF)),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Retry", color = TextWhite, fontSize = 12.sp)
+                        }
+                    }
+                    else -> {}
+                }
+            },
+            dismissButton = {
+                if (updateState !is com.missingcore.music.update.UpdateDownloadState.Downloading) {
+                    TextButton(onClick = {
+                        showUpdateDialog = false
+                        appUpdateManager.resetState()
+                    }) {
+                        Text("Close", color = TextGreySecondary, fontSize = 12.sp)
+                    }
                 }
             },
             containerColor = SurfaceBlack,
