@@ -22,5 +22,6 @@ env/
 # Keystores & sensitive keys
 *.jks
 *.keystore
+*.apk
 oauth.json
 browser.json

@@ -173,23 +173,14 @@ class YouTubeMusicProvider(
     }
 
     override suspend fun getStreamUrl(track: Track): String? = withContext(Dispatchers.IO) {
-        if (!track.streamUrl.isNullOrBlank() && !track.streamUrl.contains("/streams/")) {
-            return@withContext track.streamUrl
+        val rawUrl = track.streamUrl
+        if (!rawUrl.isNullOrBlank() && (rawUrl.startsWith("http://") || rawUrl.startsWith("https://"))) {
+            return@withContext rawUrl
         }
 
         val videoId = track.id.removePrefix("yt_")
-        for (instance in PIPED_INSTANCES) {
-            try {
-                val url = "$instance/streams/$videoId"
-                val resolvedTrack = fetchPipedStreamDetails(url, videoId)
-                if (resolvedTrack != null && !resolvedTrack.streamUrl.isNullOrBlank()) {
-                    return@withContext resolvedTrack.streamUrl
-                }
-            } catch (_: Exception) {}
-        }
-
-        // Direct Invidious audio stream fallback
-        "https://inv.nadeko.net/latest_version?id=$videoId&itag=140"
+        val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
+        "$targetRenderUrl/stream?id=$videoId"
     }
 
     private fun fetchPipedSearch(urlStr: String): List<Track> {
