@@ -19,6 +19,9 @@ const ytmusic = new YTMusic();
 
 let isInitialized = false;
 
+// Cross-platform Python binary discovery
+const PYTHON_BIN = process.platform === "win32" ? "python" : "python3";
+
 interface StreamCacheEntry {
   url: string;
   headers: Record<string, string>;
@@ -50,7 +53,10 @@ async function resolveAudioStream(videoId: string): Promise<StreamCacheEntry | n
   // 1. Resolve via python stream_resolver.py
   try {
     const scriptPath = path.join(__dirname, "stream_resolver.py");
-    const { stdout } = await execAsync(`python "${scriptPath}" ${videoId}`, { timeout: 12000 });
+    const { stdout, stderr } = await execAsync(`"${PYTHON_BIN}" "${scriptPath}" ${videoId}`, { timeout: 15000 });
+    if (stderr && stderr.trim()) {
+      console.log(`[StreamResolver stderr for ${videoId}]:`, stderr.trim());
+    }
     const parsed = JSON.parse(stdout.trim());
     if (parsed.url) {
       const entry: StreamCacheEntry = {
@@ -60,36 +66,11 @@ async function resolveAudioStream(videoId: string): Promise<StreamCacheEntry | n
       };
       streamCache.set(videoId, entry);
       return entry;
+    } else if (parsed.error) {
+      console.warn(`[StreamResolver error for ${videoId}]:`, parsed.error);
     }
   } catch (e: any) {
-    console.warn(`stream_resolver.py failed for ${videoId}:`, e.message);
-  }
-
-  // 2. Fallback to Piped API
-  const pipedInstances = [
-    "https://pipedapi.kavin.rocks",
-    "https://api.piped.privacydev.net",
-    "https://pipedapi.leptons.xyz"
-  ];
-
-  for (const instance of pipedInstances) {
-    try {
-      const res = await axios.get(`${instance}/streams/${videoId}`, { timeout: 4000 });
-      const audioStreams = res.data?.audioStreams;
-      if (Array.isArray(audioStreams) && audioStreams.length > 0) {
-        audioStreams.sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0));
-        const stream = audioStreams[0].url;
-        if (stream) {
-          const entry: StreamCacheEntry = {
-            url: stream,
-            headers: { "User-Agent": "Mozilla/5.0" },
-            expiresAt: Date.now() + 2 * 3600 * 1000
-          };
-          streamCache.set(videoId, entry);
-          return entry;
-        }
-      }
-    } catch (_err) {}
+    console.warn(`[stream_resolver.py execution failed for ${videoId}]:`, e.message);
   }
 
   return null;
@@ -102,7 +83,7 @@ function formatTrack(item: any, reqHost: string) {
   const artistName = item.artist?.name || (Array.isArray(item.artists) ? item.artists.map((a: any) => a.name).join(", ") : "YouTube Artist");
   const albumName = item.album?.name || (typeof item.album === "string" ? item.album : title);
   
-  let thumbnail = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  let thumbnail = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
   if (Array.isArray(item.thumbnails) && item.thumbnails.length > 0) {
     thumbnail = item.thumbnails[item.thumbnails.length - 1].url;
   }
@@ -134,7 +115,7 @@ app.get("/", (_req: Request, res: Response) => {
   res.json({
     status: "online",
     service: "Musync TypeScript Audio Gateway & Stream Proxy",
-    version: "3.4.0",
+    version: "3.5.0",
     initialized: isInitialized,
     endpoints: {
       search: "/search?query=<song_or_artist>",
@@ -144,7 +125,8 @@ app.get("/", (_req: Request, res: Response) => {
       lyrics: "/lyrics?id=<video_id>",
       album: "/album?id=<album_id>",
       artist: "/artist?id=<artist_id>",
-      trending: "/trending"
+      trending: "/trending",
+      debug: "/debug/env"
     }
   });
 });
@@ -159,7 +141,56 @@ app.get("/health", (_req: Request, res: Response) => {
   });
 });
 
-// 3. Search endpoint
+// 3. Diagnostic endpoint to compare environments
+app.get("/debug/env", async (_req: Request, res: Response) => {
+  const diagnostics: Record<string, any> = {
+    platform: process.platform,
+    arch: process.arch,
+    nodeVersion: process.version,
+    port: PORT,
+    pythonBin: PYTHON_BIN,
+  };
+
+  try {
+    const { stdout: pyVer } = await execAsync(`"${PYTHON_BIN}" --version`);
+    diagnostics.pythonVersion = pyVer.trim();
+  } catch (e: any) {
+    diagnostics.pythonError = e.message;
+  }
+
+  try {
+    const { stdout: ytdlpVer } = await execAsync(`"${PYTHON_BIN}" -m yt_dlp --version`);
+    diagnostics.ytdlpVersion = ytdlpVer.trim();
+  } catch (e: any) {
+    diagnostics.ytdlpError = e.message;
+  }
+
+  try {
+    const { stdout: ffmpegVer } = await execAsync(`ffmpeg -version`);
+    diagnostics.ffmpegVersion = ffmpegVer.split("\n")[0];
+  } catch (e: any) {
+    diagnostics.ffmpegError = e.message;
+  }
+
+  const testId = "3_g2un5M350";
+  const scriptPath = path.join(__dirname, "stream_resolver.py");
+  try {
+    const { stdout: resolverOut, stderr: resolverErr } = await execAsync(`"${PYTHON_BIN}" "${scriptPath}" ${testId}`, { timeout: 15000 });
+    const parsed = JSON.parse(resolverOut.trim());
+    diagnostics.streamResolverTest = {
+      success: Boolean(parsed.url),
+      hasHeaders: Boolean(parsed.headers),
+      error: parsed.error || null,
+      stderr: resolverErr ? resolverErr.trim() : null
+    };
+  } catch (e: any) {
+    diagnostics.streamResolverError = e.message;
+  }
+
+  res.json(diagnostics);
+});
+
+// 4. Search endpoint
 app.get(["/search", "/result/"], async (req: Request, res: Response) => {
   const query = (req.query.query || req.query.q || "Trending") as string;
   const reqHost = `${req.protocol}://${req.get("host")}`;
@@ -174,7 +205,7 @@ app.get(["/search", "/result/"], async (req: Request, res: Response) => {
   }
 });
 
-// 4. Search autocomplete suggestions
+// 5. Search autocomplete suggestions
 app.get("/suggestions", async (req: Request, res: Response) => {
   const query = (req.query.query || req.query.q || "") as string;
   if (!query) {
@@ -189,7 +220,7 @@ app.get("/suggestions", async (req: Request, res: Response) => {
   }
 });
 
-// 5. Get Song info & direct stream URL
+// 6. Get Song info & direct stream URL
 app.get(["/song", "/song/"], async (req: Request, res: Response) => {
   const videoId = (req.query.id || req.query.query) as string;
   if (!videoId) {
@@ -221,7 +252,7 @@ app.get(["/song", "/song/"], async (req: Request, res: Response) => {
   }
 });
 
-// 6. Direct audio stream proxy with Range support & session header pass-through
+// 7. Direct audio stream proxy with Range support & session header pass-through
 app.get(["/stream", "/stream/"], async (req: Request, res: Response) => {
   const videoId = (req.query.id || req.query.query) as string;
   if (!videoId) {
@@ -230,6 +261,7 @@ app.get(["/stream", "/stream/"], async (req: Request, res: Response) => {
 
   const streamEntry = await resolveAudioStream(videoId);
   if (!streamEntry) {
+    console.warn(`[Stream 502] Failed resolving stream for video: ${videoId}`);
     return res.status(502).json({ error: "Could not resolve stream for video: " + videoId });
   }
 
@@ -260,12 +292,13 @@ app.get(["/stream", "/stream/"], async (req: Request, res: Response) => {
 
     audioStream.data.pipe(res);
   } catch (error: any) {
-    console.warn(`Axios stream failed for ${videoId} (${error.message}), falling back to direct pipe`);
+    console.warn(`[Axios stream failed for ${videoId}]: ${error.message}, spawning direct fallback`);
+    streamCache.delete(videoId);
     
     // Fallback: spawn direct yt-dlp audio stream
     try {
       res.setHeader("Content-Type", "audio/webm");
-      const ytProc = spawn("python", [
+      const ytProc = spawn(PYTHON_BIN, [
         "-m", "yt_dlp",
         "-o", "-",
         "-f", "ba/b",
@@ -281,7 +314,7 @@ app.get(["/stream", "/stream/"], async (req: Request, res: Response) => {
   }
 });
 
-// 7. Lyrics endpoint
+// 8. Lyrics endpoint
 app.get("/lyrics", async (req: Request, res: Response) => {
   const videoId = (req.query.id || req.query.videoId) as string;
   if (!videoId) {
@@ -299,7 +332,7 @@ app.get("/lyrics", async (req: Request, res: Response) => {
   }
 });
 
-// 8. Album details
+// 9. Album details
 app.get("/album", async (req: Request, res: Response) => {
   const albumId = (req.query.id || req.query.albumId) as string;
   if (!albumId) {
@@ -314,7 +347,7 @@ app.get("/album", async (req: Request, res: Response) => {
   }
 });
 
-// 9. Artist details & songs
+// 10. Artist details & songs
 app.get("/artist", async (req: Request, res: Response) => {
   const artistId = (req.query.id || req.query.artistId) as string;
   if (!artistId) {
@@ -329,7 +362,7 @@ app.get("/artist", async (req: Request, res: Response) => {
   }
 });
 
-// 10. Trending & Charts
+// 11. Trending & Charts
 app.get(["/trending", "/charts"], async (req: Request, res: Response) => {
   const reqHost = `${req.protocol}://${req.get("host")}`;
   try {

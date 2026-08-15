@@ -2,17 +2,18 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install Python 3, pip, and ffmpeg
-RUN apk add --no-cache python3 py3-pip ffmpeg
+# Install Python 3, pip, ffmpeg and create python symlink
+RUN apk add --no-cache python3 py3-pip ffmpeg && \
+    ln -sf /usr/bin/python3 /usr/bin/python
 
-# Install yt-dlp for direct YouTube CDN audio resolution
+# Install yt-dlp for direct YouTube audio extraction
 RUN pip install --no-cache-dir --break-system-packages yt-dlp
 
-# Copy dependency specifications
+# Copy package configurations and install dependencies
 COPY package*.json ./
 RUN npm install
 
-# Copy source code and scripts
+# Copy project files
 COPY tsconfig.json ./
 COPY server.ts ./
 COPY stream_resolver.py ./
