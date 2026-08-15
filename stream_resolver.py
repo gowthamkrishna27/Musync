@@ -3,12 +3,11 @@ import json
 import yt_dlp
 
 def resolve(video_id):
-    # Datacenter-resilient player client priorities
     client_configs = [
-        ['tv_embedded'],
+        ['android_vr', 'web_safari'],
         ['android_vr'],
-        ['android_vr', 'android'],
-        ['android']
+        ['android'],
+        ['tv_embedded']
     ]
 
     for clients in client_configs:
@@ -19,8 +18,7 @@ def resolve(video_id):
             'skip_download': True,
             'extractor_args': {
                 'youtube': {
-                    'player_client': clients,
-                    'player_skip': ['webpage', 'configs']
+                    'player_client': clients
                 }
             }
         }
