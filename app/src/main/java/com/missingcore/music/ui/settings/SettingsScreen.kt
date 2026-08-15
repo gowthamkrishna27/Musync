@@ -61,13 +61,17 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val app = context.applicationContext as com.missingcore.music.MusyncApplication
+    val audioEffectManager = app.container.audioEffectManager
+    val eqState by audioEffectManager.state.collectAsState()
+
     val uiState by viewModel.uiState.collectAsState()
     var showCustomApiDialog by remember { mutableStateOf(false) }
     var autoplayEnabled by remember { mutableStateOf(true) }
     var showCrossfadeDialog by remember { mutableStateOf(false) }
     var selectedCrossfade by remember { mutableStateOf("5 sec") }
     var showEqDialog by remember { mutableStateOf(false) }
-    var selectedEq by remember { mutableStateOf("Custom") }
     var showTermsDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var showHapticsDialog by remember { mutableStateOf(false) }
@@ -122,7 +126,7 @@ fun SettingsScreen(
                     SettingsDivider()
                     SettingsRow(
                         title = "Equalizer",
-                        value = selectedEq,
+                        value = if (eqState.isEnabled) eqState.activePreset else "Disabled",
                         onClick = { showEqDialog = true }
                     )
                     SettingsDivider()
@@ -366,13 +370,13 @@ fun SettingsScreen(
             title = { Text("Equalizer Preset", color = TextWhite, fontWeight = FontWeight.Bold) },
             text = {
                 Column {
-                    val eqOptions = listOf("Custom", "Flat", "Bass Boost", "Vocal", "Electronic", "Rock")
+                    val eqOptions = eqState.availablePresets
                     eqOptions.forEach { eq ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    selectedEq = eq
+                                    audioEffectManager.setPreset(eq)
                                     showEqDialog = false
                                 }
                                 .padding(vertical = 10.dp),
@@ -380,7 +384,7 @@ fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(eq, color = TextWhite, fontSize = 14.sp)
-                            if (selectedEq == eq) {
+                            if (eqState.activePreset == eq) {
                                 Text("✓", color = StatusGreen, fontWeight = FontWeight.Bold)
                             }
                         }

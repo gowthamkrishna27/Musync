@@ -75,6 +75,10 @@ class MusyncContainer(private val context: Context) {
         com.missingcore.music.playback.BeatHapticManager(context)
     }
 
+    val audioEffectManager: com.missingcore.music.playback.AudioEffectManager by lazy {
+        com.missingcore.music.playback.AudioEffectManager(context, preferencesManager)
+    }
+
     val playbackManager: PlaybackManager by lazy {
         PlaybackManager(context)
     }

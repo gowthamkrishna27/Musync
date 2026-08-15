@@ -43,7 +43,23 @@ class PreferencesManager(private val context: Context) {
         val KEY_HAPTIC_INTENSITY = stringPreferencesKey("haptic_intensity")
         val KEY_SHUFFLE = booleanPreferencesKey("shuffle_enabled")
         val KEY_REPEAT_MODE = stringPreferencesKey("repeat_mode")
+        val KEY_EQUALIZER_PRESET = stringPreferencesKey("equalizer_preset")
         private const val SECURE_KEY_API_KEY = "secure_api_key"
+    }
+
+    val equalizerPreset: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_EQUALIZER_PRESET] ?: "Bass Boost"
+    }
+
+    fun getEqualizerPreset(): String {
+        return securePrefs.getString("saved_eq_preset", "Bass Boost") ?: "Bass Boost"
+    }
+
+    suspend fun saveEqualizerPreset(preset: String) {
+        securePrefs.edit().putString("saved_eq_preset", preset).apply()
+        context.dataStore.edit { prefs ->
+            prefs[KEY_EQUALIZER_PRESET] = preset
+        }
     }
 
     val providerId: Flow<String> = context.dataStore.data.map { prefs ->

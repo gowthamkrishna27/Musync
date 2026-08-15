@@ -95,7 +95,29 @@ class MusicPlaybackService : MediaLibraryService() {
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
 
-        player = exoPlayer
+        val audioManager = getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+        val explicitSessionId = try {
+            audioManager.generateAudioSessionId()
+        } catch (_: Exception) {
+            0
+        }
+
+        if (explicitSessionId != 0) {
+            android.util.Log.d("MusicPlaybackService", "Generated explicit audioSessionId: $explicitSessionId")
+            app.container.audioEffectManager.attach(explicitSessionId)
+        }
+
+        exoPlayer.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+            override fun onAudioSessionIdChanged(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                audioSessionId: Int
+            ) {
+                android.util.Log.d("MusicPlaybackService", "AnalyticsListener -> onAudioSessionIdChanged: $audioSessionId")
+                if (audioSessionId != 0) {
+                    app.container.audioEffectManager.attach(audioSessionId)
+                }
+            }
+        })
 
         val sessionActivityPendingIntent = PendingIntent.getActivity(
             this,
@@ -172,6 +194,8 @@ class MusicPlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        val app = application as MusyncApplication
+        app.container.audioEffectManager.detach()
         serviceScope.cancel()
         mediaLibrarySession?.run {
             player.release()

@@ -57,6 +57,9 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speaker
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -68,10 +71,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -569,7 +575,11 @@ fun NowPlayingSheet(
 
     // 1. Equalizer Modal Bottom Sheet
     if (showEqualizerSheet) {
+        val app = context.applicationContext as com.missingcore.music.MusyncApplication
+        val audioEffectManager = app.container.audioEffectManager
+        val eqState by audioEffectManager.state.collectAsState()
         val eqSheetState = rememberModalBottomSheetState()
+
         ModalBottomSheet(
             onDismissRequest = { showEqualizerSheet = false },
             sheetState = eqSheetState,
@@ -578,89 +588,168 @@ fun NowPlayingSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(24.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.GraphicEq, null, tint = StatusGreen, modifier = Modifier.size(24.dp))
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "Built-in Sound Equalizer",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = TextWhite
+                // Header + Master Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.GraphicEq,
+                            contentDescription = null,
+                            tint = if (eqState.isEnabled) StatusGreen else IconGrey,
+                            modifier = Modifier.size(26.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Hardware Equalizer & DSP",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = TextWhite
+                            )
+                            Text(
+                                text = if (eqState.isEnabled) "Active Studio Engine" else "Bypassed",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (eqState.isEnabled) StatusGreen else TextGreyMuted
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = eqState.isEnabled,
+                        onCheckedChange = { audioEffectManager.setEnabled(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = StatusGreen,
+                            checkedTrackColor = StatusGreen.copy(alpha = 0.5f),
+                            uncheckedThumbColor = TextGreyMuted,
+                            uncheckedTrackColor = Color(0xFF282C37)
+                        )
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                // EQ Presets
-                val presets = listOf("Flat", "Bass Boost", "Vocal Focus", "Treble Boost", "Rock")
+                // Presets Horizontal Scroll
+                Text("Sound Profiles", color = TextGreySecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    presets.forEach { preset ->
-                        val isSelected = selectedEqPreset == preset
+                    eqState.availablePresets.forEach { preset ->
+                        val isSelected = eqState.activePreset == preset
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(20.dp))
                                 .background(if (isSelected) StatusGreen else CardElevated)
                                 .border(1.dp, if (isSelected) StatusGreen else BorderStroke, RoundedCornerShape(20.dp))
                                 .clickable {
-                                    selectedEqPreset = preset
-                                    when (preset) {
-                                        "Flat" -> { bassLevel = 0.5f; midLevel = 0.5f; trebleLevel = 0.5f }
-                                        "Bass Boost" -> { bassLevel = 0.85f; midLevel = 0.5f; trebleLevel = 0.5f }
-                                        "Vocal Focus" -> { bassLevel = 0.4f; midLevel = 0.8f; trebleLevel = 0.5f }
-                                        "Treble Boost" -> { bassLevel = 0.4f; midLevel = 0.5f; trebleLevel = 0.85f }
-                                        "Rock" -> { bassLevel = 0.75f; midLevel = 0.4f; trebleLevel = 0.75f }
-                                    }
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    audioEffectManager.setPreset(preset)
                                 }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .padding(horizontal = 14.dp, vertical = 8.dp)
                         ) {
                             Text(
                                 text = preset,
                                 color = if (isSelected) Color.Black else TextWhite,
-                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
-                // Bass Slider
-                Text("Bass (${(bassLevel * 100).toInt()}%)", color = TextGreySecondary, fontSize = 12.sp)
+                // Hardware Bass Boost
+                val bassPercent = (eqState.bassBoostStrength / 1000f).coerceIn(0f, 1f)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Bass Boost (Sub-Woofer)", color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("${(bassPercent * 100).toInt()}%", color = StatusGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
                 Slider(
-                    value = bassLevel,
-                    onValueChange = { bassLevel = it; selectedEqPreset = "Custom" },
+                    value = bassPercent,
+                    onValueChange = { audioEffectManager.setBassBoost((it * 1000).toInt().toShort()) },
+                    enabled = eqState.isEnabled,
                     colors = SliderDefaults.colors(thumbColor = StatusGreen, activeTrackColor = StatusGreen)
                 )
 
-                // Mid Slider
-                Text("Mids (${(midLevel * 100).toInt()}%)", color = TextGreySecondary, fontSize = 12.sp)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Hardware Virtualizer (3D Spatial Sound)
+                val virtPercent = (eqState.virtualizerStrength / 1000f).coerceIn(0f, 1f)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("3D Spatial Surround (Virtualizer)", color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("${(virtPercent * 100).toInt()}%", color = StatusGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
                 Slider(
-                    value = midLevel,
-                    onValueChange = { midLevel = it; selectedEqPreset = "Custom" },
+                    value = virtPercent,
+                    onValueChange = { audioEffectManager.setVirtualizer((it * 1000).toInt().toShort()) },
+                    enabled = eqState.isEnabled,
                     colors = SliderDefaults.colors(thumbColor = StatusGreen, activeTrackColor = StatusGreen)
                 )
 
-                // Treble Slider
-                Text("Treble (${(trebleLevel * 100).toInt()}%)", color = TextGreySecondary, fontSize = 12.sp)
-                Slider(
-                    value = trebleLevel,
-                    onValueChange = { trebleLevel = it; selectedEqPreset = "Custom" },
-                    colors = SliderDefaults.colors(thumbColor = StatusGreen, activeTrackColor = StatusGreen)
-                )
+                // Multi-Band Parametric Equalizer Frequencies
+                if (eqState.bands.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Parametric Frequency Bands", color = TextGreySecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                Spacer(modifier = Modifier.height(10.dp))
+                    eqState.bands.forEach { band ->
+                        val min = band.minLevelMb.toFloat()
+                        val max = band.maxLevelMb.toFloat()
+                        val current = band.levelMb.toFloat()
+                        val range = if (max > min) max - min else 3000f
+                        val progress = ((current - min) / range).coerceIn(0f, 1f)
+                        val freqLabel = if (band.centerFreqHz >= 1000) "${band.centerFreqHz / 1000} kHz" else "${band.centerFreqHz} Hz"
+                        val dbGain = band.levelMb / 100
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(freqLabel, color = TextWhite, fontSize = 12.sp)
+                            Text(
+                                text = if (dbGain > 0) "+$dbGain dB" else "$dbGain dB",
+                                color = if (dbGain != 0) StatusGreen else TextGreyMuted,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Slider(
+                            value = progress,
+                            onValueChange = { frac ->
+                                val targetLevel = (min + frac * range).toInt().toShort()
+                                audioEffectManager.setBandLevel(band.index, targetLevel)
+                            },
+                            enabled = eqState.isEnabled,
+                            colors = SliderDefaults.colors(thumbColor = StatusGreen, activeTrackColor = StatusGreen)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = { showEqualizerSheet = false },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF282C37), contentColor = Color.White),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(1.dp, Color(0x33FFFFFF))
                 ) {
-                    Text("Apply Profile", fontWeight = FontWeight.Bold)
+                    Text("Apply & Close", fontWeight = FontWeight.Bold)
                 }
             }
         }
