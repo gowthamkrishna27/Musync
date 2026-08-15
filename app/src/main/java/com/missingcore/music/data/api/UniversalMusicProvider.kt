@@ -6,58 +6,84 @@ import com.missingcore.music.domain.model.Playlist
 import com.missingcore.music.domain.model.Track
 import com.missingcore.music.domain.provider.MusicProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 
 /**
- * Universal YouTube Music Provider.
+ * Universal Dual-Engine Music Provider.
  * 
- * Powered by ytmusicapi (https://musync-ytmusic-api.onrender.com) and high-speed YouTube streaming.
+ * Aggregates:
+ * 1. YouTube Music (Metadata from Render ytmusicapi + In-App Stream Gateways)
+ * 2. Audius Music Network (320kbps High-Bitrate Direct Edge CDN Streaming)
  */
 class UniversalMusicProvider(
-    private val ytMusicProvider: YouTubeMusicProvider = YouTubeMusicProvider()
+    private val ytMusicProvider: YouTubeMusicProvider = YouTubeMusicProvider(),
+    private val audiusProvider: AudiusMusicProvider = AudiusMusicProvider()
 ) : MusicProvider {
 
-    override val providerId: String = "ytmusic"
-    override val displayName: String = "YouTube Music"
+    override val providerId: String = "universal"
+    override val displayName: String = "Universal Music Engine"
 
     fun updateConfiguration(baseUrl: String?, apiKey: String?) {
         ytMusicProvider.updateConfiguration(baseUrl, apiKey)
+        if (baseUrl != null && baseUrl.contains("audius")) {
+            audiusProvider.updateConfiguration(baseUrl, apiKey)
+        }
     }
 
     override suspend fun testConnection(baseUrl: String?, apiKey: String?): Boolean {
-        return ytMusicProvider.testConnection(baseUrl, apiKey)
+        return ytMusicProvider.testConnection(baseUrl, apiKey) || audiusProvider.testConnection(baseUrl, apiKey)
     }
 
     override suspend fun search(query: String): List<Track> = withContext(Dispatchers.IO) {
-        ytMusicProvider.search(query)
+        val ytDeferred = async { ytMusicProvider.search(query) }
+        val audiusDeferred = async { audiusProvider.search(query) }
+
+        val ytResults = try { ytDeferred.await() } catch (_: Exception) { emptyList() }
+        val audiusResults = try { audiusDeferred.await() } catch (_: Exception) { emptyList() }
+
+        val combined = mutableListOf<Track>()
+        combined.addAll(ytResults)
+        combined.addAll(audiusResults)
+        combined.distinctBy { it.title.lowercase().trim() }
     }
 
     override suspend fun searchArtists(query: String): List<Artist> = withContext(Dispatchers.IO) {
-        ytMusicProvider.searchArtists(query)
+        val yt = try { ytMusicProvider.searchArtists(query) } catch (_: Exception) { emptyList() }
+        val audius = try { audiusProvider.searchArtists(query) } catch (_: Exception) { emptyList() }
+        (yt + audius).distinctBy { it.name.lowercase().trim() }
     }
 
     override suspend fun searchPlaylists(query: String): List<Playlist> = withContext(Dispatchers.IO) {
-        ytMusicProvider.searchPlaylists(query)
+        audiusProvider.searchPlaylists(query)
     }
 
     override suspend fun getTrending(): List<Track> = withContext(Dispatchers.IO) {
-        ytMusicProvider.getTrending()
+        val yt = try { ytMusicProvider.getTrending() } catch (_: Exception) { emptyList() }
+        val audius = try { audiusProvider.getTrending() } catch (_: Exception) { emptyList() }
+        (yt + audius).distinctBy { it.title.lowercase().trim() }
     }
 
     override suspend fun getUndergroundTrending(): List<Track> = withContext(Dispatchers.IO) {
+        val audius = try { audiusProvider.getUndergroundTrending() } catch (_: Exception) { emptyList() }
+        if (audius.isNotEmpty()) return@withContext audius
         ytMusicProvider.getUndergroundTrending()
     }
 
     override suspend fun getTrack(id: String): Track? = withContext(Dispatchers.IO) {
-        ytMusicProvider.getTrack(id)
+        if (id.startsWith("yt_")) {
+            ytMusicProvider.getTrack(id)
+        } else {
+            audiusProvider.getTrack(id) ?: ytMusicProvider.getTrack(id)
+        }
     }
 
     override suspend fun getArtist(id: String): Artist? = withContext(Dispatchers.IO) {
-        ytMusicProvider.getArtist(id)
+        audiusProvider.getArtist(id) ?: ytMusicProvider.getArtist(id)
     }
 
     override suspend fun getArtistTracks(artistId: String): List<Track> = withContext(Dispatchers.IO) {
-        ytMusicProvider.getArtistTracks(artistId)
+        search(artistId.removePrefix("yt_artist_").removePrefix("audius_"))
     }
 
     override suspend fun getAlbum(id: String): Album? = withContext(Dispatchers.IO) {
@@ -65,10 +91,16 @@ class UniversalMusicProvider(
     }
 
     override suspend fun getPlaylist(id: String): Playlist? = withContext(Dispatchers.IO) {
-        ytMusicProvider.getPlaylist(id)
+        audiusProvider.getPlaylist(id) ?: ytMusicProvider.getPlaylist(id)
     }
 
     override suspend fun getStreamUrl(track: Track): String? {
-        return ytMusicProvider.getStreamUrl(track)
+        if (!track.streamUrl.isNullOrBlank() && !track.streamUrl.contains("/stream?id=")) {
+            return track.streamUrl
+        }
+        if (track.id.startsWith("yt_")) {
+            return ytMusicProvider.getStreamUrl(track)
+        }
+        return audiusProvider.getStreamUrl(track) ?: ytMusicProvider.getStreamUrl(track)
     }
 }
