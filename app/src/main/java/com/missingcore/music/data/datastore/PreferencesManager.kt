@@ -36,7 +36,7 @@ class PreferencesManager(private val context: Context) {
     }
 
     companion object {
-        const val DEFAULT_BASE_URL = "http://192.168.0.104:5000"
+        const val DEFAULT_BASE_URL = "https://musync-ytmusic-api.onrender.com"
         val KEY_PROVIDER_ID = stringPreferencesKey("provider_id")
         val KEY_BASE_URL = stringPreferencesKey("base_url")
         val KEY_AUDIO_QUALITY = stringPreferencesKey("audio_quality")
