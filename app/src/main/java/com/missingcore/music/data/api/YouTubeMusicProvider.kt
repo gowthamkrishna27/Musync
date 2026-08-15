@@ -176,7 +176,7 @@ class YouTubeMusicProvider(
         val videoId = track.id.removePrefix("yt_")
         val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
 
-        // 1. Query Render /song endpoint for direct Google Video CDN URL
+        // 1. Query Render /song endpoint with 3s fast timeout
         try {
             val songUrl = "$targetRenderUrl/song?id=$videoId"
             val reqBuilder = Request.Builder().url(songUrl).header("User-Agent", "Musync-Android/1.0")
@@ -196,13 +196,8 @@ class YouTubeMusicProvider(
             Log.w(TAG, "Failed resolving /song direct stream: ${e.message}")
         }
 
-        // 2. Return direct stream endpoint
-        val rawUrl = track.streamUrl
-        if (!rawUrl.isNullOrBlank() && (rawUrl.startsWith("http://") || rawUrl.startsWith("https://"))) {
-            return@withContext rawUrl
-        }
-
-        "$targetRenderUrl/stream?id=$videoId"
+        // 2. Return direct high-availability Invidious audio stream
+        "https://inv.nadeko.net/latest_version?id=$videoId&itag=140"
     }
 
     private fun fetchPipedSearch(urlStr: String): List<Track> {

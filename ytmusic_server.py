@@ -2,15 +2,14 @@
 Musync ytmusicapi & yt-dlp High-Speed Audio Stream Server
 ---------------------------------------------------------
 Production-ready REST API backend powered by ytmusicapi & yt-dlp.
-Uses android_vr and tvhtml5 device clients for 100% bypass of datacenter bot blocks,
+Uses android_vr and android device clients for 100% bypass of datacenter bot blocks,
 streaming official Google Video CDN audio directly to ExoPlayer with 0ms buffering.
 """
 
-from flask import Flask, request, jsonify, redirect, Response
+from flask import Flask, request, jsonify, redirect
 from flask_cors import CORS
 from ytmusicapi import YTMusic
 import yt_dlp
-import requests
 import os
 import sys
 
@@ -25,15 +24,15 @@ except Exception as e:
     print(f"Warning initializing YTMusic: {e}")
     yt = None
 
-# yt-dlp configuration using android_vr / tvhtml5 clients to bypass datacenter IP restrictions
+# yt-dlp configuration using android_vr and android clients (no ffmpeg requirement, pure direct stream extraction)
 ydl_opts = {
-    'format': 'bestaudio/best',
+    'format': 'ba/b',
     'quiet': True,
     'no_warnings': True,
     'skip_download': True,
     'extractor_args': {
         'youtube': {
-            'player_client': ['android_vr', 'tvhtml5', 'android']
+            'player_client': ['android_vr', 'android']
         }
     }
 }
@@ -54,7 +53,7 @@ def home():
     return jsonify({
         "status": "online",
         "service": "Musync Stream Server (ytmusicapi + yt-dlp android_vr)",
-        "version": "2.2.0",
+        "version": "2.3.0",
         "endpoints": {
             "search": "/search?query=<song_or_artist>",
             "song": "/song?id=<video_id>",
@@ -77,7 +76,9 @@ def stream_redirect():
     stream_url = resolve_direct_audio_url(video_id)
     if stream_url:
         return redirect(stream_url, code=302)
-    return jsonify({"error": "Failed to resolve stream"}), 502
+    # Fallback to direct Invidious audio gateway
+    fallback_url = f"https://inv.nadeko.net/latest_version?id={video_id}&itag=140"
+    return redirect(fallback_url, code=302)
 
 @app.route("/song", methods=["GET"])
 @app.route("/song/", methods=["GET"])
@@ -87,12 +88,15 @@ def get_song():
         return jsonify({"error": "Missing video ID"}), 400
 
     stream_url = resolve_direct_audio_url(video_id)
+    if not stream_url:
+        stream_url = f"https://inv.nadeko.net/latest_version?id={video_id}&itag=140"
+
     return jsonify({
         "videoId": video_id,
         "id": video_id,
-        "url": stream_url or "",
-        "media_url": stream_url or "",
-        "stream_url": stream_url or ""
+        "url": stream_url,
+        "media_url": stream_url,
+        "stream_url": stream_url
     })
 
 @app.route("/search", methods=["GET"])
