@@ -43,9 +43,10 @@ class YouTubeMusicProvider(
 
     companion object {
         private const val TAG = "YouTubeMusicProvider"
+        const val RAILWAY_URL = "https://musync-production-2fc5.up.railway.app"
         const val LOCAL_URL = "http://192.168.0.104:5000"
-        const val CLOUD_URL = "https://musync-ytmusic-api.onrender.com"
-        const val DEFAULT_RENDER_URL = LOCAL_URL
+        const val CLOUD_URL = RAILWAY_URL
+        const val DEFAULT_RENDER_URL = RAILWAY_URL
 
         private val PIPED_INSTANCES = listOf(
             "https://pipedapi.kavin.rocks",
@@ -70,22 +71,9 @@ class YouTubeMusicProvider(
 
         verifiedWorkingUrl?.let { return@withContext it }
 
-        // Fast 1.2s health ping to local PC server
-        try {
-            val req = Request.Builder().url("$LOCAL_URL/health").header("User-Agent", "Musync-Android/1.0").build()
-            val quickClient = httpClient.newBuilder().connectTimeout(1200, TimeUnit.MILLISECONDS).readTimeout(1200, TimeUnit.MILLISECONDS).build()
-            val resp = quickClient.newCall(req).execute()
-            if (resp.isSuccessful) {
-                verifiedWorkingUrl = LOCAL_URL
-                Log.d(TAG, "Dynamically selected local endpoint: $LOCAL_URL")
-                return@withContext LOCAL_URL
-            }
-        } catch (_: Exception) {
-            Log.d(TAG, "Local endpoint unreachable, using cloud endpoint: $CLOUD_URL")
-        }
-
-        verifiedWorkingUrl = CLOUD_URL
-        CLOUD_URL
+        // Default directly to 24/7 Railway Cloud Gateway
+        verifiedWorkingUrl = RAILWAY_URL
+        RAILWAY_URL
     }
 
     fun updateConfiguration(baseUrl: String?, apiKey: String?) {
