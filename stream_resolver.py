@@ -1,17 +1,16 @@
 import sys
 import json
-import urllib.request
 import yt_dlp
 
 def resolve(video_id):
-    # 1. Primary: yt-dlp with datacenter-bypass client rotation
-    client_chains = [
-        ['android_vr', 'ios', 'web_safari'],
-        ['tv_embedded', 'android', 'mweb'],
-        ['android']
+    client_configs = [
+        ['android_vr', 'android'],
+        ['android_vr'],
+        ['android'],
+        ['tv_embedded']
     ]
 
-    for clients in client_chains:
+    for clients in client_configs:
         ydl_opts = {
             'format': 'ba/b',
             'quiet': True,
@@ -38,29 +37,7 @@ def resolve(video_id):
         except Exception:
             continue
 
-    # 2. Fallback: Query Piped public instances
-    piped_instances = [
-        "https://pipedapi.kavin.rocks",
-        "https://api.piped.privacydev.net",
-        "https://pipedapi.leptons.xyz"
-    ]
-    for base in piped_instances:
-        try:
-            req = urllib.request.Request(f"{base}/streams/{video_id}", headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=4) as resp:
-                data = json.loads(resp.read().decode())
-                audio_streams = data.get('audioStreams', [])
-                if audio_streams:
-                    audio_streams.sort(key=lambda s: s.get('bitrate', 0), reverse=True)
-                    print(json.dumps({
-                        'url': audio_streams[0]['url'],
-                        'headers': {"User-Agent": "Mozilla/5.0"}
-                    }))
-                    return
-        except Exception:
-            continue
-
-    print(json.dumps({'error': 'All stream extraction methods exhausted'}))
+    print(json.dumps({'error': 'Stream extraction failed for video: ' + str(video_id)}))
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
