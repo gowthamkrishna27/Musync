@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Musync</string>
+    <string name="notification_channel_name">Music Playback</string>
+    <string name="notification_channel_description">Active media playback and controls</string>
+</resources>
