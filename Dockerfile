@@ -2,8 +2,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install Python 3, pip, ffmpeg and create python symlink
-RUN apk add --no-cache python3 py3-pip ffmpeg && \
+# Install Python 3, pip, ffmpeg, ca-certificates, and create python symlink
+RUN apk add --no-cache python3 py3-pip ffmpeg ca-certificates && \
     ln -sf /usr/bin/python3 /usr/bin/python
 
 # Install yt-dlp for direct YouTube audio extraction

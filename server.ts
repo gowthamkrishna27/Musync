@@ -41,19 +41,24 @@ async function initYTMusic() {
   }
 }
 
+interface StreamResolutionResult {
+  entry: StreamCacheEntry | null;
+  error?: string;
+}
+
 /**
  * High-Speed Audio Stream Resolver using stream_resolver.py
  */
-async function resolveAudioStream(videoId: string): Promise<StreamCacheEntry | null> {
+async function resolveAudioStream(videoId: string): Promise<StreamResolutionResult> {
   const cached = streamCache.get(videoId);
   if (cached && cached.expiresAt > Date.now()) {
-    return cached;
+    return { entry: cached };
   }
 
   // 1. Resolve via python stream_resolver.py
   try {
-    const scriptPath = path.join(__dirname, "stream_resolver.py");
-    const { stdout, stderr } = await execAsync(`"${PYTHON_BIN}" "${scriptPath}" ${videoId}`, { timeout: 15000 });
+    const scriptPath = path.join(process.cwd(), "stream_resolver.py");
+    const { stdout, stderr } = await execAsync(`"${PYTHON_BIN}" "${scriptPath}" ${videoId}`, { timeout: 25000 });
     if (stderr && stderr.trim()) {
       console.log(`[StreamResolver stderr for ${videoId}]:`, stderr.trim());
     }
@@ -65,15 +70,15 @@ async function resolveAudioStream(videoId: string): Promise<StreamCacheEntry | n
         expiresAt: Date.now() + 4 * 3600 * 1000
       };
       streamCache.set(videoId, entry);
-      return entry;
+      return { entry };
     } else if (parsed.error) {
-      console.warn(`[StreamResolver error for ${videoId}]:`, parsed.error);
+      return { entry: null, error: parsed.error };
     }
   } catch (e: any) {
-    console.warn(`[stream_resolver.py execution failed for ${videoId}]:`, e.message);
+    return { entry: null, error: e.message };
   }
 
-  return null;
+  return { entry: null, error: "Unknown stream resolution failure" };
 }
 
 // Helper to format track for Musync Mobile App schema
@@ -259,10 +264,11 @@ app.get(["/stream", "/stream/"], async (req: Request, res: Response) => {
     return res.status(400).json({ error: "Missing video ID parameter (?id=...)" });
   }
 
-  const streamEntry = await resolveAudioStream(videoId);
+  const resolution = await resolveAudioStream(videoId);
+  const streamEntry = resolution.entry;
   if (!streamEntry) {
-    console.warn(`[Stream 502] Failed resolving stream for video: ${videoId}`);
-    return res.status(502).json({ error: "Could not resolve stream for video: " + videoId });
+    console.warn(`[Stream 502] Failed resolving stream for video: ${videoId}, error: ${resolution.error}`);
+    return res.status(502).json({ error: "Could not resolve stream for video: " + videoId, details: resolution.error });
   }
 
   try {

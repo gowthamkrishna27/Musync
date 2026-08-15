@@ -10,12 +10,15 @@ def resolve(video_id):
         ['tv_embedded']
     ]
 
+    last_error = ""
+
     for clients in client_configs:
         ydl_opts = {
             'format': 'ba/b',
             'quiet': True,
             'no_warnings': True,
             'skip_download': True,
+            'nocheckcertificate': True,
             'extractor_args': {
                 'youtube': {
                     'player_client': clients
@@ -35,10 +38,11 @@ def resolve(video_id):
                     }
                     print(json.dumps(output))
                     return
-        except Exception:
+        except Exception as e:
+            last_error = str(e)
             continue
 
-    print(json.dumps({'error': 'Stream extraction failed for video: ' + str(video_id)}))
+    print(json.dumps({'error': f'All clients failed. Last error: {last_error}'}))
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
