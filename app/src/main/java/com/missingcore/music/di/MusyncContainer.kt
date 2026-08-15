@@ -13,6 +13,9 @@ import com.missingcore.music.domain.repository.MusicRepository
 import com.missingcore.music.domain.repository.PlaylistRepository
 import com.missingcore.music.domain.repository.RecentlyPlayedRepository
 import com.missingcore.music.playback.PlaybackManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MusyncContainer(private val context: Context) {
 
@@ -27,6 +30,15 @@ class MusyncContainer(private val context: Context) {
     val universalMusicProvider: UniversalMusicProvider by lazy {
         UniversalMusicProvider().apply {
             updateConfiguration(preferencesManager.getBaseUrl(), preferencesManager.getApiKey())
+        }
+    }
+
+    init {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            preferencesManager.baseUrl.collect { url ->
+                val activeUrl = if (url == "none") "" else url
+                universalMusicProvider.updateConfiguration(activeUrl, preferencesManager.getApiKey())
+            }
         }
     }
 

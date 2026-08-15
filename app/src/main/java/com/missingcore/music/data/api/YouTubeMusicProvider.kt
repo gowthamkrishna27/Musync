@@ -66,8 +66,30 @@ class YouTubeMusicProvider(
     }
 
     override suspend fun testConnection(baseUrl: String?, apiKey: String?): Boolean = withContext(Dispatchers.IO) {
-        val tracks = search("trending music")
-        tracks.isNotEmpty()
+        val target = (baseUrl ?: customBaseUrl ?: DEFAULT_RENDER_URL).trimEnd('/')
+        if (target.isBlank() || target == "none") return@withContext false
+        try {
+            val req = Request.Builder()
+                .url("$target/health")
+                .header("User-Agent", "Musync-Android/1.0")
+                .apply {
+                    if (!apiKey.isNullOrBlank()) header("X-API-Key", apiKey)
+                }
+                .build()
+            val resp = httpClient.newCall(req).execute()
+            if (resp.isSuccessful) return@withContext true
+        } catch (_: Exception) {}
+
+        try {
+            val req = Request.Builder()
+                .url("$target/search?query=trending")
+                .header("User-Agent", "Musync-Android/1.0")
+                .build()
+            val resp = httpClient.newCall(req).execute()
+            resp.isSuccessful
+        } catch (_: Exception) {
+            false
+        }
     }
 
     override suspend fun search(query: String): List<Track> = withContext(Dispatchers.IO) {
@@ -137,7 +159,7 @@ class YouTubeMusicProvider(
                     val obj = gson.fromJson(body, JsonObject::class.java)
                     val title = obj.get("title")?.asString ?: "YouTube Track"
                     val artistName = obj.get("artist")?.asString ?: "YouTube Artist"
-                    val artUrl = obj.get("image_url")?.asString ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+                    val artUrl = obj.get("image_url")?.asString ?: "https://i.ytimg.com/vi/$videoId/mqdefault.jpg"
                     val artist = Artist(id = "yt_artist_${artistName.hashCode()}", name = artistName, imageUrl = artUrl)
                     val album = Album(id = "yt_album_${videoId.hashCode()}", name = title, artist = artist, artworkUrl = artUrl)
                     val streamUrl = "$targetRenderUrl/stream?id=$videoId"
@@ -156,7 +178,7 @@ class YouTubeMusicProvider(
         } catch (_: Exception) {}
 
         // Fallback: construct standard Track with targetRenderUrl/stream
-        val artUrl = "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+        val artUrl = "https://i.ytimg.com/vi/$videoId/mqdefault.jpg"
         val artist = Artist(id = "yt_artist_$videoId", name = "YouTube Music", imageUrl = artUrl)
         val album = Album(id = "yt_album_$videoId", name = "Single", artist = artist, artworkUrl = artUrl)
         Track(
@@ -262,7 +284,7 @@ class YouTubeMusicProvider(
             val title = obj.get("title")?.asString ?: "Unknown Title"
             val uploaderName = obj.get("uploaderName")?.asString ?: "YouTube Music"
             val durationSec = obj.get("duration")?.asLong ?: 200L
-            val thumbnail = obj.get("thumbnail")?.asString ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+            val thumbnail = obj.get("thumbnail")?.asString ?: "https://i.ytimg.com/vi/$videoId/mqdefault.jpg"
 
             val artistObj = Artist(id = "yt_artist_${uploaderName.hashCode()}", name = uploaderName, imageUrl = thumbnail)
             val albumObj = Album(id = "yt_album_${videoId.hashCode()}", name = title, artist = artistObj, artworkUrl = thumbnail)
@@ -307,7 +329,7 @@ class YouTubeMusicProvider(
             val title = obj.get("title")?.asString ?: "Unknown Title"
             val author = obj.get("author")?.asString ?: "YouTube Artist"
             val lengthSec = obj.get("lengthSeconds")?.asLong ?: 200L
-            val thumbnail = "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+            val thumbnail = "https://i.ytimg.com/vi/$videoId/mqdefault.jpg"
 
             val artistObj = Artist(id = "yt_artist_${author.hashCode()}", name = author, imageUrl = thumbnail)
             val albumObj = Album(id = "yt_album_${videoId.hashCode()}", name = title, artist = artistObj, artworkUrl = thumbnail)
@@ -345,7 +367,7 @@ class YouTubeMusicProvider(
 
         val title = root.get("title")?.asString ?: "Unknown Title"
         val uploader = root.get("uploader")?.asString ?: "YouTube Artist"
-        val thumbnail = root.get("thumbnailUrl")?.asString ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+        val thumbnail = root.get("thumbnailUrl")?.asString ?: "https://i.ytimg.com/vi/$videoId/mqdefault.jpg"
         val duration = root.get("duration")?.asLong ?: 200L
 
         // Extract direct audio stream (Opus 160kbps or M4A 128kbps)
@@ -450,7 +472,7 @@ class YouTubeMusicProvider(
                 val artists = obj.getAsJsonArray("artists")
                 val artistName = artists?.firstOrNull()?.asJsonObject?.get("name")?.asString ?: obj.get("artist")?.asString ?: "YouTube Artist"
                 val thumbnails = obj.getAsJsonArray("thumbnails")
-                val artUrl = thumbnails?.lastOrNull()?.asJsonObject?.get("url")?.asString ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+                val artUrl = thumbnails?.lastOrNull()?.asJsonObject?.get("url")?.asString ?: "https://i.ytimg.com/vi/$videoId/mqdefault.jpg"
 
                 val artistObj = Artist(id = "yt_artist_${artistName.hashCode()}", name = artistName, imageUrl = artUrl)
                 val albumObj = Album(id = "yt_album_${videoId.hashCode()}", name = title, artist = artistObj, artworkUrl = artUrl)

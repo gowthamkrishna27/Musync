@@ -75,7 +75,7 @@ class PreferencesManager(private val context: Context) {
     }
 
     fun getBaseUrl(): String {
-        return DEFAULT_BASE_URL
+        return securePrefs.getString("saved_base_url", null) ?: DEFAULT_BASE_URL
     }
 
     fun setApiKey(apiKey: String?) {
@@ -96,6 +96,7 @@ class PreferencesManager(private val context: Context) {
     }
 
     suspend fun setBaseUrl(baseUrl: String) {
+        securePrefs.edit().putString("saved_base_url", baseUrl).apply()
         context.dataStore.edit { prefs ->
             prefs[KEY_BASE_URL] = baseUrl
         }

@@ -258,9 +258,18 @@ fun NowPlayingSheet(
                         .border(1.5.dp, Color(0x33FFFFFF), RoundedCornerShape(26.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (!track.artworkUrl.isNullOrBlank()) {
+                    val rawUrl = track.artworkUrl
+                    if (!rawUrl.isNullOrBlank()) {
+                        val cleanArtworkUrl = if (rawUrl.contains("hqdefault.jpg")) {
+                            rawUrl.replace("hqdefault.jpg", "mqdefault.jpg")
+                        } else {
+                            rawUrl
+                        }
                         AsyncImage(
-                            model = track.artworkUrl,
+                            model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                                .data(cleanArtworkUrl)
+                                .crossfade(true)
+                                .build(),
                             contentDescription = track.title,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
