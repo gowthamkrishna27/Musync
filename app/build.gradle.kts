@@ -7,14 +7,14 @@ plugins {
 }
 
 android {
-    namespace = "com.missingcore.music"
+    namespace = "com.musync.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.cyanchill.missingcore.music"
+        applicationId = "com.musync.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
+        versionCode = 1002
         versionName = "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

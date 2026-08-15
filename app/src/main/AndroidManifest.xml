@@ -41,24 +41,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Deep linking for missingcore:// and musync:// -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="missingcore"
-                    android:host="track" />
-                <data
-                    android:scheme="missingcore"
-                    android:host="artist" />
-                <data
-                    android:scheme="missingcore"
-                    android:host="album" />
-                <data
-                    android:scheme="missingcore"
-                    android:host="playlist" />
-            </intent-filter>
+            <!-- Deep linking for musync:// -->
 
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
