@@ -50,13 +50,15 @@ class PlaybackManager(private val context: Context) {
                 try {
                     val controller = controllerFuture?.get()
                     mediaController = controller
-                    setupPlayerListener(controller)
-                    updateStateFromController()
+                    if (controller != null) {
+                        setupPlayerListener(controller)
+                        updateStateFromController()
+                    }
                 } catch (e: Exception) {
                     _playbackState.update { it.copy(errorMessage = "Failed to connect to player service: ${e.message}") }
                 }
             },
-            MoreExecutors.directExecutor()
+            androidx.core.content.ContextCompat.getMainExecutor(context)
         )
     }
 
@@ -95,12 +97,18 @@ class PlaybackManager(private val context: Context) {
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                android.util.Log.e("PlaybackManager", "ExoPlayer error occurred: ${error.message}", error)
+                val item = mediaController?.currentMediaItem
+                val uri = item?.requestMetadata?.mediaUri ?: item?.localConfiguration?.uri
+                android.util.Log.e(
+                    "PlaybackManager",
+                    "ExoPlayer playback error | Track: ${item?.mediaMetadata?.title} (${item?.mediaId}) | URI: $uri | ErrorCode: ${error.errorCode} (${error.errorCodeName}) | Message: ${error.message}",
+                    error
+                )
                 _playbackState.update {
                     it.copy(
                         isPlaying = false,
                         isBuffering = false,
-                        errorMessage = "Streaming error: ${error.message ?: "Failed to load audio stream"}"
+                        errorMessage = "Streaming error (${error.errorCodeName}): ${error.message ?: "Failed to load audio stream"}"
                     )
                 }
             }
@@ -185,13 +193,14 @@ class PlaybackManager(private val context: Context) {
                     try {
                         val newController = controllerFuture?.get()
                         if (newController != null) {
+                            mediaController = newController
                             action(newController)
                         }
                     } catch (e: Exception) {
-                        // Controller not ready
+                        android.util.Log.e("PlaybackManager", "withController failed: ${e.message}", e)
                     }
                 },
-                MoreExecutors.directExecutor()
+                androidx.core.content.ContextCompat.getMainExecutor(context)
             )
         }
     }
@@ -208,23 +217,28 @@ class PlaybackManager(private val context: Context) {
 
     fun playTracks(tracks: List<Track>, startIndex: Int = 0) {
         if (tracks.isEmpty()) return
+        val incomingTracks = tracks.toList()
         currentQueue.clear()
-        currentQueue.addAll(tracks)
+        currentQueue.addAll(incomingTracks)
 
-        val mediaItems = tracks.map { MediaItemMapper.toMediaItem(it) }
-        val safeIndex = startIndex.coerceIn(0, (tracks.size - 1).coerceAtLeast(0))
+        val mediaItems = incomingTracks.map { MediaItemMapper.toMediaItem(it) }
+        val safeIndex = if (mediaItems.isNotEmpty()) startIndex.coerceIn(0, mediaItems.size - 1) else 0
 
         withController { controller ->
-            controller.setMediaItems(mediaItems, safeIndex, 0L)
-            controller.prepare()
-            controller.play()
+            if (mediaItems.isNotEmpty()) {
+                val currentTrackUri = mediaItems[safeIndex].requestMetadata.mediaUri
+                android.util.Log.d("PlaybackManager", "playTracks -> setting ${mediaItems.size} items at index $safeIndex to controller. Current track URI: $currentTrackUri")
+                controller.setMediaItems(mediaItems, safeIndex, 0L)
+                controller.prepare()
+                controller.play()
+            }
         }
 
         _playbackState.update {
             it.copy(
                 queue = currentQueue.toList(),
                 queueIndex = safeIndex,
-                currentTrack = tracks.getOrNull(safeIndex),
+                currentTrack = incomingTracks.getOrNull(safeIndex),
                 errorMessage = null
             )
         }

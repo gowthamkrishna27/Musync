@@ -1,12 +1,11 @@
 services:
   - type: web
     name: musync-ytmusic-api
-    runtime: python
+    env: docker
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn ytmusic_server:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     autoDeploy: true
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.9
+      - key: PORT
+        value: 5000

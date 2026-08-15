@@ -1,13 +1,24 @@
-FROM python:3.11-slim
+FROM node:20-alpine
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python 3, pip, and ffmpeg
+RUN apk add --no-cache python3 py3-pip ffmpeg
 
-COPY ytmusic_server.py .
-COPY Procfile .
+# Install yt-dlp for direct YouTube CDN audio resolution
+RUN pip install --no-cache-dir --break-system-packages yt-dlp
+
+# Copy dependency specifications
+COPY package*.json ./
+RUN npm install
+
+# Copy source code and scripts
+COPY tsconfig.json ./
+COPY server.ts ./
+COPY stream_resolver.py ./
 
 EXPOSE 5000
 
-CMD ["gunicorn", "ytmusic_server:app", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120"]
+ENV PORT=5000
+
+CMD ["npx", "tsx", "server.ts"]

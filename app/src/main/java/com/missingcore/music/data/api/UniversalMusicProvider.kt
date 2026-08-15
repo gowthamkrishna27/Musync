@@ -95,7 +95,7 @@ class UniversalMusicProvider(
     }
 
     override suspend fun getStreamUrl(track: Track): String? {
-        if (!track.streamUrl.isNullOrBlank() && !track.streamUrl.contains("/stream?id=")) {
+        if (!track.streamUrl.isNullOrBlank()) {
             return track.streamUrl
         }
         if (track.id.startsWith("yt_")) {

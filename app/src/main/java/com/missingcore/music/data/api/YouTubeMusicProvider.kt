@@ -43,7 +43,7 @@ class YouTubeMusicProvider(
 
     companion object {
         private const val TAG = "YouTubeMusicProvider"
-        const val DEFAULT_RENDER_URL = "https://musync-ytmusic-api.onrender.com"
+        const val DEFAULT_RENDER_URL = "http://192.168.0.104:5000"
 
         private val PIPED_INSTANCES = listOf(
             "https://pipedapi.kavin.rocks",
@@ -126,14 +126,49 @@ class YouTubeMusicProvider(
 
     override suspend fun getTrack(id: String): Track? = withContext(Dispatchers.IO) {
         val videoId = id.removePrefix("yt_")
-        for (instance in PIPED_INSTANCES) {
-            try {
-                val url = "$instance/streams/$videoId"
-                val track = fetchPipedStreamDetails(url, videoId)
-                if (track != null) return@withContext track
-            } catch (_: Exception) {}
-        }
-        null
+        val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
+        try {
+            val url = "$targetRenderUrl/song?id=$videoId"
+            val req = Request.Builder().url(url).header("User-Agent", "Musync-Android/1.0").build()
+            val resp = httpClient.newCall(req).execute()
+            if (resp.isSuccessful) {
+                val body = resp.body?.string()
+                if (!body.isNullOrBlank()) {
+                    val obj = gson.fromJson(body, JsonObject::class.java)
+                    val title = obj.get("title")?.asString ?: "YouTube Track"
+                    val artistName = obj.get("artist")?.asString ?: "YouTube Artist"
+                    val artUrl = obj.get("image_url")?.asString ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+                    val artist = Artist(id = "yt_artist_${artistName.hashCode()}", name = artistName, imageUrl = artUrl)
+                    val album = Album(id = "yt_album_${videoId.hashCode()}", name = title, artist = artist, artworkUrl = artUrl)
+                    val streamUrl = "$targetRenderUrl/stream?id=$videoId"
+                    return@withContext Track(
+                        id = "yt_$videoId",
+                        title = title,
+                        artist = artist,
+                        album = album,
+                        durationMs = 180000L,
+                        streamUrl = streamUrl,
+                        artworkUrl = artUrl,
+                        genre = "Music"
+                    )
+                }
+            }
+        } catch (_: Exception) {}
+
+        // Fallback: construct standard Track with targetRenderUrl/stream
+        val artUrl = "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+        val artist = Artist(id = "yt_artist_$videoId", name = "YouTube Music", imageUrl = artUrl)
+        val album = Album(id = "yt_album_$videoId", name = "Single", artist = artist, artworkUrl = artUrl)
+        Track(
+            id = "yt_$videoId",
+            title = "YouTube Music Track",
+            artist = artist,
+            album = album,
+            durationMs = 180000L,
+            streamUrl = "$targetRenderUrl/stream?id=$videoId",
+            artworkUrl = artUrl,
+            genre = "Music"
+        )
     }
 
     override suspend fun getArtist(id: String): Artist? = withContext(Dispatchers.IO) {
@@ -196,11 +231,12 @@ class YouTubeMusicProvider(
             Log.w(TAG, "Failed resolving /song direct stream: ${e.message}")
         }
 
-        // 2. Return direct high-availability Invidious audio stream
-        "https://inv.nadeko.net/latest_version?id=$videoId&itag=140"
+        // 2. Return direct high-availability server audio stream redirect
+        "$targetRenderUrl/stream?id=$videoId"
     }
 
     private fun fetchPipedSearch(urlStr: String): List<Track> {
+        val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
         val req = Request.Builder()
             .url(urlStr)
             .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
@@ -231,8 +267,8 @@ class YouTubeMusicProvider(
             val artistObj = Artist(id = "yt_artist_${uploaderName.hashCode()}", name = uploaderName, imageUrl = thumbnail)
             val albumObj = Album(id = "yt_album_${videoId.hashCode()}", name = title, artist = artistObj, artworkUrl = thumbnail)
 
-            // High-compatibility Direct M4A audio stream
-            val directStreamUrl = "https://inv.nadeko.net/latest_version?id=$videoId&itag=140"
+            // High-compatibility Direct audio stream
+            val directStreamUrl = "$targetRenderUrl/stream?id=$videoId"
 
             tracks.add(
                 Track(
@@ -330,7 +366,8 @@ class YouTubeMusicProvider(
         }
 
         if (streamUrl.isBlank()) {
-            streamUrl = "https://inv.nadeko.net/latest_version?id=$videoId&itag=140"
+            val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
+            streamUrl = "$targetRenderUrl/stream?id=$videoId"
         }
 
         val artistObj = Artist(id = "yt_artist_${uploader.hashCode()}", name = uploader, imageUrl = thumbnail)
@@ -347,6 +384,45 @@ class YouTubeMusicProvider(
             genre = "Music",
             playCount = 0L
         )
+    }
+
+    suspend fun getLyrics(id: String): String? = withContext(Dispatchers.IO) {
+        val videoId = id.removePrefix("yt_")
+        val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
+        try {
+            val url = "$targetRenderUrl/lyrics?id=$videoId"
+            val reqBuilder = Request.Builder().url(url).header("User-Agent", "Musync-Android/1.0")
+            customApiKey?.let { if (it.isNotBlank()) reqBuilder.header("Authorization", "Bearer $it") }
+            val response = httpClient.newCall(reqBuilder.build()).execute()
+            if (response.isSuccessful) {
+                val body = response.body?.string()
+                if (!body.isNullOrBlank()) {
+                    val obj = gson.fromJson(body, JsonObject::class.java)
+                    return@withContext obj.get("lyrics")?.asString
+                }
+            }
+        } catch (_: Exception) {}
+        null
+    }
+
+    suspend fun getSearchSuggestions(query: String): List<String> = withContext(Dispatchers.IO) {
+        val clean = query.trim()
+        if (clean.isBlank()) return@withContext emptyList()
+        val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
+        val encoded = try { URLEncoder.encode(clean, "UTF-8") } catch (_: Exception) { clean }
+        try {
+            val url = "$targetRenderUrl/suggestions?query=$encoded"
+            val reqBuilder = Request.Builder().url(url).header("User-Agent", "Musync-Android/1.0")
+            val response = httpClient.newCall(reqBuilder.build()).execute()
+            if (response.isSuccessful) {
+                val body = response.body?.string()
+                if (!body.isNullOrBlank()) {
+                    val arr = gson.fromJson(body, JsonArray::class.java)
+                    return@withContext arr.mapNotNull { it.asString }
+                }
+            }
+        } catch (_: Exception) {}
+        emptyList()
     }
 
     private fun fetchCustomYtMusic(urlStr: String, apiKey: String?): List<Track> {
@@ -379,8 +455,9 @@ class YouTubeMusicProvider(
                 val artistObj = Artist(id = "yt_artist_${artistName.hashCode()}", name = artistName, imageUrl = artUrl)
                 val albumObj = Album(id = "yt_album_${videoId.hashCode()}", name = title, artist = artistObj, artworkUrl = artUrl)
 
+                val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
                 val streamUrl = obj.get("url")?.asString
-                    ?: "https://inv.nadeko.net/latest_version?id=$videoId&itag=140"
+                    ?: "$targetRenderUrl/stream?id=$videoId"
 
                 tracks.add(
                     Track(
@@ -400,3 +477,4 @@ class YouTubeMusicProvider(
         return tracks
     }
 }
+

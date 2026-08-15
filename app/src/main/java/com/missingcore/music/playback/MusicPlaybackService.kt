@@ -126,8 +126,26 @@ class MusicPlaybackService : MediaLibraryService() {
                 }
             }
 
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                val stateName = when (playbackState) {
+                    Player.STATE_IDLE -> "IDLE"
+                    Player.STATE_BUFFERING -> "BUFFERING"
+                    Player.STATE_READY -> "READY"
+                    Player.STATE_ENDED -> "ENDED"
+                    else -> "UNKNOWN ($playbackState)"
+                }
+                val currentItem = exoPlayer.currentMediaItem
+                android.util.Log.d("MusicPlaybackService", "ExoPlayer State Changed: $stateName | Current Media: ${currentItem?.mediaId} | URI: ${currentItem?.requestMetadata?.mediaUri ?: currentItem?.localConfiguration?.uri}")
+            }
+
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                android.util.Log.e("MusicPlaybackService", "ExoPlayer Error: ${error.message}", error)
+                val currentItem = exoPlayer.currentMediaItem
+                val uri = currentItem?.requestMetadata?.mediaUri ?: currentItem?.localConfiguration?.uri
+                android.util.Log.e(
+                    "MusicPlaybackService",
+                    "ExoPlayer Error occurred | MediaId: ${currentItem?.mediaId} | Title: ${currentItem?.mediaMetadata?.title} | URI: $uri | ErrorCode: ${error.errorCode} | ErrorCodeName: ${error.errorCodeName} | Message: ${error.message}",
+                    error
+                )
             }
         })
 
@@ -177,18 +195,25 @@ class MusicPlaybackService : MediaLibraryService() {
                 val resolvedItems = mediaItems.map { item ->
                     val uri = item.requestMetadata.mediaUri ?: item.localConfiguration?.uri
                     val uriStr = uri?.toString()
-                    if (!uriStr.isNullOrBlank() && uri != android.net.Uri.EMPTY && !uriStr.contains("/stream?id=")) {
-                        item
+                    val track = MediaItemMapper.fromMediaItem(item)
+
+                    val resolvedStreamUrl = if (!uriStr.isNullOrBlank() && uri != android.net.Uri.EMPTY) {
+                        uriStr
                     } else {
-                        val track = MediaItemMapper.fromMediaItem(item)
-                        val streamUrl = try {
+                        try {
                             app.container.universalMusicProvider.getStreamUrl(track)
-                        } catch (_: Exception) { null }
-                        if (!streamUrl.isNullOrBlank()) {
-                            MediaItemMapper.toMediaItem(track.copy(streamUrl = streamUrl))
-                        } else {
-                            item
+                        } catch (e: Exception) {
+                            android.util.Log.w("MusicPlaybackService", "Failed resolving stream for ${track.id}: ${e.message}")
+                            null
                         }
+                    }
+
+                    if (!resolvedStreamUrl.isNullOrBlank()) {
+                        android.util.Log.d("MusicPlaybackService", "onAddMediaItems -> resolved stream for '${track.title}' (${track.id}) -> $resolvedStreamUrl")
+                        MediaItemMapper.toMediaItem(track.copy(streamUrl = resolvedStreamUrl))
+                    } else {
+                        android.util.Log.w("MusicPlaybackService", "onAddMediaItems -> no stream URL for '${track.title}' (${track.id})")
+                        item.buildUpon().setUri(uri ?: android.net.Uri.EMPTY).build()
                     }
                 }.toMutableList()
                 future.set(resolvedItems)
@@ -296,6 +321,24 @@ class MusicPlaybackService : MediaLibraryService() {
                     }
                 } catch (e: Exception) {
                     future.set(LibraryResult.ofError(SessionResult.RESULT_ERROR_UNKNOWN))
+                }
+            }
+            return future
+        }
+
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val app = application as MusyncApplication
+            val future = com.google.common.util.concurrent.SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
+            serviceScope.launch(Dispatchers.IO) {
+                try {
+                    val recent = app.container.recentlyPlayedRepository.getRecentlyPlayed(10).first()
+                    val mediaItems = recent.map { MediaItemMapper.toMediaItem(it) }
+                    future.set(MediaSession.MediaItemsWithStartPosition(mediaItems, 0, 0L))
+                } catch (_: Exception) {
+                    future.set(MediaSession.MediaItemsWithStartPosition(emptyList(), 0, 0L))
                 }
             }
             return future
