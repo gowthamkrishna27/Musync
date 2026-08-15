@@ -43,7 +43,9 @@ class YouTubeMusicProvider(
 
     companion object {
         private const val TAG = "YouTubeMusicProvider"
-        const val DEFAULT_RENDER_URL = "http://192.168.0.104:5000"
+        const val LOCAL_URL = "http://192.168.0.104:5000"
+        const val CLOUD_URL = "https://musync-ytmusic-api.onrender.com"
+        const val DEFAULT_RENDER_URL = LOCAL_URL
 
         private val PIPED_INSTANCES = listOf(
             "https://pipedapi.kavin.rocks",
@@ -58,15 +60,44 @@ class YouTubeMusicProvider(
         )
     }
 
+    @Volatile
+    private var verifiedWorkingUrl: String? = null
+
+    suspend fun getActiveBaseUrl(): String = withContext(Dispatchers.IO) {
+        if (!customBaseUrl.isNullOrBlank() && customBaseUrl != "none") {
+            return@withContext customBaseUrl!!.trimEnd('/')
+        }
+
+        verifiedWorkingUrl?.let { return@withContext it }
+
+        // Fast 1.2s health ping to local PC server
+        try {
+            val req = Request.Builder().url("$LOCAL_URL/health").header("User-Agent", "Musync-Android/1.0").build()
+            val quickClient = httpClient.newBuilder().connectTimeout(1200, TimeUnit.MILLISECONDS).readTimeout(1200, TimeUnit.MILLISECONDS).build()
+            val resp = quickClient.newCall(req).execute()
+            if (resp.isSuccessful) {
+                verifiedWorkingUrl = LOCAL_URL
+                Log.d(TAG, "Dynamically selected local endpoint: $LOCAL_URL")
+                return@withContext LOCAL_URL
+            }
+        } catch (_: Exception) {
+            Log.d(TAG, "Local endpoint unreachable, using cloud endpoint: $CLOUD_URL")
+        }
+
+        verifiedWorkingUrl = CLOUD_URL
+        CLOUD_URL
+    }
+
     fun updateConfiguration(baseUrl: String?, apiKey: String?) {
-        customBaseUrl = if (!baseUrl.isNullOrBlank() && baseUrl != "none") {
-            if (baseUrl.endsWith("/")) baseUrl.dropLast(1) else baseUrl
-        } else null
+        val trimmed = baseUrl?.trim()?.trimEnd('/')
+        customBaseUrl = if (!trimmed.isNullOrBlank() && trimmed != "none") trimmed else null
         customApiKey = apiKey
+        verifiedWorkingUrl = null
+        Log.d(TAG, "YouTubeMusicProvider configuration updated -> customBaseUrl: $customBaseUrl")
     }
 
     override suspend fun testConnection(baseUrl: String?, apiKey: String?): Boolean = withContext(Dispatchers.IO) {
-        val target = (baseUrl ?: customBaseUrl ?: DEFAULT_RENDER_URL).trimEnd('/')
+        val target = (baseUrl ?: customBaseUrl ?: getActiveBaseUrl()).trimEnd('/')
         if (target.isBlank() || target == "none") return@withContext false
         try {
             val req = Request.Builder()
@@ -97,14 +128,15 @@ class YouTubeMusicProvider(
         if (cleanQuery.isBlank()) return@withContext emptyList()
         val encoded = try { URLEncoder.encode(cleanQuery, "UTF-8") } catch (_: Exception) { cleanQuery }
 
-        // 1. Primary: Render Cloud Endpoint (or user's custom endpoint)
-        val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
+        // 1. Dynamic Endpoint (Local or Cloud or Custom)
+        val targetRenderUrl = getActiveBaseUrl()
         try {
             val url = "$targetRenderUrl/search?query=$encoded"
-            val tracks = fetchCustomYtMusic(url, customApiKey)
+            val tracks = fetchCustomYtMusic(url, customApiKey, targetRenderUrl)
             if (tracks.isNotEmpty()) return@withContext tracks
         } catch (e: Exception) {
-            Log.w(TAG, "Render endpoint failed/sleeping: ${e.message}")
+            Log.w(TAG, "Dynamic endpoint $targetRenderUrl failed: ${e.message}")
+            verifiedWorkingUrl = null
         }
 
         // 2. Query Public Piped Instances
@@ -148,7 +180,7 @@ class YouTubeMusicProvider(
 
     override suspend fun getTrack(id: String): Track? = withContext(Dispatchers.IO) {
         val videoId = id.removePrefix("yt_")
-        val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
+        val targetRenderUrl = getActiveBaseUrl()
         try {
             val url = "$targetRenderUrl/song?id=$videoId"
             val req = Request.Builder().url(url).header("User-Agent", "Musync-Android/1.0").build()
@@ -430,7 +462,7 @@ class YouTubeMusicProvider(
     suspend fun getSearchSuggestions(query: String): List<String> = withContext(Dispatchers.IO) {
         val clean = query.trim()
         if (clean.isBlank()) return@withContext emptyList()
-        val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
+        val targetRenderUrl = getActiveBaseUrl()
         val encoded = try { URLEncoder.encode(clean, "UTF-8") } catch (_: Exception) { clean }
         try {
             val url = "$targetRenderUrl/suggestions?query=$encoded"
@@ -447,7 +479,7 @@ class YouTubeMusicProvider(
         emptyList()
     }
 
-    private fun fetchCustomYtMusic(urlStr: String, apiKey: String?): List<Track> {
+    private fun fetchCustomYtMusic(urlStr: String, apiKey: String?, activeBaseUrl: String): List<Track> {
         val reqBuilder = Request.Builder()
             .url(urlStr)
             .header("User-Agent", "Musync-Android/1.0")
@@ -477,8 +509,7 @@ class YouTubeMusicProvider(
                 val artistObj = Artist(id = "yt_artist_${artistName.hashCode()}", name = artistName, imageUrl = artUrl)
                 val albumObj = Album(id = "yt_album_${videoId.hashCode()}", name = title, artist = artistObj, artworkUrl = artUrl)
 
-                val targetRenderUrl = (customBaseUrl ?: DEFAULT_RENDER_URL).trimEnd('/')
-                val streamUrl = "$targetRenderUrl/stream?id=$videoId"
+                val streamUrl = "$activeBaseUrl/stream?id=$videoId"
 
                 tracks.add(
                     Track(
