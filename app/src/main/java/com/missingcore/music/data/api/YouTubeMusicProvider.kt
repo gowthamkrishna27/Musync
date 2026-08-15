@@ -173,13 +173,35 @@ class YouTubeMusicProvider(
     }
 
     override suspend fun getStreamUrl(track: Track): String? = withContext(Dispatchers.IO) {
+        val videoId = track.id.removePrefix("yt_")
+        val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
+
+        // 1. Query Render /song endpoint for direct Google Video CDN URL
+        try {
+            val songUrl = "$targetRenderUrl/song?id=$videoId"
+            val reqBuilder = Request.Builder().url(songUrl).header("User-Agent", "Musync-Android/1.0")
+            customApiKey?.let { if (it.isNotBlank()) reqBuilder.header("Authorization", "Bearer $it") }
+            val response = httpClient.newCall(reqBuilder.build()).execute()
+            if (response.isSuccessful) {
+                val body = response.body?.string()
+                if (!body.isNullOrBlank()) {
+                    val obj = gson.fromJson(body, JsonObject::class.java)
+                    val directUrl = obj.get("url")?.asString ?: obj.get("media_url")?.asString ?: obj.get("stream_url")?.asString
+                    if (!directUrl.isNullOrBlank() && (directUrl.startsWith("http://") || directUrl.startsWith("https://"))) {
+                        return@withContext directUrl
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed resolving /song direct stream: ${e.message}")
+        }
+
+        // 2. Return direct stream endpoint
         val rawUrl = track.streamUrl
         if (!rawUrl.isNullOrBlank() && (rawUrl.startsWith("http://") || rawUrl.startsWith("https://"))) {
             return@withContext rawUrl
         }
 
-        val videoId = track.id.removePrefix("yt_")
-        val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
         "$targetRenderUrl/stream?id=$videoId"
     }
 

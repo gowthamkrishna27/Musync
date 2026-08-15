@@ -6,10 +6,11 @@ Uses android_vr and tvhtml5 device clients for 100% bypass of datacenter bot blo
 streaming official Google Video CDN audio directly to ExoPlayer with 0ms buffering.
 """
 
-from flask import Flask, request, jsonify, redirect
+from flask import Flask, request, jsonify, redirect, Response
 from flask_cors import CORS
 from ytmusicapi import YTMusic
 import yt_dlp
+import requests
 import os
 import sys
 
@@ -19,7 +20,7 @@ CORS(app)
 # Initialize YTMusic
 try:
     yt = YTMusic()
-    print("✓ Initialized YTMusic successfully.")
+    print("YTMusic initialized successfully.")
 except Exception as e:
     print(f"Warning initializing YTMusic: {e}")
     yt = None
@@ -53,7 +54,7 @@ def home():
     return jsonify({
         "status": "online",
         "service": "Musync Stream Server (ytmusicapi + yt-dlp android_vr)",
-        "version": "2.1.0",
+        "version": "2.2.0",
         "endpoints": {
             "search": "/search?query=<song_or_artist>",
             "song": "/song?id=<video_id>",
@@ -77,6 +78,22 @@ def stream_redirect():
     if stream_url:
         return redirect(stream_url, code=302)
     return jsonify({"error": "Failed to resolve stream"}), 502
+
+@app.route("/song", methods=["GET"])
+@app.route("/song/", methods=["GET"])
+def get_song():
+    video_id = request.args.get("id") or request.args.get("query")
+    if not video_id:
+        return jsonify({"error": "Missing video ID"}), 400
+
+    stream_url = resolve_direct_audio_url(video_id)
+    return jsonify({
+        "videoId": video_id,
+        "id": video_id,
+        "url": stream_url or "",
+        "media_url": stream_url or "",
+        "stream_url": stream_url or ""
+    })
 
 @app.route("/search", methods=["GET"])
 @app.route("/result/", methods=["GET"])
@@ -112,7 +129,6 @@ def search():
                 except:
                     duration_sec = 180
 
-            # Stream redirect endpoint that resolves and streams Google Video CDN audio
             stream_url = f"{host_url}/stream?id={video_id}"
 
             songs.append({
@@ -135,21 +151,6 @@ def search():
         return jsonify(songs)
     except Exception as e:
         return jsonify({"error": str(e), "data": []}), 500
-
-@app.route("/song", methods=["GET"])
-@app.route("/song/", methods=["GET"])
-def get_song():
-    video_id = request.args.get("id") or request.args.get("query")
-    if not video_id:
-        return jsonify({"error": "Missing video ID"}), 400
-
-    stream_url = resolve_direct_audio_url(video_id)
-    return jsonify({
-        "videoId": video_id,
-        "id": video_id,
-        "url": stream_url or "",
-        "media_url": stream_url or ""
-    })
 
 @app.route("/trending", methods=["GET"])
 @app.route("/charts", methods=["GET"])

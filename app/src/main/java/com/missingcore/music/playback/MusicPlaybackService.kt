@@ -166,6 +166,36 @@ class MusicPlaybackService : MediaLibraryService() {
 
     private inner class CustomLibraryCallback : MediaLibrarySession.Callback {
 
+        override fun onAddMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: MutableList<MediaItem>
+        ): ListenableFuture<MutableList<MediaItem>> {
+            val app = application as MusyncApplication
+            val future = com.google.common.util.concurrent.SettableFuture.create<MutableList<MediaItem>>()
+            serviceScope.launch(Dispatchers.IO) {
+                val resolvedItems = mediaItems.map { item ->
+                    val uri = item.requestMetadata.mediaUri ?: item.localConfiguration?.uri
+                    val uriStr = uri?.toString()
+                    if (!uriStr.isNullOrBlank() && uri != android.net.Uri.EMPTY && !uriStr.contains("/stream?id=")) {
+                        item
+                    } else {
+                        val track = MediaItemMapper.fromMediaItem(item)
+                        val streamUrl = try {
+                            app.container.universalMusicProvider.getStreamUrl(track)
+                        } catch (_: Exception) { null }
+                        if (!streamUrl.isNullOrBlank()) {
+                            MediaItemMapper.toMediaItem(track.copy(streamUrl = streamUrl))
+                        } else {
+                            item
+                        }
+                    }
+                }.toMutableList()
+                future.set(resolvedItems)
+            }
+            return future
+        }
+
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
             browser: MediaSession.ControllerInfo,
