@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.settings
+package com.musync.app.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -62,8 +62,10 @@ import com.musync.app.ui.theme.StatusGreen
 import com.musync.app.ui.theme.SurfaceBlack
 import com.musync.app.ui.theme.TextGreyMuted
 import com.musync.app.ui.theme.TextGreySecondary
-import androidx.compose.foundation.layout.statusBarsPadding
 import com.musync.app.ui.theme.TextWhite
+import androidx.compose.foundation.layout.statusBarsPadding
+import com.musync.app.ui.auth.AccountProfileCard
+import com.musync.app.ui.auth.AuthBottomSheet
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,6 +79,8 @@ fun SettingsScreen(
     val eqState by audioEffectManager.state.collectAsState()
     val appUpdateManager = app.container.appUpdateManager
     val updateState by appUpdateManager.updateState.collectAsState()
+    val currentUser by viewModel.authManager.currentUser.collectAsState()
+    val syncStatus by viewModel.authManager.syncStatus.collectAsState()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     val uiState by viewModel.uiState.collectAsState()
@@ -89,6 +93,7 @@ fun SettingsScreen(
     var showTermsDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var showHapticsDialog by remember { mutableStateOf(false) }
+    var showAuthSheet by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -113,6 +118,19 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp)
         ) {
+            // Group 0: Account & Cloud Sync
+            item {
+                SettingsSectionTitle("Account & Cloud Backup")
+                AccountProfileCard(
+                    user = currentUser,
+                    syncStatus = syncStatus,
+                    onSignInClick = { showAuthSheet = true },
+                    onSyncClick = { viewModel.cloudSyncManager.triggerSync() },
+                    onSignOutClick = { viewModel.authManager.signOut() }
+                )
+                Spacer(modifier = Modifier.height(18.dp))
+            }
+
             // Group 1: Playback & Audio
             item {
                 SettingsSectionTitle("Playback & Audio")
@@ -836,6 +854,13 @@ fun SettingsScreen(
             },
             containerColor = SurfaceBlack,
             shape = RoundedCornerShape(14.dp)
+        )
+    }
+
+    if (showAuthSheet) {
+        AuthBottomSheet(
+            authManager = viewModel.authManager,
+            onDismiss = { showAuthSheet = false }
         )
     }
 }

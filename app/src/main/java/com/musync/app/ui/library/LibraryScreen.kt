@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.library
+package com.musync.app.ui.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -67,6 +67,8 @@ import com.musync.app.ui.theme.TextGreySecondary
 import com.musync.app.ui.theme.TextWhite
 
 import androidx.compose.foundation.layout.statusBarsPadding
+import com.musync.app.ui.auth.AccountProfileCard
+import com.musync.app.ui.auth.AuthBottomSheet
 
 enum class LibraryNavTab {
     FAVORITES, PLAYLISTS, HISTORY, LOCAL
@@ -78,8 +80,16 @@ fun LibraryScreen(
     onNavigateToPlaylist: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val app = context.applicationContext as com.musync.app.MusyncApplication
+    val authManager = app.container.authManager
+    val cloudSyncManager = app.container.cloudSyncManager
+    val currentUser by authManager.currentUser.collectAsState()
+    val syncStatus by authManager.syncStatus.collectAsState()
+
     var selectedTab by remember { mutableStateOf(LibraryNavTab.FAVORITES) }
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showAuthSheet by remember { mutableStateOf(false) }
     var newPlaylistName by remember { mutableStateOf("") }
 
     val favorites by viewModel.favorites.collectAsState()
@@ -133,6 +143,18 @@ fun LibraryScreen(
         }
 
         Spacer(modifier = Modifier.height(10.dp))
+
+        // Account Profile & Sync Badge
+        AccountProfileCard(
+            user = currentUser,
+            syncStatus = syncStatus,
+            onSignInClick = { showAuthSheet = true },
+            onSyncClick = { cloudSyncManager.triggerSync() },
+            onSignOutClick = { authManager.signOut() },
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         // Tabs: Favorites, Playlists, History, Local
         TabRow(
@@ -592,6 +614,13 @@ fun LibraryScreen(
             },
             containerColor = SurfaceBlack,
             shape = RoundedCornerShape(14.dp)
+        )
+    }
+
+    if (showAuthSheet) {
+        AuthBottomSheet(
+            authManager = authManager,
+            onDismiss = { showAuthSheet = false }
         )
     }
 }

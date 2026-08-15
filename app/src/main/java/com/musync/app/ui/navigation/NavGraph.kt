@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.navigation
+package com.musync.app.ui.navigation
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -124,7 +124,9 @@ fun MainApp(
             container.preferencesManager,
             container.musicRepository,
             container.universalMusicProvider,
-            container.beatHapticManager
+            container.beatHapticManager,
+            container.authManager,
+            container.cloudSyncManager
         )
     )
 

@@ -1,4 +1,4 @@
-﻿package com.musync.app.di
+package com.musync.app.di
 
 import android.content.Context
 import com.musync.app.data.api.UniversalMusicProvider
@@ -86,6 +86,14 @@ class MusyncContainer(private val context: Context) {
 
     val appUpdateManager: com.musync.app.update.AppUpdateManager by lazy {
         com.musync.app.update.AppUpdateManager(context, preferencesManager)
+    }
+
+    val authManager: com.musync.app.auth.AuthManager by lazy {
+        com.musync.app.auth.AuthManager(context)
+    }
+
+    val cloudSyncManager: com.musync.app.data.sync.CloudSyncManager by lazy {
+        com.musync.app.data.sync.CloudSyncManager(authManager, database)
     }
 
     val playbackManager: PlaybackManager by lazy {

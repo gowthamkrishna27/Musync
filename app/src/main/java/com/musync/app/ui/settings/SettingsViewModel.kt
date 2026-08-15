@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.settings
+package com.musync.app.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -32,7 +32,9 @@ class SettingsViewModel(
     private val preferencesManager: PreferencesManager,
     private val musicRepository: MusicRepository,
     private val universalMusicProvider: UniversalMusicProvider,
-    private val beatHapticManager: BeatHapticManager
+    private val beatHapticManager: BeatHapticManager,
+    val authManager: com.musync.app.auth.AuthManager,
+    val cloudSyncManager: com.musync.app.data.sync.CloudSyncManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -156,11 +158,13 @@ class SettingsViewModel(
         private val preferencesManager: PreferencesManager,
         private val musicRepository: MusicRepository,
         private val universalMusicProvider: UniversalMusicProvider,
-        private val beatHapticManager: BeatHapticManager
+        private val beatHapticManager: BeatHapticManager,
+        private val authManager: com.musync.app.auth.AuthManager,
+        private val cloudSyncManager: com.musync.app.data.sync.CloudSyncManager
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return SettingsViewModel(preferencesManager, musicRepository, universalMusicProvider, beatHapticManager) as T
+            return SettingsViewModel(preferencesManager, musicRepository, universalMusicProvider, beatHapticManager, authManager, cloudSyncManager) as T
         }
     }
 }
