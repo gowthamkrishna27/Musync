@@ -1,0 +1,26 @@
+# Android Studio & Gradle
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+*/build
+.cxx
+captures/
+.externalNativeBuild
+.kotlin/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+
+# Keystores & sensitive keys
+*.jks
+*.keystore
+oauth.json
+browser.json
