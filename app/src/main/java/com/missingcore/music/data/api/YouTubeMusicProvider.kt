@@ -43,7 +43,7 @@ class YouTubeMusicProvider(
 
     companion object {
         private const val TAG = "YouTubeMusicProvider"
-        const val DEFAULT_RENDER_URL = "https://musync-ytmusic-api.onrender.com"
+        const val DEFAULT_RENDER_URL = "http://192.168.0.104:5000"
 
         private val PIPED_INSTANCES = listOf(
             "https://pipedapi.kavin.rocks",
