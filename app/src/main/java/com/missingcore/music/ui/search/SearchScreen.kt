@@ -56,6 +56,7 @@ import com.missingcore.music.ui.theme.IconWhite
 import com.missingcore.music.ui.theme.TextGreyMuted
 import com.missingcore.music.ui.theme.TextGreySecondary
 import com.missingcore.music.ui.theme.TextWhite
+import androidx.compose.foundation.layout.statusBarsPadding
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -82,7 +83,8 @@ fun SearchScreen(
         modifier = modifier
             .fillMaxSize()
             .background(BackgroundBlack)
-            .padding(top = 14.dp)
+            .statusBarsPadding()
+            .padding(top = 8.dp)
     ) {
         // Title: "Search"
         Text(

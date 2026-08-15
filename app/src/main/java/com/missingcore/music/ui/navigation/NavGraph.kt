@@ -145,366 +145,363 @@ fun MainApp(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    Scaffold(
-        bottomBar = {
-            val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-            val isPlayingTrack = playbackState.currentTrack != null
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.Transparent)
-                    .padding(start = 14.dp, end = 14.dp, bottom = 28.dp),
-                contentAlignment = Alignment.Center
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(BackgroundBlack)
+    ) {
+        NavHost(
+            navController = navController,
+            startDestination = Screen.Home.route,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            composable(
+                route = Screen.Home.route,
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = "missingcore://home" },
+                    navDeepLink { uriPattern = "musync://home" }
+                )
             ) {
-                Row(
-                    modifier = if (isPlayingTrack) Modifier.fillMaxWidth() else Modifier.wrapContentWidth(),
-                    horizontalArrangement = if (isPlayingTrack) Arrangement.spacedBy(8.dp) else Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                HomeScreen(
+                    viewModel = homeViewModel,
+                    onNavigateToSearch = {
+                        navController.navigate(Screen.Search.route)
+                    }
+                )
+            }
+
+            composable(
+                route = Screen.Search.route,
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = "missingcore://search" },
+                    navDeepLink { uriPattern = "musync://search" }
+                )
+            ) {
+                SearchScreen(viewModel = searchViewModel)
+            }
+
+            composable(
+                route = Screen.Library.route,
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = "missingcore://library" },
+                    navDeepLink { uriPattern = "musync://library" }
+                )
+            ) {
+                LibraryScreen(
+                    viewModel = libraryViewModel,
+                    onNavigateToPlaylist = { playlistId ->
+                        navController.navigate(Screen.PlaylistDetail.createRoute(playlistId))
+                    }
+                )
+            }
+
+            composable(
+                route = Screen.Settings.route,
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = "missingcore://settings" },
+                    navDeepLink { uriPattern = "musync://settings" }
+                )
+            ) {
+                SettingsScreen(viewModel = settingsViewModel)
+            }
+
+            composable(
+                route = Screen.PlaylistDetail.route,
+                arguments = listOf(navArgument("playlistId") { type = NavType.StringType }),
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = "missingcore://playlist/{playlistId}" },
+                    navDeepLink { uriPattern = "musync://playlist/{playlistId}" }
+                )
+            ) { backStackEntry ->
+                val playlistId = backStackEntry.arguments?.getString("playlistId") ?: ""
+                val playlistViewModel: PlaylistViewModel = viewModel(
+                    key = "playlist_$playlistId",
+                    factory = PlaylistViewModel.Factory(
+                        playlistId,
+                        container.playlistRepository,
+                        container.favoritesRepository,
+                        container.playbackManager
+                    )
+                )
+                PlaylistDetailScreen(
+                    viewModel = playlistViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            // Deep links for direct track playback
+            composable(
+                route = "track/{id}",
+                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = "missingcore://track/{id}" },
+                    navDeepLink { uriPattern = "musync://track/{id}" }
+                )
+            ) { backStackEntry ->
+                val trackId = backStackEntry.arguments?.getString("id")
+                if (!trackId.isNullOrBlank()) {
+                    androidx.compose.runtime.LaunchedEffect(trackId) {
+                        val track = container.musicRepository.getTrack(trackId).getOrNull()
+                        if (track != null) {
+                            container.playbackManager.play(track)
+                        }
+                    }
+                }
+                HomeScreen(
+                    viewModel = homeViewModel,
+                    onNavigateToSearch = { navController.navigate(Screen.Search.route) }
+                )
+            }
+        }
+
+        // True Floating Glassmorphism Bottom Bar Overlay with Dark Frosted Glass Background
+        val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+        val isPlayingTrack = playbackState.currentTrack != null
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .background(Color.Transparent)
+                .padding(start = 14.dp, end = 14.dp, bottom = 24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                modifier = if (isPlayingTrack) Modifier.fillMaxWidth() else Modifier.wrapContentWidth(),
+                horizontalArrangement = if (isPlayingTrack) Arrangement.spacedBy(8.dp) else Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 1. LEFT SIDE: Mini Music Player (Dark Frosted Glass Pill)
+                AnimatedVisibility(
+                    visible = isPlayingTrack,
+                    enter = fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
+                            slideInHorizontally(initialOffsetX = { -it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                            expandHorizontally(),
+                    exit = fadeOut() + slideOutHorizontally() + shrinkHorizontally(),
+                    modifier = Modifier.weight(1f, fill = true)
                 ) {
-                    // 1. LEFT SIDE: Mini Music Player (Smooth spring entry animation on song appearance)
-                    AnimatedVisibility(
-                        visible = isPlayingTrack,
-                        enter = fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
-                                slideInHorizontally(initialOffsetX = { -it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                                expandHorizontally(),
-                        exit = fadeOut() + slideOutHorizontally() + shrinkHorizontally(),
-                        modifier = Modifier.weight(1f, fill = true)
-                    ) {
-                        if (playbackState.currentTrack != null) {
-                            val track = playbackState.currentTrack!!
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(36.dp))
-                                    .background(Color(0x4018181B))
-                                    .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(36.dp))
-                                    .clickable {
-                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                        showNowPlaying = true
-                                    }
-                                    .padding(start = 8.dp, end = 10.dp, top = 7.dp, bottom = 7.dp),
-                                contentAlignment = Alignment.CenterStart
+                    if (playbackState.currentTrack != null) {
+                        val track = playbackState.currentTrack!!
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(36.dp))
+                                .background(Color(0xF2181A24))
+                                .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(36.dp))
+                                .clickable {
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    showNowPlaying = true
+                                }
+                                .padding(start = 8.dp, end = 10.dp, top = 7.dp, bottom = 7.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
+                                // Circular Vinyl Artwork
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF111111))
+                                        .border(1.5.dp, Color(0x55444444), CircleShape)
+                                        .padding(2.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    // Circular Vinyl Artwork
-                                    Box(
-                                        modifier = Modifier
-                                            .size(46.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFF111111))
-                                            .border(2.dp, Color(0x55444444), CircleShape)
-                                            .padding(2.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (!track.artworkUrl.isNullOrBlank()) {
-                                            coil.compose.AsyncImage(
-                                                model = track.artworkUrl,
-                                                contentDescription = track.title,
-                                                modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .clip(CircleShape),
-                                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                            )
-                                        } else {
-                                            com.missingcore.music.ui.components.DefaultArtworkView(
-                                                modifier = Modifier.fillMaxSize(),
-                                                iconSize = 20.dp,
-                                                shape = CircleShape
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.width(10.dp))
-
-                                    // Track Title & Artist
-                                    Column(
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(
-                                            text = track.title,
-                                            style = MaterialTheme.typography.titleMedium.copy(
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Bold
-                                            ),
-                                            color = Color.White,
-                                            maxLines = 1,
-                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    if (!track.artworkUrl.isNullOrBlank()) {
+                                        coil.compose.AsyncImage(
+                                            model = track.artworkUrl,
+                                            contentDescription = track.title,
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .clip(CircleShape),
+                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
                                         )
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = track.artist.name,
-                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                            color = Color(0xFFB3B3B3),
-                                            maxLines = 1,
-                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    } else {
+                                        com.missingcore.music.ui.components.DefaultArtworkView(
+                                            modifier = Modifier.fillMaxSize(),
+                                            iconSize = 20.dp,
+                                            shape = CircleShape
                                         )
                                     }
+                                }
 
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
 
-                                    // Dark Glassmorphic Play/Pause Button
-                                    Box(
-                                        modifier = Modifier
-                                            .size(42.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFF2A2D36))
-                                            .border(1.dp, Color(0x33FFFFFF), CircleShape)
-                                            .clickable {
-                                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                                playerViewModel.togglePlay()
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = if (playbackState.isPlaying) androidx.compose.material.icons.Icons.Default.Pause else androidx.compose.material.icons.Icons.Default.PlayArrow,
-                                            contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
+                                // Track Title & Artist
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = track.title,
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = track.artist.name,
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                        color = Color(0xFFB3B3B3),
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(6.dp))
+
+                                // Dark Glass Play/Pause Button
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF2C303E))
+                                        .border(1.dp, Color(0x44FFFFFF), CircleShape)
+                                        .clickable {
+                                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                            playerViewModel.togglePlay()
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (playbackState.isPlaying) androidx.compose.material.icons.Icons.Default.Pause else androidx.compose.material.icons.Icons.Default.PlayArrow,
+                                        contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
                                 }
                             }
                         }
                     }
+                }
 
-                    // 2. RIGHT SIDE: Floating Navigation Pill (Home, Library, Settings)
-                    Box(
-                        modifier = Modifier
-                            .wrapContentWidth()
-                            .clip(RoundedCornerShape(36.dp))
-                            .background(Color(0x4018181B))
-                            .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(36.dp))
-                            .padding(horizontal = 8.dp, vertical = 7.dp)
+                // 2. RIGHT SIDE: Floating Navigation Pill (Home, Library, Settings with Dark Glass)
+                Box(
+                    modifier = Modifier
+                        .wrapContentWidth()
+                        .clip(RoundedCornerShape(36.dp))
+                        .background(Color(0xF2181A24))
+                        .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(36.dp))
+                        .padding(horizontal = 8.dp, vertical = 7.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.wrapContentWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.wrapContentWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        // 1. Home
+                        val isHome = currentRoute == Screen.Home.route
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(if (isHome) Color(0x35FFFFFF) else Color.Transparent)
+                                .clickable {
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    navController.navigate(Screen.Home.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
-                            // 1. Home
-                            val isHome = currentRoute == Screen.Home.route
-                            Box(
-                                modifier = Modifier
-                                    .size(46.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isHome) Color(0xFF33383E) else Color.Transparent)
-                                    .clickable {
-                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                        navController.navigate(Screen.Home.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = androidx.compose.material.icons.Icons.Filled.Home,
-                                    contentDescription = "Home",
-                                    tint = if (isHome) Color.White else Color(0xFF9E9E9E),
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Filled.Home,
+                                contentDescription = "Home",
+                                tint = if (isHome) Color.White else Color(0xFF9E9E9E),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
 
-                            // 2. Library
-                            val isLibrary = currentRoute == Screen.Library.route
-                            Box(
-                                modifier = Modifier
-                                    .size(46.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isLibrary) Color(0xFF33383E) else Color.Transparent)
-                                    .clickable {
-                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                        navController.navigate(Screen.Library.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = androidx.compose.material.icons.Icons.Outlined.LibraryMusic,
-                                    contentDescription = "Library",
-                                    tint = if (isLibrary) Color.White else Color(0xFF9E9E9E),
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
+                        // 2. Library
+                        val isLibrary = currentRoute == Screen.Library.route
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(if (isLibrary) Color(0x35FFFFFF) else Color.Transparent)
+                                .clickable {
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    navController.navigate(Screen.Library.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Outlined.LibraryMusic,
+                                contentDescription = "Library",
+                                tint = if (isLibrary) Color.White else Color(0xFF9E9E9E),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
 
-                            // 3. Settings
-                            val isSettings = currentRoute == Screen.Settings.route
-                            Box(
-                                modifier = Modifier
-                                    .size(46.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isSettings) Color(0xFF33383E) else Color.Transparent)
-                                    .clickable {
-                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                        navController.navigate(Screen.Settings.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = androidx.compose.material.icons.Icons.Default.Settings,
-                                    contentDescription = "Settings",
-                                    tint = if (isSettings) Color.White else Color(0xFF9E9E9E),
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
+                        // 3. Settings
+                        val isSettings = currentRoute == Screen.Settings.route
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(if (isSettings) Color(0x35FFFFFF) else Color.Transparent)
+                                .clickable {
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    navController.navigate(Screen.Settings.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = if (isSettings) Color.White else Color(0xFF9E9E9E),
+                                modifier = Modifier.size(22.dp)
+                            )
                         }
                     }
                 }
             }
-        },
-        containerColor = BackgroundBlack
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            NavHost(
-                navController = navController,
-                startDestination = Screen.Home.route,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                composable(
-                    route = Screen.Home.route,
-                    deepLinks = listOf(
-                        navDeepLink { uriPattern = "missingcore://home" },
-                        navDeepLink { uriPattern = "musync://home" }
-                    )
-                ) {
-                    HomeScreen(
-                        viewModel = homeViewModel,
-                        onNavigateToSearch = {
-                            navController.navigate(Screen.Search.route)
-                        }
-                    )
+        }
+
+        // Now Playing Sheet
+        if (showNowPlaying && playbackState.currentTrack != null) {
+            NowPlayingSheet(
+                playbackState = playbackState,
+                isFavorite = favoriteIds.contains(playbackState.currentTrack?.id),
+                onDismiss = { showNowPlaying = false },
+                onTogglePlay = { playerViewModel.togglePlay() },
+                onSkipNext = { playerViewModel.skipNext() },
+                onSkipPrevious = { playerViewModel.skipPrevious() },
+                onSeekTo = { pos -> playerViewModel.seekTo(pos) },
+                onToggleFavorite = { playerViewModel.toggleFavorite(playbackState.currentTrack) },
+                onToggleShuffle = { playerViewModel.toggleShuffle() },
+                onToggleRepeat = { playerViewModel.toggleRepeat() },
+                onOpenQueue = {
+                    showNowPlaying = false
+                    showQueue = true
                 }
+            )
+        }
 
-                composable(
-                    route = Screen.Search.route,
-                    deepLinks = listOf(
-                        navDeepLink { uriPattern = "missingcore://search" },
-                        navDeepLink { uriPattern = "musync://search" }
-                    )
-                ) {
-                    SearchScreen(viewModel = searchViewModel)
-                }
-
-                composable(
-                    route = Screen.Library.route,
-                    deepLinks = listOf(
-                        navDeepLink { uriPattern = "missingcore://library" },
-                        navDeepLink { uriPattern = "musync://library" }
-                    )
-                ) {
-                    LibraryScreen(
-                        viewModel = libraryViewModel,
-                        onNavigateToPlaylist = { playlistId ->
-                            navController.navigate(Screen.PlaylistDetail.createRoute(playlistId))
-                        }
-                    )
-                }
-
-                composable(
-                    route = Screen.Settings.route,
-                    deepLinks = listOf(
-                        navDeepLink { uriPattern = "missingcore://settings" },
-                        navDeepLink { uriPattern = "musync://settings" }
-                    )
-                ) {
-                    SettingsScreen(viewModel = settingsViewModel)
-                }
-
-                composable(
-                    route = Screen.PlaylistDetail.route,
-                    arguments = listOf(navArgument("playlistId") { type = NavType.StringType }),
-                    deepLinks = listOf(
-                        navDeepLink { uriPattern = "missingcore://playlist/{playlistId}" },
-                        navDeepLink { uriPattern = "musync://playlist/{playlistId}" }
-                    )
-                ) { backStackEntry ->
-                    val playlistId = backStackEntry.arguments?.getString("playlistId") ?: ""
-                    val playlistViewModel: PlaylistViewModel = viewModel(
-                        key = "playlist_$playlistId",
-                        factory = PlaylistViewModel.Factory(
-                            playlistId,
-                            container.playlistRepository,
-                            container.favoritesRepository,
-                            container.playbackManager
-                        )
-                    )
-                    PlaylistDetailScreen(
-                        viewModel = playlistViewModel,
-                        onNavigateBack = { navController.popBackStack() }
-                    )
-                }
-
-                // Deep links for direct track playback
-                composable(
-                    route = "track/{id}",
-                    arguments = listOf(navArgument("id") { type = NavType.StringType }),
-                    deepLinks = listOf(
-                        navDeepLink { uriPattern = "missingcore://track/{id}" },
-                        navDeepLink { uriPattern = "musync://track/{id}" }
-                    )
-                ) { backStackEntry ->
-                    val trackId = backStackEntry.arguments?.getString("id")
-                    if (!trackId.isNullOrBlank()) {
-                        androidx.compose.runtime.LaunchedEffect(trackId) {
-                            val track = container.musicRepository.getTrack(trackId).getOrNull()
-                            if (track != null) {
-                                container.playbackManager.play(track)
-                            }
-                        }
-                    }
-                    HomeScreen(
-                        viewModel = homeViewModel,
-                        onNavigateToSearch = { navController.navigate(Screen.Search.route) }
-                    )
-                }
-            }
-
-            // Now Playing Sheet
-            if (showNowPlaying && playbackState.currentTrack != null) {
-                NowPlayingSheet(
-                    playbackState = playbackState,
-                    isFavorite = favoriteIds.contains(playbackState.currentTrack?.id),
-                    onDismiss = { showNowPlaying = false },
-                    onTogglePlay = { playerViewModel.togglePlay() },
-                    onSkipNext = { playerViewModel.skipNext() },
-                    onSkipPrevious = { playerViewModel.skipPrevious() },
-                    onSeekTo = { pos -> playerViewModel.seekTo(pos) },
-                    onToggleFavorite = { playerViewModel.toggleFavorite(playbackState.currentTrack) },
-                    onToggleShuffle = { playerViewModel.toggleShuffle() },
-                    onToggleRepeat = { playerViewModel.toggleRepeat() },
-                    onOpenQueue = {
-                        showNowPlaying = false
-                        showQueue = true
-                    }
-                )
-            }
-
-            // Queue Sheet
-            if (showQueue) {
-                QueueSheet(
-                    playbackState = playbackState,
-                    onDismiss = { showQueue = false },
-                    onPlayTrackAtIndex = { idx -> playerViewModel.playTrackAtIndex(idx) },
-                    onRemoveFromQueue = { id -> playerViewModel.removeFromQueue(id) },
-                    onClearQueue = { playerViewModel.clearQueue() }
-                )
-            }
+        // Queue Sheet
+        if (showQueue) {
+            QueueSheet(
+                playbackState = playbackState,
+                onDismiss = { showQueue = false },
+                onPlayTrackAtIndex = { idx -> playerViewModel.playTrackAtIndex(idx) },
+                onRemoveFromQueue = { id -> playerViewModel.removeFromQueue(id) },
+                onClearQueue = { playerViewModel.clearQueue() }
+            )
         }
     }
 }

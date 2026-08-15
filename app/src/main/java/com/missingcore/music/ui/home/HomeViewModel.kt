@@ -29,6 +29,11 @@ data class HomeUiState(
     val isSearching: Boolean = false,
     val searchQuery: String = "",
     val searchResults: List<Track> = emptyList(),
+    val selectedLanguage: String = "All",
+    val teluguTracks: List<Track> = emptyList(),
+    val tamilTracks: List<Track> = emptyList(),
+    val hindiTracks: List<Track> = emptyList(),
+    val globalTracks: List<Track> = emptyList(),
     val trendingTracks: List<Track> = emptyList(),
     val undergroundTracks: List<Track> = emptyList(),
     val localTracks: List<Track> = emptyList(),
@@ -60,30 +65,81 @@ class HomeViewModel(
         loadHomeData()
     }
 
+    fun selectLanguage(language: String) {
+        _uiState.update { it.copy(selectedLanguage = language) }
+        if (language != "All") {
+            loadSpecificLanguageTracks(language)
+        }
+    }
+
+    private fun loadSpecificLanguageTracks(language: String) {
+        viewModelScope.launch {
+            try {
+                val query = when (language) {
+                    "Telugu" -> "Latest Telugu Songs 2026"
+                    "Tamil" -> "Latest Tamil Songs 2026"
+                    "Hindi" -> "Latest Bollywood Hindi Songs 2026"
+                    "English" -> "Global Top Hits Billboard 2026"
+                    "Malayalam" -> "Latest Malayalam Hit Songs 2026"
+                    "Kannada" -> "Latest Kannada Hit Songs 2026"
+                    "Punjabi" -> "Latest Punjabi Hit Songs 2026"
+                    else -> "Trending $language Songs 2026"
+                }
+                val results = musicRepository.search(query).getOrDefault(emptyList())
+                if (results.isNotEmpty()) {
+                    _uiState.update { current ->
+                        when (language) {
+                            "Telugu" -> current.copy(teluguTracks = results)
+                            "Tamil" -> current.copy(tamilTracks = results)
+                            "Hindi" -> current.copy(hindiTracks = results)
+                            else -> current.copy(globalTracks = results)
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
     fun loadHomeData() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             try {
+                // Fetch trending/Telugu as base
                 val trendingResult = musicRepository.getTrending()
-                val undergroundResult = musicRepository.getUndergroundTrending()
-
                 val trending = trendingResult.getOrDefault(emptyList())
-                val underground = undergroundResult.getOrDefault(emptyList())
 
-                if (trending.isEmpty() && underground.isEmpty()) {
-                    // Automatically load local tracks when offline / unable to connect
+                if (trending.isEmpty()) {
                     loadOfflineLocalTracks()
-                } else {
-                    val artists = trending.map { it.artist }.distinctBy { it.id }.take(10)
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            isOffline = false,
-                            trendingTracks = trending,
-                            undergroundTracks = underground,
-                            featuredArtists = artists,
-                            errorMessage = null
-                        )
+                    return@launch
+                }
+
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isOffline = false,
+                        trendingTracks = trending,
+                        teluguTracks = trending,
+                        errorMessage = null
+                    )
+                }
+
+                // Parallel fetch for Tamil, Hindi, and Global song catalogs
+                launch {
+                    val tamil = musicRepository.search("Latest Tamil Songs 2026").getOrDefault(emptyList())
+                    if (tamil.isNotEmpty()) {
+                        _uiState.update { it.copy(tamilTracks = tamil) }
+                    }
+                }
+                launch {
+                    val hindi = musicRepository.search("Latest Bollywood Hindi Songs 2026").getOrDefault(emptyList())
+                    if (hindi.isNotEmpty()) {
+                        _uiState.update { it.copy(hindiTracks = hindi) }
+                    }
+                }
+                launch {
+                    val global = musicRepository.search("Global Top Hits Billboard 2026").getOrDefault(emptyList())
+                    if (global.isNotEmpty()) {
+                        _uiState.update { it.copy(globalTracks = global) }
                     }
                 }
             } catch (_: Exception) {

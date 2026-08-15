@@ -23,7 +23,7 @@ data class SettingsUiState(
     val apiKey: String = "",
     val isCustomApiConfigured: Boolean = false,
     val audioQuality: String = "high",
-    val hapticIntensity: HapticIntensity = HapticIntensity.BALANCED,
+    val hapticIntensity: HapticIntensity = HapticIntensity.OFF,
     val connectionStatus: ConnectionStatus = ConnectionStatus.IDLE,
     val statusMessage: String? = null
 )
@@ -65,7 +65,7 @@ class SettingsViewModel(
                 val intensity = try {
                     HapticIntensity.valueOf(intensityName)
                 } catch (_: Exception) {
-                    HapticIntensity.BALANCED
+                    HapticIntensity.OFF
                 }
                 beatHapticManager.setIntensity(intensity)
                 _uiState.update { it.copy(hapticIntensity = intensity) }

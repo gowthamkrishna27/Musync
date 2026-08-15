@@ -27,9 +27,14 @@ oauth.json
 browser.json
 
 # Node.js
+# Node.js
 node_modules/
 dist/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Binaries
+*.exe
+cloudflared.exe
 

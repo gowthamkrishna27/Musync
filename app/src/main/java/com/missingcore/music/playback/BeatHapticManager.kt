@@ -29,8 +29,8 @@ class BeatHapticManager(private val context: Context) {
         null
     }
 
-    private var isHapticActive = true
-    private var intensity = HapticIntensity.BALANCED
+    private var isHapticActive = false
+    private var intensity = HapticIntensity.OFF
 
     fun isEnabled(): Boolean = isHapticActive && intensity != HapticIntensity.OFF
 

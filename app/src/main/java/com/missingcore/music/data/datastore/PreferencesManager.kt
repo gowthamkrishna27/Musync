@@ -75,7 +75,7 @@ class PreferencesManager(private val context: Context) {
     }
 
     val hapticIntensity: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_HAPTIC_INTENSITY] ?: "BALANCED"
+        prefs[KEY_HAPTIC_INTENSITY] ?: "OFF"
     }
 
     val isShuffle: Flow<Boolean> = context.dataStore.data.map { prefs ->

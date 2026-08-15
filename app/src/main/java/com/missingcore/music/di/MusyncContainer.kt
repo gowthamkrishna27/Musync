@@ -40,6 +40,11 @@ class MusyncContainer(private val context: Context) {
                 universalMusicProvider.updateConfiguration(activeUrl, preferencesManager.getApiKey())
             }
         }
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            preferencesManager.audioQuality.collect { quality ->
+                universalMusicProvider.updateAudioQuality(quality)
+            }
+        }
     }
 
     val musicRepository: MusicRepository by lazy {

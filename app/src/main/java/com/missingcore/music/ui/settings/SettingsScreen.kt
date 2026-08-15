@@ -16,7 +16,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
@@ -28,10 +32,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.style.TextAlign
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -55,6 +62,7 @@ import com.missingcore.music.ui.theme.StatusGreen
 import com.missingcore.music.ui.theme.SurfaceBlack
 import com.missingcore.music.ui.theme.TextGreyMuted
 import com.missingcore.music.ui.theme.TextGreySecondary
+import androidx.compose.foundation.layout.statusBarsPadding
 import com.missingcore.music.ui.theme.TextWhite
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,10 +80,10 @@ fun SettingsScreen(
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     val uiState by viewModel.uiState.collectAsState()
-    var showCustomApiDialog by remember { mutableStateOf(false) }
     var autoplayEnabled by remember { mutableStateOf(true) }
     var showCrossfadeDialog by remember { mutableStateOf(false) }
     var selectedCrossfade by remember { mutableStateOf("5 sec") }
+    var showQualityDialog by remember { mutableStateOf(false) }
     var showEqDialog by remember { mutableStateOf(false) }
     var showUpdateDialog by remember { mutableStateOf(false) }
     var showTermsDialog by remember { mutableStateOf(false) }
@@ -86,7 +94,8 @@ fun SettingsScreen(
         modifier = modifier
             .fillMaxSize()
             .background(BackgroundBlack)
-            .padding(top = 14.dp)
+            .statusBarsPadding()
+            .padding(top = 8.dp)
     ) {
         Text(
             text = "Settings",
@@ -104,30 +113,18 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp)
         ) {
-            // Group 1: Online Music API
+            // Group 1: Playback & Audio
             item {
-                SettingsSectionTitle("Online Music Source")
-                SettingsCardContainer {
-                    SettingsRow(
-                        title = "Custom Music API",
-                        value = if (uiState.isCustomApiConfigured) "Configured ✓" else "Add API Endpoint",
-                        valueColor = if (uiState.isCustomApiConfigured) StatusGreen else TextGreyMuted,
-                        onClick = { showCustomApiDialog = true }
-                    )
-                }
-            }
-
-            // Group 2: Playback & Audio
-            item {
-                Spacer(modifier = Modifier.height(20.dp))
                 SettingsSectionTitle("Playback & Audio")
                 SettingsCardContainer {
                     SettingsRow(
                         title = "Streaming Quality",
-                        value = if (uiState.audioQuality == "high") "High (320kbps)" else "Standard (128kbps)",
-                        onClick = {
-                            viewModel.onAudioQualityChange(if (uiState.audioQuality == "high") "standard" else "high")
-                        }
+                        value = when (uiState.audioQuality) {
+                            "low", "saver" -> "Data Saver (64kbps)"
+                            "standard" -> "Standard (128kbps)"
+                            else -> "High (320kbps)"
+                        },
+                        onClick = { showQualityDialog = true }
                     )
                     SettingsDivider()
                     SettingsRow(
@@ -175,7 +172,7 @@ fun SettingsScreen(
                 }
             }
 
-            // Group 3: About
+            // Group 2: About
             item {
                 Spacer(modifier = Modifier.height(20.dp))
                 SettingsSectionTitle("About")
@@ -203,131 +200,25 @@ fun SettingsScreen(
                         value = "",
                         onClick = { showPrivacyDialog = true }
                     )
+                    SettingsDivider()
+                    SettingsRow(
+                        title = "Developer",
+                        value = "@gowthamchowdary.27",
+                        valueColor = StatusGreen,
+                        onClick = {
+                            try {
+                                val intent = android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse("https://instagram.com/gowthamchowdary.27")
+                                )
+                                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(intent)
+                            } catch (_: Exception) {}
+                        }
+                    )
                 }
             }
         }
-    }
-
-    // Add Custom API Dialog (No hardcoded default providers)
-    if (showCustomApiDialog) {
-        AlertDialog(
-            onDismissRequest = { showCustomApiDialog = false },
-            title = { Text("Add Custom Music API", color = TextWhite, fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    Text(
-                        text = "Enter your custom music server or streaming endpoint URL. Leave empty to run in local offline device mode.",
-                        color = TextGreySecondary,
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Text("API Base URL / Endpoint", color = TextGreySecondary, fontSize = 12.sp)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = uiState.customApiUrl,
-                        onValueChange = { viewModel.onCustomApiUrlChange(it) },
-                        placeholder = { Text("https://your-api-endpoint.com/v1/", color = TextGreyMuted, fontSize = 12.sp) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(8.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = CardElevated,
-                            unfocusedContainerColor = CardElevated,
-                            focusedBorderColor = Color.White,
-                            unfocusedBorderColor = BorderStroke,
-                            focusedTextColor = TextWhite,
-                            unfocusedTextColor = TextWhite
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("API Key (Optional)", color = TextGreySecondary, fontSize = 12.sp)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = uiState.apiKey,
-                        onValueChange = { viewModel.onApiKeyChange(it) },
-                        placeholder = { Text("Optional API token / key", color = TextGreyMuted, fontSize = 12.sp) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(8.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = CardElevated,
-                            unfocusedContainerColor = CardElevated,
-                            focusedBorderColor = Color.White,
-                            unfocusedBorderColor = BorderStroke,
-                            focusedTextColor = TextWhite,
-                            unfocusedTextColor = TextWhite
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    if (uiState.statusMessage != null) {
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = uiState.statusMessage ?: "",
-                            color = if (uiState.connectionStatus == ConnectionStatus.SUCCESS) StatusGreen else Color(0xFFEF4444),
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (uiState.isCustomApiConfigured || uiState.customApiUrl.isNotBlank()) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0x22EF4444))
-                                .border(1.dp, Color(0x55EF4444), RoundedCornerShape(8.dp))
-                                .clickable {
-                                    viewModel.clearCustomApi()
-                                    showCustomApiDialog = false
-                                }
-                                .padding(horizontal = 14.dp, vertical = 9.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("Remove", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
-                    }
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0x35FFFFFF))
-                            .border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(8.dp))
-                            .clickable {
-                                viewModel.saveCustomApi()
-                                if (uiState.customApiUrl.isBlank()) {
-                                    showCustomApiDialog = false
-                                }
-                            }
-                            .padding(horizontal = 16.dp, vertical = 9.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (uiState.connectionStatus == ConnectionStatus.TESTING) "Connecting..." else "Save & Connect",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-            },
-            dismissButton = {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0x22FFFFFF))
-                        .clickable { showCustomApiDialog = false }
-                        .padding(horizontal = 14.dp, vertical = 9.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Cancel", color = Color(0xFFCCCCCC), fontSize = 12.sp)
-                }
-            },
-            containerColor = SurfaceBlack,
-            shape = RoundedCornerShape(14.dp)
-        )
     }
 
     // Crossfade Dialog
@@ -375,30 +266,235 @@ fun SettingsScreen(
         )
     }
 
-    // Equalizer Profile Dialog
+    // Streaming Quality Dialog
+    if (showQualityDialog) {
+        AlertDialog(
+            onDismissRequest = { showQualityDialog = false },
+            title = { Text("Streaming Quality", color = TextWhite, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val qualities = listOf(
+                        Triple("high", "High (320kbps)", "Best studio sound clarity & dynamic range"),
+                        Triple("standard", "Standard (128kbps)", "Balanced mobile data & smooth audio"),
+                        Triple("saver", "Data Saver (64kbps)", "Ultra-low data usage for 2G / weak cellular")
+                    )
+
+                    qualities.forEach { (key, title, subtitle) ->
+                        val isSelected = uiState.audioQuality == key || (key == "saver" && uiState.audioQuality == "low")
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) Color(0x22FFFFFF) else CardElevated)
+                                .border(1.dp, if (isSelected) Color.White else BorderStroke, RoundedCornerShape(10.dp))
+                                .clickable {
+                                    viewModel.onAudioQualityChange(key)
+                                    showQualityDialog = false
+                                }
+                                .padding(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(title, color = TextWhite, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(subtitle, color = TextGreySecondary, fontSize = 11.sp)
+                                }
+                                if (isSelected) {
+                                    Text("✓", color = StatusGreen, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0x22FFFFFF))
+                        .clickable { showQualityDialog = false }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Close", color = Color.White, fontSize = 12.sp)
+                }
+            },
+            containerColor = SurfaceBlack,
+            shape = RoundedCornerShape(14.dp)
+        )
+    }
+
+    // Studio Equalizer Dialog
     if (showEqDialog) {
+        val scrollState = androidx.compose.foundation.rememberScrollState()
         AlertDialog(
             onDismissRequest = { showEqDialog = false },
-            title = { Text("Equalizer Preset", color = TextWhite, fontWeight = FontWeight.Bold) },
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Audio Equalizer", color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Switch(
+                        checked = eqState.isEnabled,
+                        onCheckedChange = { audioEffectManager.setEnabled(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.Black,
+                            checkedTrackColor = Color.White,
+                            uncheckedThumbColor = TextGreySecondary,
+                            uncheckedTrackColor = CardElevated
+                        )
+                    )
+                }
+            },
             text = {
-                Column {
-                    val eqOptions = eqState.availablePresets
-                    eqOptions.forEach { eq ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(scrollState)
+                ) {
+                    // 1. Presets Selector
+                    Text("PRESETS", color = TextGreyMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(eqState.availablePresets) { preset ->
+                            val isSelected = eqState.activePreset == preset
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(if (isSelected) Color.White else CardElevated)
+                                    .border(1.dp, if (isSelected) Color.White else BorderStroke, RoundedCornerShape(16.dp))
+                                    .clickable { audioEffectManager.setPreset(preset) }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = preset,
+                                    color = if (isSelected) Color.Black else TextWhite,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 2. Bass Boost & Virtualizer
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Bass Boost
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(CardElevated)
+                                .border(1.dp, BorderStroke, RoundedCornerShape(10.dp))
+                                .padding(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Bass Boost", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                Text("${(eqState.bassBoostStrength / 10)}%", color = StatusGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Slider(
+                                value = eqState.bassBoostStrength.toFloat(),
+                                onValueChange = { audioEffectManager.setBassBoost(it.toInt().toShort()) },
+                                valueRange = 0f..1000f,
+                                enabled = eqState.isEnabled,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color.White,
+                                    activeTrackColor = Color.White,
+                                    inactiveTrackColor = Color(0x33FFFFFF)
+                                )
+                            )
+                        }
+
+                        // 3D Virtualizer
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(CardElevated)
+                                .border(1.dp, BorderStroke, RoundedCornerShape(10.dp))
+                                .padding(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("3D Surround", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                Text("${(eqState.virtualizerStrength / 10)}%", color = StatusGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Slider(
+                                value = eqState.virtualizerStrength.toFloat(),
+                                onValueChange = { audioEffectManager.setVirtualizer(it.toInt().toShort()) },
+                                valueRange = 0f..1000f,
+                                enabled = eqState.isEnabled,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color.White,
+                                    activeTrackColor = Color.White,
+                                    inactiveTrackColor = Color(0x33FFFFFF)
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 3. Graphic Frequency Bands
+                    Text("FREQUENCY BANDS (dB)", color = TextGreyMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    eqState.bands.forEach { band ->
+                        val freqLabel = if (band.centerFreqHz >= 1000) {
+                            "%.1fkHz".format(band.centerFreqHz / 1000.0)
+                        } else {
+                            "${band.centerFreqHz}Hz"
+                        }
+                        val gainDb = band.levelMb / 100.0
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
-                                    audioEffectManager.setPreset(eq)
-                                    showEqDialog = false
-                                }
-                                .padding(vertical = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                                .padding(vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(eq, color = TextWhite, fontSize = 14.sp)
-                            if (eqState.activePreset == eq) {
-                                Text("✓", color = StatusGreen, fontWeight = FontWeight.Bold)
-                            }
+                            Text(
+                                text = freqLabel,
+                                color = TextWhite,
+                                fontSize = 12.sp,
+                                modifier = Modifier.width(60.dp)
+                            )
+                            Slider(
+                                value = band.levelMb.toFloat(),
+                                onValueChange = { audioEffectManager.setBandLevel(band.index, it.toInt().toShort()) },
+                                valueRange = band.minLevelMb.toFloat()..band.maxLevelMb.toFloat(),
+                                enabled = eqState.isEnabled,
+                                modifier = Modifier.weight(1f),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color.White,
+                                    activeTrackColor = Color.White,
+                                    inactiveTrackColor = Color(0x33FFFFFF)
+                                )
+                            )
+                            Text(
+                                text = "${if (gainDb > 0) "+" else ""}${gainDb.toInt()}dB",
+                                color = if (gainDb != 0.0) StatusGreen else TextGreyMuted,
+                                fontSize = 11.sp,
+                                modifier = Modifier.width(44.dp),
+                                textAlign = TextAlign.End
+                            )
                         }
                     }
                 }
@@ -412,7 +508,7 @@ fun SettingsScreen(
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Close", color = Color.White, fontSize = 12.sp)
+                    Text("Done", color = Color.White, fontSize = 12.sp)
                 }
             },
             containerColor = SurfaceBlack,

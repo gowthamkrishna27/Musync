@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "989198851105",
+    "project_id": "musync-d9db5",
+    "storage_bucket": "musync-d9db5.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:989198851105:android:c6a19fc2cf333dcfb15760",
+        "android_client_info": {
+          "package_name": "Musync.k2706"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAOWYijIH2svFCseEjGb6ZazuM2hkQvMUc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:989198851105:android:c6a19fc2cf333dcfb15760",
+        "android_client_info": {
+          "package_name": "com.missingcore.music"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAOWYijIH2svFCseEjGb6ZazuM2hkQvMUc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:989198851105:android:c6a19fc2cf333dcfb15760",
+        "android_client_info": {
+          "package_name": "com.missingcore.music.debug"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAOWYijIH2svFCseEjGb6ZazuM2hkQvMUc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

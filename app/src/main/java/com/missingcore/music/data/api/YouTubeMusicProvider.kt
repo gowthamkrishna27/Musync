@@ -76,6 +76,13 @@ class YouTubeMusicProvider(
         RAILWAY_URL
     }
 
+    private var currentAudioQuality: String = "high"
+
+    fun updateAudioQuality(quality: String) {
+        currentAudioQuality = if (quality.isNotBlank()) quality else "high"
+        Log.d(TAG, "Audio streaming quality updated -> $currentAudioQuality")
+    }
+
     fun updateConfiguration(baseUrl: String?, apiKey: String?) {
         val trimmed = baseUrl?.trim()?.trimEnd('/')
         customBaseUrl = if (!trimmed.isNullOrBlank() && trimmed != "none") trimmed else null
@@ -274,7 +281,7 @@ class YouTubeMusicProvider(
         }
 
         // 2. Return direct high-availability server audio stream redirect
-        "$targetRenderUrl/stream?id=$videoId"
+        "$targetRenderUrl/stream?id=$videoId&quality=$currentAudioQuality"
     }
 
     private fun fetchPipedSearch(urlStr: String): List<Track> {

@@ -1,35 +1,60 @@
-import express, { Request, Response } from "express";
+import express, { Request, Response, NextFunction } from "express";
+import http from "http";
 import cors from "cors";
 import dotenv from "dotenv";
 import YTMusic from "ytmusic-api";
-import { exec, spawn } from "child_process";
+import { exec } from "child_process";
 import { promisify } from "util";
 import axios from "axios";
 import path from "path";
+import rateLimit from "express-rate-limit";
+import { cacheService } from "./src/cache/cacheService";
+import { metricsService } from "./src/metrics/metricsService";
+import { StreamManager } from "./src/streaming/streamManager";
 
 dotenv.config();
 
 const execAsync = promisify(exec);
 const app = express();
+
+// High-capacity Express configuration
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
+
 app.use(cors());
 app.use(express.json());
 
+// Latency & Metrics Tracking Middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const start = Date.now();
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    metricsService.recordRequest(duration);
+  });
+  next();
+});
+
+// Rate limiters
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 600, // 600 requests per minute per IP for standard API queries
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later." }
+});
+
+const streamLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 3000, // 3000 range chunks per minute per IP (safe for seeking and chunking)
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 const PORT = parseInt(process.env.PORT || "5000", 10);
 const ytmusic = new YTMusic();
-
 let isInitialized = false;
 
-// Cross-platform Python binary discovery
 const PYTHON_BIN = process.platform === "win32" ? "python" : "python3";
-
-interface StreamCacheEntry {
-  url: string;
-  headers: Record<string, string>;
-  expiresAt: number;
-}
-
-// In-memory cache for resolved audio stream URLs and session headers (4 hours)
-const streamCache = new Map<string, StreamCacheEntry>();
 
 async function initYTMusic() {
   try {
@@ -41,53 +66,13 @@ async function initYTMusic() {
   }
 }
 
-interface StreamResolutionResult {
-  entry: StreamCacheEntry | null;
-  error?: string;
-}
-
-/**
- * High-Speed Audio Stream Resolver using stream_resolver.py
- */
-async function resolveAudioStream(videoId: string): Promise<StreamResolutionResult> {
-  const cached = streamCache.get(videoId);
-  if (cached && cached.expiresAt > Date.now()) {
-    return { entry: cached };
-  }
-
-  // 1. Resolve via python stream_resolver.py
-  try {
-    const scriptPath = path.join(process.cwd(), "stream_resolver.py");
-    const { stdout, stderr } = await execAsync(`"${PYTHON_BIN}" "${scriptPath}" ${videoId}`, { timeout: 25000 });
-    if (stderr && stderr.trim()) {
-      console.log(`[StreamResolver stderr for ${videoId}]:`, stderr.trim());
-    }
-    const parsed = JSON.parse(stdout.trim());
-    if (parsed.url) {
-      const entry: StreamCacheEntry = {
-        url: parsed.url,
-        headers: parsed.headers || {},
-        expiresAt: Date.now() + 4 * 3600 * 1000
-      };
-      streamCache.set(videoId, entry);
-      return { entry };
-    } else if (parsed.error) {
-      return { entry: null, error: parsed.error };
-    }
-  } catch (e: any) {
-    return { entry: null, error: e.message };
-  }
-
-  return { entry: null, error: "Unknown stream resolution failure" };
-}
-
 // Helper to format track for Musync Mobile App schema
 function formatTrack(item: any, reqHost: string) {
   const videoId = item.videoId || item.id || "";
   const title = item.name || item.title || "Unknown Title";
   const artistName = item.artist?.name || (Array.isArray(item.artists) ? item.artists.map((a: any) => a.name).join(", ") : "YouTube Artist");
   const albumName = item.album?.name || (typeof item.album === "string" ? item.album : title);
-  
+
   let thumbnail = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
   if (Array.isArray(item.thumbnails) && item.thumbnails.length > 0) {
     thumbnail = item.thumbnails[item.thumbnails.length - 1].url;
@@ -119,8 +104,8 @@ function formatTrack(item: any, reqHost: string) {
 app.get("/", (_req: Request, res: Response) => {
   res.json({
     status: "online",
-    service: "Musync TypeScript Audio Gateway & Stream Proxy",
-    version: "3.5.0",
+    service: "Musync High-Performance Audio Gateway & Streaming Cluster",
+    version: "4.0.0",
     initialized: isInitialized,
     endpoints: {
       search: "/search?query=<song_or_artist>",
@@ -131,6 +116,8 @@ app.get("/", (_req: Request, res: Response) => {
       album: "/album?id=<album_id>",
       artist: "/artist?id=<artist_id>",
       trending: "/trending",
+      metrics: "/metrics",
+      health: "/health",
       debug: "/debug/env"
     }
   });
@@ -138,15 +125,31 @@ app.get("/", (_req: Request, res: Response) => {
 
 // 2. Health check
 app.get("/health", (_req: Request, res: Response) => {
+  const cacheStats = cacheService.getStats();
+  const perfMetrics = metricsService.getMetrics();
   res.json({
     status: "healthy",
     ytmusic: isInitialized,
-    cachedStreams: streamCache.size,
-    runtime: "Node.js / TypeScript"
+    cache: cacheStats,
+    activeStreams: perfMetrics.activeStreams,
+    uptimeSeconds: perfMetrics.uptimeSeconds,
+    runtime: "Node.js / TypeScript / Enterprise Cluster"
   });
 });
 
-// 3. Diagnostic endpoint to compare environments
+// 3. Prometheus / Performance Metrics Endpoint
+app.get("/metrics", (_req: Request, res: Response) => {
+  const cacheStats = cacheService.getStats();
+  const perfMetrics = metricsService.getMetrics();
+
+  res.json({
+    timestamp: new Date().toISOString(),
+    metrics: perfMetrics,
+    cache: cacheStats
+  });
+});
+
+// 4. Diagnostic endpoint to inspect environment
 app.get("/debug/env", async (_req: Request, res: Response) => {
   const diagnostics: Record<string, any> = {
     platform: process.platform,
@@ -178,15 +181,12 @@ app.get("/debug/env", async (_req: Request, res: Response) => {
   }
 
   const testId = "3_g2un5M350";
-  const scriptPath = path.join(__dirname, "stream_resolver.py");
   try {
-    const { stdout: resolverOut, stderr: resolverErr } = await execAsync(`"${PYTHON_BIN}" "${scriptPath}" ${testId}`, { timeout: 15000 });
-    const parsed = JSON.parse(resolverOut.trim());
+    const resolution = await StreamManager.resolveAudioStream(testId);
     diagnostics.streamResolverTest = {
-      success: Boolean(parsed.url),
-      hasHeaders: Boolean(parsed.headers),
-      error: parsed.error || null,
-      stderr: resolverErr ? resolverErr.trim() : null
+      success: Boolean(resolution.entry?.url),
+      source: resolution.source,
+      error: resolution.error || null
     };
   } catch (e: any) {
     diagnostics.streamResolverError = e.message;
@@ -195,7 +195,7 @@ app.get("/debug/env", async (_req: Request, res: Response) => {
   res.json(diagnostics);
 });
 
-// In-App OTA Update endpoints
+// 5. In-App OTA Update endpoints
 app.get("/update/check", async (req: Request, res: Response) => {
   const reqHost = `${req.protocol}://${req.get("host")}`;
   try {
@@ -205,9 +205,9 @@ app.get("/update/check", async (req: Request, res: Response) => {
     });
     const tagName = ghRes.data.tag_name || "v1.0.0";
     const version = tagName.replace(/^v/, "");
-    const changelog = ghRes.data.body || "New performance updates and fixes";
+    const changelog = ghRes.data.body || "High-concurrency streaming and performance engine";
     let downloadUrl = "https://github.com/gowthamkrishna27/Musync/releases/latest/download/Musync.apk";
-    
+
     if (ghRes.data.assets && ghRes.data.assets.length > 0) {
       const apkAsset = ghRes.data.assets.find((a: any) => a.name.endsWith(".apk"));
       if (apkAsset) downloadUrl = apkAsset.browser_download_url;
@@ -235,14 +235,23 @@ app.get("/update/latest.apk", (_req: Request, res: Response) => {
   res.redirect("https://github.com/gowthamkrishna27/Musync/releases/latest/download/Musync.apk");
 });
 
-// 4. Search endpoint
-app.get(["/search", "/result/"], async (req: Request, res: Response) => {
+// 6. Search endpoint with L1/L2 caching
+app.get(["/search", "/result/"], apiLimiter, async (req: Request, res: Response) => {
   const query = (req.query.query || req.query.q || "Trending") as string;
   const reqHost = `${req.protocol}://${req.get("host")}`;
+  const cacheKey = `search:${query.toLowerCase().trim()}`;
 
   try {
+    const cached = await cacheService.get<any[]>(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const results = await ytmusic.searchSongs(query);
     const formatted = results.map((item) => formatTrack(item, reqHost));
+
+    // Cache search results for 30 minutes
+    await cacheService.set(cacheKey, formatted, 1800);
     res.json(formatted);
   } catch (error: any) {
     console.error("Search error:", error);
@@ -250,23 +259,30 @@ app.get(["/search", "/result/"], async (req: Request, res: Response) => {
   }
 });
 
-// 5. Search autocomplete suggestions
-app.get("/suggestions", async (req: Request, res: Response) => {
+// 7. Search autocomplete suggestions with caching
+app.get("/suggestions", apiLimiter, async (req: Request, res: Response) => {
   const query = (req.query.query || req.query.q || "") as string;
   if (!query) {
     return res.json([]);
   }
 
+  const cacheKey = `sug:${query.toLowerCase().trim()}`;
   try {
+    const cached = await cacheService.get<string[]>(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const suggestions = await ytmusic.getSearchSuggestions(query);
+    await cacheService.set(cacheKey, suggestions, 3600); // 1 hour TTL
     res.json(suggestions);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to get suggestions", data: [] });
   }
 });
 
-// 6. Get Song info & direct stream URL
-app.get(["/song", "/song/"], async (req: Request, res: Response) => {
+// 8. Get Song info & direct stream URL with caching
+app.get(["/song", "/song/"], apiLimiter, async (req: Request, res: Response) => {
   const videoId = (req.query.id || req.query.query) as string;
   if (!videoId) {
     return res.status(400).json({ error: "Missing video ID parameter (?id=...)" });
@@ -274,10 +290,16 @@ app.get(["/song", "/song/"], async (req: Request, res: Response) => {
 
   const reqHost = `${req.protocol}://${req.get("host")}`;
   const streamUrl = `${reqHost}/stream?id=${videoId}`;
+  const cacheKey = `song_meta:${videoId}`;
 
   try {
+    const cached = await cacheService.get<any>(cacheKey);
+    if (cached) {
+      return res.json({ ...cached, url: streamUrl, media_url: streamUrl, stream_url: streamUrl });
+    }
+
     const songData = await ytmusic.getSong(videoId);
-    res.json({
+    const result = {
       videoId,
       id: videoId,
       title: songData?.name || "Unknown Title",
@@ -285,7 +307,10 @@ app.get(["/song", "/song/"], async (req: Request, res: Response) => {
       url: streamUrl,
       media_url: streamUrl,
       stream_url: streamUrl
-    });
+    };
+
+    await cacheService.set(cacheKey, result, 86400); // 24 hours TTL
+    res.json(result);
   } catch (_e) {
     res.json({
       videoId,
@@ -297,132 +322,128 @@ app.get(["/song", "/song/"], async (req: Request, res: Response) => {
   }
 });
 
-// 7. Direct audio stream proxy with Range support & session header pass-through
-app.get(["/stream", "/stream/"], async (req: Request, res: Response) => {
-  const videoId = (req.query.id || req.query.query) as string;
-  if (!videoId) {
-    return res.status(400).json({ error: "Missing video ID parameter (?id=...)" });
-  }
-
-  const resolution = await resolveAudioStream(videoId);
-  const streamEntry = resolution.entry;
-  if (!streamEntry) {
-    console.warn(`[Stream 502] Failed resolving stream for video: ${videoId}, error: ${resolution.error}`);
-    return res.status(502).json({ error: "Could not resolve stream for video: " + videoId, details: resolution.error });
-  }
-
-  try {
-    const rangeHeader = req.headers.range;
-    const reqHeaders: Record<string, string> = {
-      ...streamEntry.headers,
-      "Accept": "*/*",
-      "Sec-Fetch-Mode": "navigate"
-    };
-    if (rangeHeader) {
-      reqHeaders["Range"] = rangeHeader;
-    }
-
-    const audioStream = await axios({
-      method: "GET",
-      url: streamEntry.url,
-      headers: reqHeaders,
-      responseType: "stream",
-      validateStatus: (status) => status < 400
-    });
-
-    res.status(audioStream.status);
-    if (audioStream.headers["content-type"]) res.setHeader("Content-Type", audioStream.headers["content-type"]);
-    if (audioStream.headers["content-length"]) res.setHeader("Content-Length", audioStream.headers["content-length"]);
-    if (audioStream.headers["content-range"]) res.setHeader("Content-Range", audioStream.headers["content-range"]);
-    if (audioStream.headers["accept-ranges"]) res.setHeader("Accept-Ranges", audioStream.headers["accept-ranges"]);
-
-    audioStream.data.pipe(res);
-  } catch (error: any) {
-    console.warn(`[Axios stream failed for ${videoId}]: ${error.message}, spawning direct fallback`);
-    streamCache.delete(videoId);
-    
-    // Fallback: spawn direct yt-dlp audio stream
-    try {
-      res.setHeader("Content-Type", "audio/webm");
-      const ytProc = spawn(PYTHON_BIN, [
-        "-m", "yt_dlp",
-        "-o", "-",
-        "-f", "ba/b",
-        "--extractor-args", "youtube:player_client=android_vr,android",
-        `https://www.youtube.com/watch?v=${videoId}`
-      ]);
-      ytProc.stdout.pipe(res);
-      req.on("close", () => ytProc.kill());
-    } catch (procErr: any) {
-      console.error("Direct yt-dlp spawn failed:", procErr.message);
-      res.status(500).json({ error: "Failed to stream audio" });
-    }
-  }
+// 9. Direct high-performance audio stream endpoint
+app.get(["/stream", "/stream/"], streamLimiter, async (req: Request, res: Response) => {
+  await StreamManager.handleStreamRequest(req, res);
 });
 
-// 8. Lyrics endpoint
-app.get("/lyrics", async (req: Request, res: Response) => {
+// 10. Lyrics endpoint with caching
+app.get("/lyrics", apiLimiter, async (req: Request, res: Response) => {
   const videoId = (req.query.id || req.query.videoId) as string;
   if (!videoId) {
     return res.status(400).json({ error: "Missing video ID parameter (?id=...)" });
   }
 
+  const cacheKey = `lyrics:${videoId}`;
   try {
+    const cached = await cacheService.get<string>(cacheKey);
+    if (cached) {
+      return res.json({ videoId, lyrics: cached });
+    }
+
     const lyrics = await ytmusic.getLyrics(videoId);
+    const lyricsContent = lyrics || "Lyrics not available for this track.";
+    await cacheService.set(cacheKey, lyricsContent, 86400 * 7); // 7 days TTL
     res.json({
       videoId,
-      lyrics: lyrics || "Lyrics not available for this track."
+      lyrics: lyricsContent
     });
   } catch (error: any) {
     res.status(404).json({ error: "Lyrics not found", videoId });
   }
 });
 
-// 9. Album details
-app.get("/album", async (req: Request, res: Response) => {
+// 11. Album details with caching
+app.get("/album", apiLimiter, async (req: Request, res: Response) => {
   const albumId = (req.query.id || req.query.albumId) as string;
   if (!albumId) {
     return res.status(400).json({ error: "Missing album ID parameter (?id=...)" });
   }
 
+  const cacheKey = `album:${albumId}`;
   try {
+    const cached = await cacheService.get<any>(cacheKey);
+    if (cached) return res.json(cached);
+
     const album = await ytmusic.getAlbum(albumId);
+    await cacheService.set(cacheKey, album, 86400); // 24 hours TTL
     res.json(album);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to fetch album" });
   }
 });
 
-// 10. Artist details & songs
-app.get("/artist", async (req: Request, res: Response) => {
+// 12. Artist details & songs with caching
+app.get("/artist", apiLimiter, async (req: Request, res: Response) => {
   const artistId = (req.query.id || req.query.artistId) as string;
   if (!artistId) {
     return res.status(400).json({ error: "Missing artist ID parameter (?id=...)" });
   }
 
+  const cacheKey = `artist:${artistId}`;
   try {
+    const cached = await cacheService.get<any>(cacheKey);
+    if (cached) return res.json(cached);
+
     const artist = await ytmusic.getArtist(artistId);
+    await cacheService.set(cacheKey, artist, 86400); // 24 hours TTL
     res.json(artist);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to fetch artist" });
   }
 });
 
-// 11. Trending & Charts
-app.get(["/trending", "/charts"], async (req: Request, res: Response) => {
+// 13. Trending & Charts
+app.get(["/trending", "/charts"], apiLimiter, async (req: Request, res: Response) => {
   const reqHost = `${req.protocol}://${req.get("host")}`;
+  const cacheKey = "trending:global";
   try {
+    const cached = await cacheService.get<any[]>(cacheKey);
+    if (cached) return res.json(cached);
+
     const results = await ytmusic.searchSongs("Top Global Hits 2026");
     const formatted = results.map((item) => formatTrack(item, reqHost));
+    await cacheService.set(cacheKey, formatted, 3600); // 1 hour TTL
     res.json(formatted);
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to fetch trending songs", data: [] });
   }
 });
 
-// Start server
+// Start server and handle graceful shutdown
+let server: http.Server | null = null;
+
 initYTMusic().then(() => {
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Musync TypeScript YTMusic Server listening on port ${PORT}`);
+  server = app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Musync High-Performance Streaming Server listening on port ${PORT}`);
   });
+
+  // Enable HTTP keep-alive timeouts tuned for high concurrency
+  server.keepAliveTimeout = 65000;
+  server.headersTimeout = 66000;
 });
+
+// Graceful Shutdown
+async function handleGracefulShutdown(signal: string) {
+  console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
+  if (server) {
+    server.close(async () => {
+      console.log("✓ HTTP server stopped accepting new connections.");
+      metricsService.close();
+      await cacheService.close();
+      console.log("✓ All cache and connection pools drained. Clean exit.");
+      process.exit(0);
+    });
+
+    // Force exit after 10s if hanging connections remain
+    setTimeout(() => {
+      console.error("⚠ Forcing exit after timeout.");
+      process.exit(1);
+    }, 10000).unref();
+  } else {
+    process.exit(0);
+  }
+}
+
+process.on("SIGTERM", () => handleGracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => handleGracefulShutdown("SIGINT"));

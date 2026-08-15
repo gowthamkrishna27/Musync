@@ -29,7 +29,13 @@ data class EqualizerState(
     val bassBoostStrength: Short = 750, // 0 to 1000
     val virtualizerStrength: Short = 300, // 0 to 1000
     val loudnessGainMb: Int = 200, // 0 to 1000 mB
-    val bands: List<EqualizerBand> = emptyList(),
+    val bands: List<EqualizerBand> = listOf(
+        EqualizerBand(0, 60, 700, -1500, 1500),
+        EqualizerBand(1, 230, 400, -1500, 1500),
+        EqualizerBand(2, 910, 0, -1500, 1500),
+        EqualizerBand(3, 3600, 100, -1500, 1500),
+        EqualizerBand(4, 14000, 200, -1500, 1500)
+    ),
     val availablePresets: List<String> = listOf("Flat", "Bass Boost", "Vocal Focus", "Treble Boost", "Rock", "Electronic", "Custom")
 )
 

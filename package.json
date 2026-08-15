@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch server.ts",
     "build": "tsc",
-    "start": "tsx server.ts"
+    "start": "tsx server.ts",
+    "load-test": "tsx load_test/musync_load_tester.ts"
   },
   "keywords": [
     "musync",
@@ -22,11 +23,15 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.6.2",
+    "ioredis": "^6.0.0",
+    "lru-cache": "^11.5.2",
     "ytmusic-api": "^5.2.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
+    "@types/ioredis": "^4.28.10",
     "@types/node": "^22.10.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"

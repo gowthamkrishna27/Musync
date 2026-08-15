@@ -66,6 +66,8 @@ import com.missingcore.music.ui.theme.TextGreyMuted
 import com.missingcore.music.ui.theme.TextGreySecondary
 import com.missingcore.music.ui.theme.TextWhite
 
+import androidx.compose.foundation.layout.statusBarsPadding
+
 enum class LibraryNavTab {
     FAVORITES, PLAYLISTS, HISTORY, LOCAL
 }
@@ -98,7 +100,8 @@ fun LibraryScreen(
         modifier = modifier
             .fillMaxSize()
             .background(BackgroundBlack)
-            .padding(top = 14.dp)
+            .statusBarsPadding()
+            .padding(top = 8.dp)
     ) {
         // Title: "Library"
         Row(

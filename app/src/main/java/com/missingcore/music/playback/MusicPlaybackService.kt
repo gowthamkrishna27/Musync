@@ -53,21 +53,30 @@ class MusicPlaybackService : MediaLibraryService() {
         val httpDataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
             .setUserAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
             .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(20000)
-            .setReadTimeoutMs(20000)
+            .setConnectTimeoutMs(8000)
+            .setReadTimeoutMs(12000)
+            .setDefaultRequestProperties(mapOf("Connection" to "keep-alive"))
 
-        val dataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(this, httpDataSourceFactory)
+        // Media3 Local Disk Cache (200MB LRU) for instant zero-bandwidth replays
+        val cache = MediaCacheManager.getCache(this)
+        val cacheDataSourceFactory = androidx.media3.datasource.cache.CacheDataSource.Factory()
+            .setCache(cache)
+            .setUpstreamDataSourceFactory(httpDataSourceFactory)
+            .setFlags(androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+
+        val dataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(this, cacheDataSourceFactory)
         val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(this)
             .setDataSourceFactory(dataSourceFactory)
 
-        // Ultra-smooth buffer performance optimization for Android
+        // High-fidelity & lossless buffer tuning: 500ms instant start, 30s-90s continuous buffer, 15s back-seek
         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                15000, // minBufferMs
-                60000, // maxBufferMs
-                1000,  // bufferForPlaybackMs (instant 1s start)
-                2000   // bufferForPlaybackAfterRebufferMs
+                30000, // minBufferMs
+                90000, // maxBufferMs (lossless high-bitrate continuous audio)
+                500,   // bufferForPlaybackMs (instant 500ms start)
+                1000   // bufferForPlaybackAfterRebufferMs (ultra-fast recovery)
             )
+            .setBackBuffer(15000, true) // 15s retention for instant backward seeking
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
@@ -82,6 +91,7 @@ class MusicPlaybackService : MediaLibraryService() {
                 enableAudioTrackPlaybackParams: Boolean
             ): androidx.media3.exoplayer.audio.AudioSink {
                 return androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(true) // Lossless 32-bit float audio pipeline
                     .setAudioProcessors(arrayOf(beatAudioProcessor))
                     .build()
             }

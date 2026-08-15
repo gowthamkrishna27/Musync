@@ -18,8 +18,7 @@ val TextGreySubtle = Color(0xFF555555)
 val IconWhite = Color(0xFFFFFFFF)
 val IconGrey = Color(0xFFB3B3B3)
 val IconMuted = Color(0xFF777777)
-
-val StatusGreen = Color(0xFF22C55E)
+val StatusGreen = Color(0xFFFFFFFF)
 val DeleteRed = Color(0xFFEF4444)
 
 // Retain compatibility mappings

@@ -17,9 +17,11 @@ RUN npm install
 COPY tsconfig.json ./
 COPY server.ts ./
 COPY stream_resolver.py ./
+COPY src ./src
 
 EXPOSE 5000
 
 ENV PORT=5000
+ENV NODE_ENV=production
 
 CMD ["npx", "tsx", "server.ts"]

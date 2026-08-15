@@ -73,11 +73,13 @@ class BeatDetectorAudioProcessor(
         val remaining = inputBuffer.remaining()
         if (remaining == 0) return
 
-        try {
-            val bufferCopy = inputBuffer.asReadOnlyBuffer()
-            processPcmStream(bufferCopy)
-        } catch (_: Exception) {
-            // Safe fallback: never interrupt audio pipeline
+        if (beatHapticManager.isEnabled() && beatHapticManager.getIntensity() != HapticIntensity.OFF) {
+            try {
+                val bufferCopy = inputBuffer.asReadOnlyBuffer()
+                processPcmStream(bufferCopy)
+            } catch (_: Exception) {
+                // Safe fallback: never interrupt audio pipeline
+            }
         }
 
         val output = replaceOutputBuffer(remaining)

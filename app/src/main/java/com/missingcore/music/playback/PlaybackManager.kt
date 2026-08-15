@@ -34,6 +34,8 @@ class PlaybackManager(private val context: Context) {
     val playbackState: StateFlow<PlaybackState> = _playbackState.asStateFlow()
 
     private val currentQueue = mutableListOf<Track>()
+    private var retryCount = 0
+    private val maxRetries = 3
 
     init {
         initializeController()
@@ -74,12 +76,16 @@ class PlaybackManager(private val context: Context) {
             }
 
             override fun onPlaybackStateChanged(playbackStateInt: Int) {
+                if (playbackStateInt == Player.STATE_READY) {
+                    retryCount = 0
+                }
                 val isBuffering = playbackStateInt == Player.STATE_BUFFERING
                 _playbackState.update { it.copy(isBuffering = isBuffering) }
                 updateStateFromController()
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                retryCount = 0
                 updateCurrentTrackFromController()
             }
 
@@ -101,9 +107,33 @@ class PlaybackManager(private val context: Context) {
                 val uri = item?.requestMetadata?.mediaUri ?: item?.localConfiguration?.uri
                 android.util.Log.e(
                     "PlaybackManager",
-                    "ExoPlayer playback error | Track: ${item?.mediaMetadata?.title} (${item?.mediaId}) | URI: $uri | ErrorCode: ${error.errorCode} (${error.errorCodeName}) | Message: ${error.message}",
+                    "ExoPlayer playback error (attempt $retryCount/$maxRetries) | Track: ${item?.mediaMetadata?.title} (${item?.mediaId}) | URI: $uri | ErrorCode: ${error.errorCode} (${error.errorCodeName}) | Message: ${error.message}",
                     error
                 )
+
+                // Resilient exponential backoff retry with jitter for temporary network interruptions
+                if (retryCount < maxRetries) {
+                    retryCount++
+                    val backoffDelay = (600L * (1 shl (retryCount - 1))) + kotlin.random.Random.nextLong(100, 300)
+                    android.util.Log.w("PlaybackManager", "Network hiccup encountered. Retrying playback (attempt $retryCount) in ${backoffDelay}ms...")
+                    scope.launch {
+                        delay(backoffDelay)
+                        mediaController?.let { controller ->
+                            controller.prepare()
+                            controller.play()
+                        }
+                    }
+                    return
+                }
+
+                // If retries exhausted and next track exists, skip gracefully
+                retryCount = 0
+                if (currentQueue.size > 1 && mediaController?.hasNextMediaItem() == true) {
+                    android.util.Log.w("PlaybackManager", "Track unrecoverable, skipping to next track in queue...")
+                    mediaController?.seekToNextMediaItem()
+                    return
+                }
+
                 _playbackState.update {
                     it.copy(
                         isPlaying = false,

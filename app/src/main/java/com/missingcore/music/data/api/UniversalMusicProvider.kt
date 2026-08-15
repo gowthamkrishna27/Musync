@@ -31,6 +31,10 @@ class UniversalMusicProvider(
         }
     }
 
+    fun updateAudioQuality(quality: String) {
+        ytMusicProvider.updateAudioQuality(quality)
+    }
+
     override suspend fun testConnection(baseUrl: String?, apiKey: String?): Boolean {
         return ytMusicProvider.testConnection(baseUrl, apiKey) || audiusProvider.testConnection(baseUrl, apiKey)
     }
