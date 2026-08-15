@@ -311,15 +311,15 @@ fun HomeScreen(
                             }
                         }
                     } else {
-                        // Standard Online Home Content: Section 1: "Recently Played" Horizontal Row
+                        // Standard Online Home Content: Section 1: "Top Telugu Hits 2026" Horizontal Row
                         val horizontalTracks = if (uiState.trendingTracks.isNotEmpty()) {
-                            uiState.trendingTracks.take(6)
+                            uiState.trendingTracks.take(8)
                         } else emptyList()
 
                         if (horizontalTracks.isNotEmpty()) {
                             item {
                                 SectionHeader(
-                                    title = "Recently Played",
+                                    title = "Top Telugu Hits 2026",
                                     actionText = "See all",
                                     onActionClick = { }
                                 )
@@ -340,10 +340,10 @@ fun HomeScreen(
                             }
                         }
 
-                        // Section 2: "Trending Now" Vertical List
+                        // Section 2: "Trending Telugu Songs" Vertical List
                         item {
                             SectionHeader(
-                                title = "Trending Now",
+                                title = "Trending Telugu Songs",
                                 actionText = "See all",
                                 onActionClick = { }
                             )

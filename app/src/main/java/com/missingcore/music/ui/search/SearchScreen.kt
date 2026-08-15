@@ -70,12 +70,12 @@ fun SearchScreen(
     val favoriteIds = favorites.map { it.id }.toSet()
 
     val recentSearches = remember {
-        mutableStateListOf("MAAD WEST", "Gavss", "BeatmakerKelz", "NEED 2")
+        mutableStateListOf("Devara", "Pushpa 2", "Chuttamalle", "Kurchi Madathapetti")
     }
 
     val popularSearches = listOf(
-        "Trap", "Electronic", "Hip Hop", "Rock",
-        "Lo-Fi", "Chill", "EDM", "Pop"
+        "Latest Telugu Hits", "Sid Sriram", "Anirudh Telugu", "DSP Hits",
+        "Thaman S", "Telugu Melodies", "Mass Telugu Hits", "Kalki 2898 AD"
     )
 
     Column(

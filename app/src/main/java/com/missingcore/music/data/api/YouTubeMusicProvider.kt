@@ -159,11 +159,11 @@ class YouTubeMusicProvider(
     }
 
     override suspend fun getTrending(): List<Track> = withContext(Dispatchers.IO) {
-        search("Top Global Music Hits").ifEmpty { search("Trending Music") }
+        search("Latest Telugu Songs 2026").ifEmpty { search("Trending Telugu Songs") }
     }
 
     override suspend fun getUndergroundTrending(): List<Track> = withContext(Dispatchers.IO) {
-        search("New Music Weekly").ifEmpty { search("Top Hits 2026") }
+        search("Telugu Melodies All Time Hits").ifEmpty { search("Telugu Romantic Songs") }
     }
 
     override suspend fun getTrack(id: String): Track? = withContext(Dispatchers.IO) {

@@ -60,14 +60,16 @@ class UniversalMusicProvider(
 
     override suspend fun getTrending(): List<Track> = withContext(Dispatchers.IO) {
         val yt = try { ytMusicProvider.getTrending() } catch (_: Exception) { emptyList() }
+        if (yt.isNotEmpty()) return@withContext yt
         val audius = try { audiusProvider.getTrending() } catch (_: Exception) { emptyList() }
-        (yt + audius).distinctBy { it.title.lowercase().trim() }
+        audius.distinctBy { it.title.lowercase().trim() }
     }
 
     override suspend fun getUndergroundTrending(): List<Track> = withContext(Dispatchers.IO) {
+        val yt = try { ytMusicProvider.getUndergroundTrending() } catch (_: Exception) { emptyList() }
+        if (yt.isNotEmpty()) return@withContext yt
         val audius = try { audiusProvider.getUndergroundTrending() } catch (_: Exception) { emptyList() }
-        if (audius.isNotEmpty()) return@withContext audius
-        ytMusicProvider.getUndergroundTrending()
+        audius.distinctBy { it.title.lowercase().trim() }
     }
 
     override suspend fun getTrack(id: String): Track? = withContext(Dispatchers.IO) {
