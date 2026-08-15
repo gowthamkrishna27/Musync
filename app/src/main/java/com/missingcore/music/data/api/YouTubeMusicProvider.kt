@@ -43,6 +43,7 @@ class YouTubeMusicProvider(
 
     companion object {
         private const val TAG = "YouTubeMusicProvider"
+        const val DEFAULT_RENDER_URL = "https://musync-ytmusic-api.onrender.com"
 
         private val PIPED_INSTANCES = listOf(
             "https://pipedapi.kavin.rocks",
@@ -74,15 +75,14 @@ class YouTubeMusicProvider(
         if (cleanQuery.isBlank()) return@withContext emptyList()
         val encoded = try { URLEncoder.encode(cleanQuery, "UTF-8") } catch (_: Exception) { cleanQuery }
 
-        // 1. Custom ytmusicapi endpoint
-        customBaseUrl?.let { customUrl ->
-            try {
-                val url = "$customUrl/search?query=$encoded"
-                val tracks = fetchCustomYtMusic(url, customApiKey)
-                if (tracks.isNotEmpty()) return@withContext tracks
-            } catch (e: Exception) {
-                Log.w(TAG, "Custom ytmusicapi endpoint failed: ${e.message}")
-            }
+        // 1. Primary: Render Cloud Endpoint (or user's custom endpoint)
+        val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
+        try {
+            val url = "$targetRenderUrl/search?query=$encoded"
+            val tracks = fetchCustomYtMusic(url, customApiKey)
+            if (tracks.isNotEmpty()) return@withContext tracks
+        } catch (e: Exception) {
+            Log.w(TAG, "Render endpoint failed/sleeping: ${e.message}")
         }
 
         // 2. Query Public Piped Instances

@@ -36,6 +36,7 @@ class PreferencesManager(private val context: Context) {
     }
 
     companion object {
+        const val DEFAULT_BASE_URL = "https://musync-ytmusic-api.onrender.com"
         val KEY_PROVIDER_ID = stringPreferencesKey("provider_id")
         val KEY_BASE_URL = stringPreferencesKey("base_url")
         val KEY_AUDIO_QUALITY = stringPreferencesKey("audio_quality")
@@ -46,11 +47,11 @@ class PreferencesManager(private val context: Context) {
     }
 
     val providerId: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_PROVIDER_ID] ?: "audius"
+        prefs[KEY_PROVIDER_ID] ?: "universal"
     }
 
     val baseUrl: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_BASE_URL] ?: AudiusMusicProvider.DEFAULT_BASE_URL
+        prefs[KEY_BASE_URL] ?: DEFAULT_BASE_URL
     }
 
     val audioQuality: Flow<String> = context.dataStore.data.map { prefs ->
@@ -71,6 +72,10 @@ class PreferencesManager(private val context: Context) {
 
     fun getApiKey(): String? {
         return securePrefs.getString(SECURE_KEY_API_KEY, null)
+    }
+
+    fun getBaseUrl(): String {
+        return DEFAULT_BASE_URL
     }
 
     fun setApiKey(apiKey: String?) {
