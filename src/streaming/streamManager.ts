@@ -50,24 +50,46 @@ export class StreamManager {
   private static readonly MAX_CONCURRENT_RESOLVES = 8;
   private static resolveQueue: Array<() => void> = [];
 
-  private static acquireResolveSlot(): Promise<void> {
-    return new Promise((resolve) => {
+  private static acquireResolveSlot(timeoutMs: number = 20000): Promise<void> {
+    return new Promise((resolve, reject) => {
       if (StreamManager.activeResolves < StreamManager.MAX_CONCURRENT_RESOLVES) {
         StreamManager.activeResolves++;
         resolve();
       } else {
-        StreamManager.resolveQueue.push(() => {
-          StreamManager.activeResolves++;
-          resolve();
-        });
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            // Remove this waiter from the queue to avoid dangling references
+            const idx = StreamManager.resolveQueue.indexOf(waiter);
+            if (idx !== -1) StreamManager.resolveQueue.splice(idx, 1);
+            reject(new Error(`Stream resolver semaphore timeout after ${timeoutMs}ms`));
+          }
+        }, timeoutMs);
+
+        const waiter = () => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            // Slot ownership is transferred directly from releaseResolveSlot;
+            // do NOT increment activeResolves here — the slot count stays the same.
+            resolve();
+          }
+        };
+        StreamManager.resolveQueue.push(waiter);
       }
     });
   }
 
   private static releaseResolveSlot(): void {
-    StreamManager.activeResolves--;
     const next = StreamManager.resolveQueue.shift();
-    if (next) next();
+    if (next) {
+      // Transfer slot ownership directly to the next waiter — activeResolves stays the same.
+      next();
+    } else {
+      // No waiter queued — free the slot.
+      StreamManager.activeResolves--;
+    }
   }
 
   /**
@@ -118,7 +140,11 @@ export class StreamManager {
         const scriptPath = path.join(process.cwd(), "stream_resolver.py");
 
         // Acquire semaphore slot — caps concurrent Python spawns to MAX_CONCURRENT_RESOLVES
+        // acquireResolveSlot may reject with a timeout error; if it does, we do NOT hold
+        // a slot, so releaseResolveSlot must NOT be called in that case.
+        let slotAcquired = false;
         await StreamManager.acquireResolveSlot();
+        slotAcquired = true;
         let stdout: string, stderr: string;
         try {
           ({ stdout, stderr } = await execAsync(
@@ -126,7 +152,7 @@ export class StreamManager {
             { timeout: 25000 }
           ));
         } finally {
-          StreamManager.releaseResolveSlot();
+          if (slotAcquired) StreamManager.releaseResolveSlot();
         }
         
         if (stderr && stderr.trim()) {
