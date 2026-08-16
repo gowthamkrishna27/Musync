@@ -172,6 +172,7 @@ fun NowPlayingSheet(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .background(BackgroundBlack)
         ) {
             // 1. FULL-BLEED EDGE-TO-EDGE ATMOSPHERIC AMBIENT BACKGROUND
             AtmosphericBackground(
