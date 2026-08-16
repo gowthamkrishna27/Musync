@@ -19,6 +19,7 @@ def resolve(video_id, quality="low", _media_type="audio"):
             'no_warnings': True,
             'skip_download': True,
             'nocheckcertificate': True,
+            'js_runtimes': {'node': {}},
             'extractor_args': {
                 'youtube': {
                     'player_client': clients,

@@ -7,7 +7,7 @@ RUN apk add --no-cache python3 py3-pip ffmpeg ca-certificates && \
     ln -sf /usr/bin/python3 /usr/bin/python
 
 # Install yt-dlp for direct YouTube audio extraction
-RUN pip install --no-cache-dir --break-system-packages yt-dlp
+RUN pip install --no-cache-dir --break-system-packages --upgrade yt-dlp
 
 # Copy package configurations and install dependencies
 COPY package*.json ./
