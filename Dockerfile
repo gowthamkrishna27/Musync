@@ -2,12 +2,14 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install Python 3, pip, ffmpeg, ca-certificates, and create python symlink
-RUN apk add --no-cache python3 py3-pip ffmpeg ca-certificates && \
+# Install Python 3, pip, ffmpeg, ca-certificates, curl, and create python symlink
+RUN apk add --no-cache python3 py3-pip ffmpeg ca-certificates curl && \
     ln -sf /usr/bin/python3 /usr/bin/python
 
-# Install latest yt-dlp for direct YouTube audio extraction
-RUN pip install --no-cache-dir --break-system-packages --force-reinstall -U "https://github.com/yt-dlp/yt-dlp/archive/master.tar.gz"
+# Install latest standalone official yt-dlp binary + pip package
+RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
+    chmod a+rx /usr/local/bin/yt-dlp && \
+    pip install --no-cache-dir --break-system-packages -U yt-dlp
 
 # Copy package configurations and install dependencies
 COPY package*.json ./
