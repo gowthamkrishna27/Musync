@@ -94,6 +94,10 @@ class PreferencesManager(private val context: Context) {
         return securePrefs.getString("saved_base_url", null) ?: DEFAULT_BASE_URL
     }
 
+    fun getAudioQuality(): String {
+        return securePrefs.getString("saved_audio_quality", null) ?: "low"
+    }
+
     fun setApiKey(apiKey: String?) {
         securePrefs.edit().apply {
             if (apiKey.isNullOrBlank()) {
@@ -119,6 +123,7 @@ class PreferencesManager(private val context: Context) {
     }
 
     suspend fun setAudioQuality(quality: String) {
+        securePrefs.edit().putString("saved_audio_quality", quality).apply()
         context.dataStore.edit { prefs ->
             prefs[KEY_AUDIO_QUALITY] = quality
         }

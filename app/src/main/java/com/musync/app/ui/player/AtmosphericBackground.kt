@@ -89,8 +89,8 @@ fun AtmosphericBackground(
                         colors = listOf(
                             Color(0x8A080A0E), // 54% dark at top for status bar legibility
                             Color(0x35080A0E), // 20% dark in center for vibrant visual glow
-                            Color(0x65080A0E), // 40% dark behind seekbar
-                            Color(0x85080A0E)  // 52% glassy dark at bottom (vibrant glow shines through)
+                            Color(0x45080A0E), // 27% dark behind seekbar
+                            Color(0x55080A0E)  // 33% glassy dark at bottom — full artwork glow shines through
                         )
                     )
                 )

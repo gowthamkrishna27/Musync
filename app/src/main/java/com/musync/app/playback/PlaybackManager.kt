@@ -248,10 +248,11 @@ class PlaybackManager(private val context: Context) {
         currentQueue.clear()
         currentQueue.add(track)
 
-        val mediaItem = MediaItemMapper.toMediaItem(track)
+        val networkQuality = com.musync.app.util.NetworkQualityHelper.getRecommendedQuality(context)
+        val mediaItem = MediaItemMapper.toMediaItem(track, quality = networkQuality)
         withController { controller ->
             if (requestId != playbackRequestId) return@withController
-            android.util.Log.i("PlaybackManager", "▶ USER_SELECTED single track (Req #$requestId): '${track.title}' (${track.id}) | URI: ${mediaItem.requestMetadata.mediaUri}")
+            android.util.Log.i("PlaybackManager", "▶ USER_SELECTED single track (Req #$requestId): '${track.title}' (${track.id}) | quality=$networkQuality | URI: ${mediaItem.requestMetadata.mediaUri}")
             controller.setMediaItems(listOf(mediaItem), 0, 0L)
             controller.prepare()
             controller.play()
@@ -274,7 +275,8 @@ class PlaybackManager(private val context: Context) {
         currentQueue.clear()
         currentQueue.addAll(incomingTracks)
 
-        val mediaItems = incomingTracks.map { MediaItemMapper.toMediaItem(it) }
+        val networkQuality = com.musync.app.util.NetworkQualityHelper.getRecommendedQuality(context)
+        val mediaItems = incomingTracks.map { MediaItemMapper.toMediaItem(it, quality = networkQuality) }
         val safeIndex = if (mediaItems.isNotEmpty()) startIndex.coerceIn(0, mediaItems.size - 1) else 0
 
         withController { controller ->
@@ -284,7 +286,7 @@ class PlaybackManager(private val context: Context) {
             }
             if (mediaItems.isNotEmpty()) {
                 val currentTrackUri = mediaItems[safeIndex].requestMetadata.mediaUri
-                android.util.Log.i("PlaybackManager", "▶ USER_SELECTED (Req #$requestId): '${incomingTracks[safeIndex].title}' (${incomingTracks[safeIndex].id}) at index $safeIndex/${mediaItems.size} | URI: $currentTrackUri")
+                android.util.Log.i("PlaybackManager", "▶ USER_SELECTED (Req #$requestId): '${incomingTracks[safeIndex].title}' (${incomingTracks[safeIndex].id}) at index $safeIndex/${mediaItems.size} | quality=$networkQuality | URI: $currentTrackUri")
                 controller.setMediaItems(mediaItems, safeIndex, 0L)
                 controller.prepare()
                 controller.play()

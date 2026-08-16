@@ -278,7 +278,10 @@ class MusicPlaybackService : MediaLibraryService() {
 
         val app = application as MusyncApplication
         val baseUrl = app.container.preferencesManager.getBaseUrl()
-        trackPreloadManager.onTrackPlaying(currentIndex, queue, baseUrl)
+        // Auto-select quality based on live network conditions (2G->saver, 3G->low, LTE->standard, 5G/WiFi->user pref)
+        val userQuality = app.container.preferencesManager.getAudioQuality()
+        val networkQuality = com.musync.app.util.NetworkQualityHelper.getRecommendedQuality(this, userQuality)
+        trackPreloadManager.onTrackPlaying(currentIndex, queue, baseUrl, networkQuality)
     }
 
     private fun recordCurrentTrack() {
