@@ -12,13 +12,12 @@ def resolve(video_id, quality="high"):
 
     last_error = ""
 
-    format_selector = 'bestaudio[itag=140]/bestaudio[ext=m4a]/bestaudio/ba/b'
     if quality in ['low', 'saver', 'data_saver']:
-        format_selector = 'bestaudio[itag=139]/bestaudio[ext=m4a][abr<=64]/worstaudio[abr>=48]/ba/b'
+        format_selector = 'bestaudio[itag=139]/bestaudio[ext=m4a][abr<=64]/worstaudio/ba/b'
     elif quality in ['standard', 'medium']:
-        format_selector = 'bestaudio[itag=140]/bestaudio[ext=m4a]/bestaudio[abr<=160]/ba/b'
+        format_selector = 'bestaudio[itag=140]/bestaudio[ext=m4a]/bestaudio[abr<=130]/ba/b'
     else:
-        format_selector = 'bestaudio[itag=140]/bestaudio[ext=m4a]/bestaudio/ba/b'
+        format_selector = 'bestaudio[itag=251]/bestaudio[abr>=160]/bestaudio[itag=140]/ba/b'
 
     for clients in client_configs:
         ydl_opts = {
