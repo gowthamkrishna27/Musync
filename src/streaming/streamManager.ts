@@ -111,6 +111,7 @@ export class StreamManager {
    * - Full support for Range: bytes=0-, bytes=1000000-, bytes=1000000-2000000
    * - Immediate upstream abort when client disconnects (zero socket leaks)
    * - Backpressure propagation
+   * - Comprehensive safe streaming diagnostics & download throughput vs bitrate analysis
    */
   static async handleStreamRequest(req: Request, res: Response): Promise<void> {
     const videoId = (req.query.id || req.query.query || req.query.videoId) as string;
@@ -120,17 +121,58 @@ export class StreamManager {
       return;
     }
 
-    metricsService.incrementActiveStreams();
+    const streamStartTime = Date.now();
+    let timeToFirstByte = 0;
+    let bytesReceived = 0;
+    let bytesSent = 0;
+    let isClientDisconnected = false;
+    let isUpstreamDisconnected = false;
     let isStreamFinished = false;
+
+    metricsService.incrementActiveStreams();
 
     const cleanup = () => {
       if (!isStreamFinished) {
         isStreamFinished = true;
         metricsService.decrementActiveStreams();
+
+        const durationSec = Math.max(0.001, (Date.now() - streamStartTime) / 1000);
+        const downstreamRateKbps = (bytesSent * 8) / (1000 * durationSec);
+        const upstreamRateKbps = (bytesReceived * 8) / (1000 * durationSec);
+
+        // Estimate estimated audio bitrate (approx 128 kbps for high, 96 for standard, 48 for saver)
+        const estimatedBitrateKbps = quality === "saver" || quality === "low" ? 48 : (quality === "standard" ? 96 : 128);
+        const throughputRatio = (downstreamRateKbps / estimatedBitrateKbps).toFixed(2);
+        const healthStatus = parseFloat(throughputRatio) >= 1.0 ? "HEALTHY (Buffer growing)" : "RISK (Throughput < Bitrate, buffer depleting)";
+
+        // Safe structured stream diagnostics (NO secrets/tokens logged)
+        console.log(JSON.stringify({
+          streamDiagnostic: {
+            trackId: videoId,
+            quality,
+            streamStartTime: new Date(streamStartTime).toISOString(),
+            timeToFirstByteMs: timeToFirstByte,
+            bytesReceived,
+            bytesSent,
+            connectionDurationSec: parseFloat(durationSec.toFixed(2)),
+            upstreamRateKbps: parseFloat(upstreamRateKbps.toFixed(1)),
+            downstreamRateKbps: parseFloat(downstreamRateKbps.toFixed(1)),
+            audioBitrateKbps: estimatedBitrateKbps,
+            throughputRatio: `${throughputRatio}x`,
+            streamHealth: healthStatus,
+            clientDisconnect: isClientDisconnected,
+            upstreamDisconnect: isUpstreamDisconnected
+          }
+        }));
       }
     };
 
-    req.on("close", cleanup);
+    req.on("close", () => {
+      if (!res.writableEnded) {
+        isClientDisconnected = true;
+      }
+      cleanup();
+    });
     res.on("finish", cleanup);
     res.on("error", cleanup);
 
@@ -151,7 +193,6 @@ export class StreamManager {
     // 2. Prepare Upstream Request with AbortController
     const abortController = new AbortController();
     req.on("close", () => {
-      // Abort upstream connection if client closed
       if (!res.writableEnded) {
         abortController.abort();
       }
@@ -162,7 +203,6 @@ export class StreamManager {
       const reqHeaders: Record<string, string> = {
         ...streamEntry.headers,
         "Accept": "*/*",
-        "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
         "Sec-Fetch-Mode": "navigate"
       };
 
@@ -180,7 +220,8 @@ export class StreamManager {
       });
 
       // Pass-through standard status and Range response headers
-      res.status(audioResponse.status);
+      const status = audioResponse.status;
+      res.status(status);
 
       const contentType = audioResponse.headers["content-type"] || "audio/webm";
       res.setHeader("Content-Type", String(contentType));
@@ -200,21 +241,38 @@ export class StreamManager {
       // Add cache-control to prevent intermediaries from corrupting range streams
       res.setHeader("Cache-Control", "public, max-age=14400, no-transform");
 
-      // Pipe with backpressure
-      audioResponse.data.pipe(res);
+      // Monitor chunk streams for TTFB, byte counts, and backpressure
+      audioResponse.data.on("data", (chunk: Buffer) => {
+        if (!timeToFirstByte) {
+          timeToFirstByte = Date.now() - streamStartTime;
+        }
+        bytesReceived += chunk.length;
+        bytesSent += chunk.length;
+      });
+
+      audioResponse.data.on("end", () => {
+        // Stream completed upstream
+      });
 
       audioResponse.data.on("error", (streamErr: any) => {
+        isUpstreamDisconnected = true;
         cleanup();
         if (!res.headersSent) {
           res.status(500).json({ error: "Stream transmission error", details: streamErr.message });
         }
       });
+
+      // Pipe upstream to client response with native Node backpressure
+      audioResponse.data.pipe(res);
     } catch (err: any) {
-      cleanup();
       if (axios.isCancel(err) || err.name === "AbortError" || req.destroyed) {
-        // Client aborted, clean exit
+        isClientDisconnected = true;
+        cleanup();
         return;
       }
+
+      isUpstreamDisconnected = true;
+      cleanup();
 
       console.warn(`[Axios stream error for ${videoId}]: ${err.message}. Purging cache entry.`);
       await cacheService.delete(`stream:v2:${videoId}`);

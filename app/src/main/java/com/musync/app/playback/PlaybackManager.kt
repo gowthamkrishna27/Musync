@@ -1,4 +1,4 @@
-﻿package com.musync.app.playback
+package com.musync.app.playback
 
 import android.content.ComponentName
 import android.content.Context
@@ -151,6 +151,7 @@ class PlaybackManager(private val context: Context) {
         val currentTrack = currentItem?.let { MediaItemMapper.fromMediaItem(it) }
         val duration = if (controller.duration > 0) controller.duration else (currentTrack?.durationMs ?: 0L)
         val pos = controller.currentPosition.coerceAtLeast(0L)
+        val buf = controller.bufferedPosition.coerceAtLeast(0L)
 
         _playbackState.update {
             it.copy(
@@ -158,6 +159,7 @@ class PlaybackManager(private val context: Context) {
                 isPlaying = controller.isPlaying,
                 isBuffering = controller.playbackState == Player.STATE_BUFFERING,
                 currentPositionMs = pos,
+                bufferedPositionMs = buf,
                 durationMs = duration,
                 repeatMode = when (controller.repeatMode) {
                     Player.REPEAT_MODE_ONE -> RepeatMode.ONE
@@ -176,12 +178,14 @@ class PlaybackManager(private val context: Context) {
         val item = controller.currentMediaItem
         val track = item?.let { MediaItemMapper.fromMediaItem(it) }
         val index = controller.currentMediaItemIndex
+        val buf = controller.bufferedPosition.coerceAtLeast(0L)
 
         _playbackState.update {
             it.copy(
                 currentTrack = track,
                 queueIndex = index,
                 currentPositionMs = 0L,
+                bufferedPositionMs = buf,
                 durationMs = if (controller.duration > 0) controller.duration else (track?.durationMs ?: 0L)
             )
         }
@@ -194,10 +198,12 @@ class PlaybackManager(private val context: Context) {
                 mediaController?.let { controller ->
                     if (controller.isPlaying) {
                         val pos = controller.currentPosition.coerceAtLeast(0L)
+                        val buf = controller.bufferedPosition.coerceAtLeast(0L)
                         val dur = if (controller.duration > 0) controller.duration else (_playbackState.value.currentTrack?.durationMs ?: 0L)
                         _playbackState.update {
                             it.copy(
                                 currentPositionMs = pos,
+                                bufferedPositionMs = buf,
                                 durationMs = dur
                             )
                         }

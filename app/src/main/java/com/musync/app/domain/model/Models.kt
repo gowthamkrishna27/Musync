@@ -1,4 +1,4 @@
-﻿package com.musync.app.domain.model
+package com.musync.app.domain.model
 
 data class Track(
     val id: String,
@@ -52,6 +52,7 @@ data class PlaybackState(
     val isPlaying: Boolean = false,
     val isBuffering: Boolean = false,
     val currentPositionMs: Long = 0L,
+    val bufferedPositionMs: Long = 0L,
     val durationMs: Long = 0L,
     val repeatMode: RepeatMode = RepeatMode.OFF,
     val isShuffle: Boolean = false,

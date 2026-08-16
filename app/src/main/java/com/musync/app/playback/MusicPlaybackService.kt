@@ -1,4 +1,4 @@
-﻿package com.musync.app.playback
+package com.musync.app.playback
 
 import android.app.PendingIntent
 import android.content.Intent
@@ -53,8 +53,8 @@ class MusicPlaybackService : MediaLibraryService() {
         val httpDataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
             .setUserAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
             .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(8000)
-            .setReadTimeoutMs(12000)
+            .setConnectTimeoutMs(15000)
+            .setReadTimeoutMs(20000)
             .setDefaultRequestProperties(mapOf("Connection" to "keep-alive"))
 
         // Media3 Local Disk Cache (200MB LRU) for instant zero-bandwidth replays
@@ -68,13 +68,17 @@ class MusicPlaybackService : MediaLibraryService() {
         val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(this)
             .setDataSourceFactory(dataSourceFactory)
 
-        // High-fidelity & lossless buffer tuning: 500ms instant start, 30s-90s continuous buffer, 15s back-seek
+        // Resilient Low-Latency & Anti-Stutter Buffer Tuning:
+        // - 2.5s initial buffer for fast startup with zero starvation
+        // - 5.0s rebuffer threshold to prevent rapid stutter loops
+        // - 30s-60s continuous safety buffer
+        // - 15s back-buffer for instant back-seeking
         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                30000, // minBufferMs
-                90000, // maxBufferMs (lossless high-bitrate continuous audio)
-                500,   // bufferForPlaybackMs (instant 500ms start)
-                1000   // bufferForPlaybackAfterRebufferMs (ultra-fast recovery)
+                30000, // minBufferMs (30s)
+                60000, // maxBufferMs (60s)
+                2500,  // bufferForPlaybackMs (2.5s initial startup safety)
+                5000   // bufferForPlaybackAfterRebufferMs (5.0s rebuffer recovery threshold)
             )
             .setBackBuffer(15000, true) // 15s retention for instant backward seeking
             .setPrioritizeTimeOverSizeThresholds(true)
@@ -138,6 +142,10 @@ class MusicPlaybackService : MediaLibraryService() {
 
         exoPlayer.addListener(object : Player.Listener {
             private var playbackStartTime = 0L
+            private var rebufferCount = 0
+            private var rebufferStartTime = 0L
+            private var totalRebufferDurationMs = 0L
+            private var isInitialBuffering = true
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) {
@@ -153,21 +161,54 @@ class MusicPlaybackService : MediaLibraryService() {
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 playbackStartTime = System.currentTimeMillis()
+                rebufferCount = 0
+                totalRebufferDurationMs = 0L
+                isInitialBuffering = true
                 if (mediaItem != null) {
                     recordCurrentTrack()
                 }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
+                val currentPos = exoPlayer.currentPosition.coerceAtLeast(0L)
+                val bufferedPos = exoPlayer.bufferedPosition.coerceAtLeast(0L)
+                val safetyDurationMs = (bufferedPos - currentPos).coerceAtLeast(0L)
+                val safetySec = safetyDurationMs / 1000.0
+
+                val posFormatted = String.format("%02d:%02d", (currentPos / 1000) / 60, (currentPos / 1000) % 60)
+                val bufFormatted = String.format("%02d:%02d", (bufferedPos / 1000) / 60, (bufferedPos / 1000) % 60)
+
                 val stateName = when (playbackState) {
                     Player.STATE_IDLE -> "IDLE"
-                    Player.STATE_BUFFERING -> "BUFFERING"
-                    Player.STATE_READY -> "READY"
+                    Player.STATE_BUFFERING -> {
+                        if (!isInitialBuffering) {
+                            rebufferCount++
+                            rebufferStartTime = System.currentTimeMillis()
+                            android.util.Log.w("MusicPlaybackService", "⚠️ REBUFFER EVENT #$rebufferCount | Safety Cushion: ${safetySec}s | Current = $posFormatted | Buffered = $bufFormatted")
+                        } else {
+                            android.util.Log.d("MusicPlaybackService", "Initial Buffering... | Current = $posFormatted | Buffered = $bufFormatted")
+                        }
+                        "BUFFERING"
+                    }
+                    Player.STATE_READY -> {
+                        if (rebufferStartTime > 0L) {
+                            val duration = System.currentTimeMillis() - rebufferStartTime
+                            totalRebufferDurationMs += duration
+                            rebufferStartTime = 0L
+                            android.util.Log.d("MusicPlaybackService", "✓ REBUFFER RECOVERED in ${duration}ms (Total rebuffer time: ${totalRebufferDurationMs}ms, Events: $rebufferCount)")
+                        }
+                        isInitialBuffering = false
+                        "READY"
+                    }
                     Player.STATE_ENDED -> "ENDED"
                     else -> "UNKNOWN ($playbackState)"
                 }
+
                 val currentItem = exoPlayer.currentMediaItem
-                android.util.Log.d("MusicPlaybackService", "ExoPlayer State Changed: $stateName | Current Media: ${currentItem?.mediaId} | URI: ${currentItem?.requestMetadata?.mediaUri ?: currentItem?.localConfiguration?.uri}")
+                android.util.Log.d(
+                    "MusicPlaybackService",
+                    "ExoPlayer State: $stateName | Buffer Depth: [Current: $posFormatted, Buffered: $bufFormatted, Safety: ${String.format("%.1f", safetySec)}s] | Rebuffers: $rebufferCount | Track: ${currentItem?.mediaId}"
+                )
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {

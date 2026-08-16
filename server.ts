@@ -45,7 +45,7 @@ const apiLimiter = rateLimit({
 
 const streamLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 3000, // 3000 range chunks per minute per IP (safe for seeking and chunking)
+  max: 60000, // 60,000 range chunks per minute per IP cluster (safe for 2,000+ simultaneous listeners behind CGNAT/WiFi)
   standardHeaders: true,
   legacyHeaders: false
 });
