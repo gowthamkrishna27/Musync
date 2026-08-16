@@ -58,9 +58,13 @@ fun AuthBottomSheet(
                             onDismiss()
                         }
                     }
+                } else {
+                    android.util.Log.e("AuthBottomSheet", "Google Sign-In returned null ID token. Ensure SHA-1 and Google Provider are enabled in Firebase Console.")
                 }
+            } catch (e: ApiException) {
+                android.util.Log.e("AuthBottomSheet", "Google Sign-In failed with status code ${e.statusCode}: ${e.message}", e)
             } catch (e: Exception) {
-                // Handled in authManager
+                android.util.Log.e("AuthBottomSheet", "Google Sign-In unexpected error: ${e.message}", e)
             }
         }
     }

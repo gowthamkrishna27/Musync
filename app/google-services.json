@@ -9,86 +9,23 @@
       "client_info": {
         "mobilesdk_app_id": "1:989198851105:android:c6a19fc2cf333dcfb15760",
         "android_client_info": {
-          "package_name": "Musync.k2706"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyAOWYijIH2svFCseEjGb6ZazuM2hkQvMUc"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:989198851105:android:c6a19fc2cf333dcfb15760",
-        "android_client_info": {
-          "package_name": "com.missingcore.music"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyAOWYijIH2svFCseEjGb6ZazuM2hkQvMUc"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:989198851105:android:c6a19fc2cf333dcfb15760",
-        "android_client_info": {
-          "package_name": "com.missingcore.music.debug"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyAOWYijIH2svFCseEjGb6ZazuM2hkQvMUc"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:989198851105:android:c6a19fc2cf333dcfb15760",
-        "android_client_info": {
-          "package_name": "com.cyanchill.missingcore.music"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyAOWYijIH2svFCseEjGb6ZazuM2hkQvMUc"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:989198851105:android:c6a19fc2cf333dcfb15760",
-        "android_client_info": {
           "package_name": "com.musync.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "989198851105-itva8jg8nlnt14nc65osj6sjl4o830ep.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.musync.app",
+            "certificate_hash": "3e69b337712fc17ee47963da9172306bea954319"
+          }
+        },
+        {
+          "client_id": "989198851105-m97comku8uiv00cvilvvaen55m745o48.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAOWYijIH2svFCseEjGb6ZazuM2hkQvMUc"
@@ -96,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "989198851105-m97comku8uiv00cvilvvaen55m745o48.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     },
@@ -107,7 +49,20 @@
           "package_name": "com.musync.app.debug"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "989198851105-itva8jg8nlnt14nc65osj6sjl4o830ep.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.musync.app.debug",
+            "certificate_hash": "3e69b337712fc17ee47963da9172306bea954319"
+          }
+        },
+        {
+          "client_id": "989198851105-m97comku8uiv00cvilvvaen55m745o48.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyAOWYijIH2svFCseEjGb6ZazuM2hkQvMUc"
@@ -115,7 +70,49 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "989198851105-m97comku8uiv00cvilvvaen55m745o48.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:989198851105:android:c6a19fc2cf333dcfb15760",
+        "android_client_info": {
+          "package_name": "Musync.k2706"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "989198851105-itva8jg8nlnt14nc65osj6sjl4o830ep.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "Musync.k2706",
+            "certificate_hash": "3e69b337712fc17ee47963da9172306bea954319"
+          }
+        },
+        {
+          "client_id": "989198851105-m97comku8uiv00cvilvvaen55m745o48.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAOWYijIH2svFCseEjGb6ZazuM2hkQvMUc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "989198851105-m97comku8uiv00cvilvvaen55m745o48.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

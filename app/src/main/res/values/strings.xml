@@ -2,4 +2,5 @@
     <string name="app_name">Musync</string>
     <string name="notification_channel_name">Music Playback</string>
     <string name="notification_channel_description">Active media playback and controls</string>
+    <string name="default_web_client_id">989198851105-m97comku8uiv00cvilvvaen55m745o48.apps.googleusercontent.com</string>
 </resources>
