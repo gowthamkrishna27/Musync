@@ -182,7 +182,21 @@ fun NowPlayingSheet(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // 2. EXISTING PLAYER UI (Interactive Foreground Layer)
+            // 2. BOTTOM SCRIM — fades blurred artwork into solid BackgroundBlack behind controls
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0.0f to Color.Transparent,
+                            0.45f to Color.Transparent,
+                            0.68f to Color(0xCC080A0E),
+                            1.0f to Color(0xFF080A0E)
+                        )
+                    )
+            )
+
+            // 3. PLAYER UI (Interactive Foreground Layer)
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -238,7 +252,7 @@ fun NowPlayingSheet(
                     }
                 }
 
-                Spacer(modifier = Modifier.weight(0.6f))
+                Spacer(modifier = Modifier.height(24.dp))
 
             // 2. Large Centered Album Artwork Banner with Round Corners & Transparent Glass Halo
             val infiniteTransition = rememberInfiniteTransition(label = "glowAnimation")
@@ -263,7 +277,7 @@ fun NowPlayingSheet(
 
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.88f)
+                    .fillMaxWidth(0.92f)
                     .aspectRatio(1f),
                 contentAlignment = Alignment.Center
             ) {
@@ -318,7 +332,7 @@ fun NowPlayingSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.weight(0.7f))
+            Spacer(modifier = Modifier.height(28.dp))
 
             // 3. Track Info (Title, Artist, Heart Toggle)
             Row(
@@ -439,7 +453,7 @@ fun NowPlayingSheet(
                     Box(
                         modifier = Modifier
                             .padding(start = thumbOffset.coerceAtLeast(0.dp))
-                            .size(12.dp)
+                            .size(16.dp)
                             .clip(CircleShape)
                             .background(Color.White)
                     )
@@ -510,10 +524,9 @@ fun NowPlayingSheet(
                 } else {
                     Box(
                         modifier = Modifier
-                            .size(62.dp)
+                            .size(64.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF282C37))
-                            .border(1.5.dp, Color(0x55FFFFFF), CircleShape)
+                            .background(Color.White)
                             .clickable {
                                 haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                                 onTogglePlay()
@@ -523,8 +536,8 @@ fun NowPlayingSheet(
                         Icon(
                             imageVector = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
-                            tint = Color.White,
-                            modifier = Modifier.size(30.dp)
+                            tint = Color.Black,
+                            modifier = Modifier.size(32.dp)
                         )
                     }
                 }
@@ -576,7 +589,7 @@ fun NowPlayingSheet(
                         imageVector = Icons.AutoMirrored.Filled.QueueMusic,
                         contentDescription = "Queue",
                         tint = IconGrey,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
 
@@ -585,7 +598,7 @@ fun NowPlayingSheet(
                         imageVector = Icons.AutoMirrored.Filled.PlaylistAdd,
                         contentDescription = "Add to Playlist",
                         tint = IconGrey,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
 
@@ -594,7 +607,7 @@ fun NowPlayingSheet(
                         imageVector = Icons.Default.Tune,
                         contentDescription = "Equalizer",
                         tint = if (showEqualizerSheet) IconWhite else IconGrey,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
 
@@ -603,7 +616,7 @@ fun NowPlayingSheet(
                         imageVector = Icons.Default.Devices,
                         contentDescription = "Devices",
                         tint = if (showDeviceDialog) IconWhite else IconGrey,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
