@@ -21,6 +21,7 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.musync.app.MainActivity
 import com.musync.app.MusyncApplication
+import com.musync.app.domain.model.Track
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,9 +42,13 @@ class MusicPlaybackService : MediaLibraryService() {
         const val CATEGORY_RECENT = "recent"
     }
 
+    private lateinit var trackPreloadManager: TrackPreloadManager
+    private var previousTrackEndTime = 0L
+
     @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
+        trackPreloadManager = TrackPreloadManager(this, serviceScope)
 
         val audioAttributes = AudioAttributes.Builder()
             .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -146,12 +151,13 @@ class MusicPlaybackService : MediaLibraryService() {
             private var rebufferStartTime = 0L
             private var totalRebufferDurationMs = 0L
             private var isInitialBuffering = true
+            private var trackFailureCount = 0
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) {
                     playbackStartTime = System.currentTimeMillis()
+                    triggerNextTrackPreload()
                 } else {
-                    // If played for more than 5 seconds, record in recently played
                     val elapsed = System.currentTimeMillis() - playbackStartTime
                     if (elapsed >= 5000L) {
                         recordCurrentTrack()
@@ -159,13 +165,26 @@ class MusicPlaybackService : MediaLibraryService() {
                 }
             }
 
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                triggerNextTrackPreload()
+            }
+
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                playbackStartTime = System.currentTimeMillis()
+                val now = System.currentTimeMillis()
+                if (previousTrackEndTime > 0L) {
+                    val gapMs = (now - previousTrackEndTime).coerceAtLeast(0L)
+                    android.util.Log.i("MusicPlaybackService", "⚡ GAPLESS TRACK TRANSITION: gap = ${gapMs}ms (Reason: $reason, New Track: ${mediaItem?.mediaMetadata?.title})")
+                }
+                previousTrackEndTime = 0L
+                playbackStartTime = now
                 rebufferCount = 0
                 totalRebufferDurationMs = 0L
                 isInitialBuffering = true
+                trackFailureCount = 0
+
                 if (mediaItem != null) {
                     recordCurrentTrack()
+                    triggerNextTrackPreload()
                 }
             }
 
@@ -200,7 +219,10 @@ class MusicPlaybackService : MediaLibraryService() {
                         isInitialBuffering = false
                         "READY"
                     }
-                    Player.STATE_ENDED -> "ENDED"
+                    Player.STATE_ENDED -> {
+                        previousTrackEndTime = System.currentTimeMillis()
+                        "ENDED"
+                    }
                     else -> "UNKNOWN ($playbackState)"
                 }
 
@@ -219,12 +241,46 @@ class MusicPlaybackService : MediaLibraryService() {
                     "ExoPlayer Error occurred | MediaId: ${currentItem?.mediaId} | Title: ${currentItem?.mediaMetadata?.title} | URI: $uri | ErrorCode: ${error.errorCode} | ErrorCodeName: ${error.errorCodeName} | Message: ${error.message}",
                     error
                 )
+
+                // Intelligent Error Recovery: Retry current track once; if still failing, skip to preloaded next track
+                trackFailureCount++
+                if (trackFailureCount <= 1) {
+                    android.util.Log.w("MusicPlaybackService", "Retrying failed track (attempt #$trackFailureCount)...")
+                    exoPlayer.prepare()
+                    exoPlayer.play()
+                } else {
+                    android.util.Log.w("MusicPlaybackService", "Skipping unplayable track to keep continuous playback alive...")
+                    if (exoPlayer.hasNextMediaItem()) {
+                        exoPlayer.seekToNextMediaItem()
+                        exoPlayer.prepare()
+                        exoPlayer.play()
+                    }
+                }
             }
         })
+
+        this.player = exoPlayer
 
         mediaLibrarySession = MediaLibrarySession.Builder(this, exoPlayer, CustomLibraryCallback())
             .setSessionActivity(sessionActivityPendingIntent)
             .build()
+    }
+
+    private fun triggerNextTrackPreload() {
+        val p = this.player ?: return
+        val currentIndex = p.currentMediaItemIndex
+        val count = p.mediaItemCount
+        if (count <= 0 || currentIndex !in 0 until count) return
+
+        val queue = mutableListOf<Track>()
+        for (i in 0 until count) {
+            val item = p.getMediaItemAt(i)
+            queue.add(MediaItemMapper.fromMediaItem(item))
+        }
+
+        val app = application as MusyncApplication
+        val baseUrl = app.container.preferencesManager.getBaseUrl()
+        trackPreloadManager.onTrackPlaying(currentIndex, queue, baseUrl)
     }
 
     private fun recordCurrentTrack() {
@@ -247,6 +303,7 @@ class MusicPlaybackService : MediaLibraryService() {
     override fun onDestroy() {
         val app = application as MusyncApplication
         app.container.audioEffectManager.detach()
+        trackPreloadManager.clear()
         serviceScope.cancel()
         mediaLibrarySession?.run {
             player.release()
@@ -267,7 +324,8 @@ class MusicPlaybackService : MediaLibraryService() {
             val app = application as MusyncApplication
             val future = com.google.common.util.concurrent.SettableFuture.create<MutableList<MediaItem>>()
             serviceScope.launch(Dispatchers.IO) {
-                val resolvedItems = mediaItems.map { item ->
+                val resolvedItems = mutableListOf<MediaItem>()
+                for (item in mediaItems) {
                     val uri = item.requestMetadata.mediaUri ?: item.localConfiguration?.uri
                     val uriStr = uri?.toString()
                     val track = MediaItemMapper.fromMediaItem(item)
@@ -284,13 +342,11 @@ class MusicPlaybackService : MediaLibraryService() {
                     }
 
                     if (!resolvedStreamUrl.isNullOrBlank()) {
-                        android.util.Log.d("MusicPlaybackService", "onAddMediaItems -> resolved stream for '${track.title}' (${track.id}) -> $resolvedStreamUrl")
-                        MediaItemMapper.toMediaItem(track.copy(streamUrl = resolvedStreamUrl))
+                        resolvedItems.add(MediaItemMapper.toMediaItem(track.copy(streamUrl = resolvedStreamUrl)))
                     } else {
-                        android.util.Log.w("MusicPlaybackService", "onAddMediaItems -> no stream URL for '${track.title}' (${track.id})")
-                        item.buildUpon().setUri(uri ?: android.net.Uri.EMPTY).build()
+                        resolvedItems.add(item.buildUpon().setUri(uri ?: android.net.Uri.EMPTY).build())
                     }
-                }.toMutableList()
+                }
                 future.set(resolvedItems)
             }
             return future

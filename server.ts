@@ -327,6 +327,36 @@ app.get(["/stream", "/stream/"], streamLimiter, async (req: Request, res: Respon
   await StreamManager.handleStreamRequest(req, res);
 });
 
+// 9b. Next-track early stream pre-warm & resolution endpoint
+app.get(["/stream/preload", "/preload"], apiLimiter, async (req: Request, res: Response) => {
+  const videoId = (req.query.id || req.query.query || req.query.videoId) as string;
+  const quality = (req.query.quality || "high") as string;
+  if (!videoId) {
+    return res.status(400).json({ error: "Missing video ID parameter (?id=...)" });
+  }
+
+  const start = Date.now();
+  const resolution = await StreamManager.resolveAudioStream(videoId, quality);
+  const durationMs = Date.now() - start;
+
+  if (resolution.entry) {
+    res.json({
+      success: true,
+      videoId,
+      quality,
+      source: resolution.source || "resolver",
+      durationMs,
+      cached: resolution.source === "l1" || resolution.source === "redis"
+    });
+  } else {
+    res.status(502).json({
+      success: false,
+      videoId,
+      error: resolution.error || "Failed to resolve stream"
+    });
+  }
+});
+
 // 10. Lyrics endpoint with caching
 app.get("/lyrics", apiLimiter, async (req: Request, res: Response) => {
   const videoId = (req.query.id || req.query.videoId) as string;
