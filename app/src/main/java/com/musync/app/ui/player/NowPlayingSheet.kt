@@ -1,12 +1,18 @@
 package com.musync.app.ui.player
 
 import android.content.Intent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode as AnimRepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.ui.PlayerView
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -129,6 +135,8 @@ fun NowPlayingSheet(
 ) {
     val track = playbackState.currentTrack ?: return
     val context = LocalContext.current
+    val app = context.applicationContext as com.musync.app.MusyncApplication
+    val playbackManager = app.container.playbackManager
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -159,61 +167,136 @@ fun NowPlayingSheet(
             }
         }
 
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(BackgroundBlack)
-                .padding(horizontal = 24.dp)
-                .padding(top = 48.dp, bottom = 28.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 1. Header: Down Arrow, "PLAYING FROM", 3-dots
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // 1. VIDEO BACKGROUND LAYER
+            // Renders behind existing music-player UI using the authoritative Media3 player
+            androidx.compose.animation.AnimatedVisibility(
+                visible = playbackState.isVideoMode,
+                enter = fadeIn(tween(600)),
+                exit = fadeOut(tween(400)),
+                modifier = Modifier.fillMaxSize()
             ) {
-                IconButton(onClick = onDismiss) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Collapse",
-                        tint = IconWhite,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "PLAYING FROM",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            letterSpacing = 1.sp,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium
-                        ),
-                        color = TextGreyMuted
-                    )
-                    Text(
-                        text = playingFromText,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        color = TextWhite,
-                        maxLines = 1
-                    )
-                }
-
-                IconButton(onClick = { showOptionsSheet = true }) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "Options",
-                        tint = IconWhite,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            useController = false
+                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                            player = playbackManager.getPlayer()
+                        }
+                    },
+                    update = { playerView ->
+                        val currentPlayer = playbackManager.getPlayer()
+                        if (playerView.player != currentPlayer) {
+                            playerView.player = currentPlayer
+                        }
+                    },
+                    onRelease = { playerView ->
+                        playerView.player = null
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
             }
 
-            Spacer(modifier = Modifier.weight(0.6f))
+            // 2. DARK / GRADIENT ATMOSPHERIC OVERLAY
+            // Protects readability of typography and controls while letting ambient video shine through
+            if (playbackState.isVideoMode) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xB30B0D13), // 70% dark at top
+                                    Color(0x660B0D13), // 40% translucent in center
+                                    Color(0xF20B0D13)  // 95% dark at bottom behind progress & controls
+                                )
+                            )
+                        )
+                )
+            }
+
+            // 3. EXISTING PLAYER UI (Interactive Foreground Layer)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(if (playbackState.isVideoMode) Color.Transparent else BackgroundBlack)
+                    .padding(horizontal = 24.dp)
+                    .padding(top = 48.dp, bottom = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // 1. Header: Down Arrow, "PLAYING FROM", Video Atmosphere Toggle, 3-dots
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Collapse",
+                            tint = IconWhite,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = if (playbackState.isVideoMode) "VIDEO ATMOSPHERE" else "PLAYING FROM",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                letterSpacing = 1.sp,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium
+                            ),
+                            color = if (playbackState.isVideoMode) StatusGreen else TextGreyMuted
+                        )
+                        Text(
+                            text = playingFromText,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = TextWhite,
+                            maxLines = 1
+                        )
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (track.isVideoAvailable) {
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    if (playbackState.isVideoMode) {
+                                        playbackManager.switchToAudioMode()
+                                    } else {
+                                        playbackManager.switchToVideoMode(playbackState.videoQuality)
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Videocam,
+                                    contentDescription = "Video Background",
+                                    tint = if (playbackState.isVideoMode) StatusGreen else IconGrey,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+
+                        IconButton(onClick = { showOptionsSheet = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "Options",
+                                tint = IconWhite,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.weight(0.6f))
 
             // 2. Large Centered Album Artwork Banner with Round Corners & Transparent Glass Halo
             val infiniteTransition = rememberInfiniteTransition(label = "glowAnimation")
@@ -621,6 +704,7 @@ fun NowPlayingSheet(
             }
         }
     }
+}
 
     // Add to Playlist Dialog
     if (showAddToPlaylistDialog) {
@@ -922,6 +1006,72 @@ fun NowPlayingSheet(
                     Icon(Icons.AutoMirrored.Filled.QueueMusic, null, tint = IconWhite, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(14.dp))
                     Text("Go to Queue", color = TextWhite)
+                }
+
+                // Video Background Atmosphere Toggle & Quality
+                if (track.isVideoAvailable) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                if (playbackState.isVideoMode) {
+                                    playbackManager.switchToAudioMode()
+                                } else {
+                                    playbackManager.switchToVideoMode(playbackState.videoQuality)
+                                }
+                            }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Videocam,
+                            contentDescription = null,
+                            tint = if (playbackState.isVideoMode) StatusGreen else IconWhite,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Video Atmosphere Background", color = TextWhite)
+                            Text(
+                                if (playbackState.isVideoMode) "Active (${playbackState.videoQuality})" else "Disabled (Audio Only)",
+                                color = if (playbackState.isVideoMode) StatusGreen else TextGreyMuted,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+
+                    if (playbackState.isVideoMode) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp)
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf("auto", "1080p", "720p", "480p", "360p", "144p").forEach { quality ->
+                                val isSelected = playbackState.videoQuality.equals(quality, ignoreCase = true)
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(if (isSelected) StatusGreen else CardElevated)
+                                        .border(1.dp, if (isSelected) StatusGreen else BorderStroke, RoundedCornerShape(16.dp))
+                                        .clickable {
+                                            playbackManager.setVideoQuality(quality)
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = quality.uppercase(),
+                                        color = if (isSelected) Color.Black else TextWhite,
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Row(
