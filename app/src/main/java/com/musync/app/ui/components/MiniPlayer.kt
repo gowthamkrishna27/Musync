@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.components
+package com.musync.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,6 +29,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -100,9 +101,14 @@ fun MiniPlayer(
                         .padding(2.5.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (!track.artworkUrl.isNullOrBlank()) {
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    val imageRequest = remember(track.artworkUrl, track.id) {
+                        com.musync.app.util.ImageQualityHelper.buildOptimizedImageRequest(context, track.artworkUrl, track.id)
+                    }
+
+                    if (!track.artworkUrl.isNullOrBlank() || track.id.isNotBlank()) {
                         AsyncImage(
-                            model = track.artworkUrl,
+                            model = imageRequest,
                             contentDescription = track.title,
                             modifier = Modifier
                                 .fillMaxSize()

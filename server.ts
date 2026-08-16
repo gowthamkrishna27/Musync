@@ -73,9 +73,21 @@ function formatTrack(item: any, reqHost: string) {
   const artistName = item.artist?.name || (Array.isArray(item.artists) ? item.artists.map((a: any) => a.name).join(", ") : "YouTube Artist");
   const albumName = item.album?.name || (typeof item.album === "string" ? item.album : title);
 
-  let thumbnail = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+  let thumbnail = `https://i.ytimg.com/vi/${videoId}/hq720.jpg`;
   if (Array.isArray(item.thumbnails) && item.thumbnails.length > 0) {
     thumbnail = item.thumbnails[item.thumbnails.length - 1].url;
+  }
+
+  // Elevate Google/YouTube CDN thumbnails to HD (800x800 / hq720)
+  if (thumbnail.includes("googleusercontent.com") || thumbnail.includes("ggpht.com")) {
+    thumbnail = thumbnail
+      .replace(/=w\d+-h\d+[^=]*/, "=w800-h800-l90-rj")
+      .replace(/=s\d+[^=]*/, "=s800-c-k-c0x00ffffff-no-rj");
+  } else if (thumbnail.includes("i.ytimg.com")) {
+    thumbnail = thumbnail
+      .replace("/mqdefault.jpg", "/hq720.jpg")
+      .replace("/default.jpg", "/hq720.jpg")
+      .replace("/sddefault.jpg", "/hq720.jpg");
   }
 
   const durationSec = item.duration || 180;

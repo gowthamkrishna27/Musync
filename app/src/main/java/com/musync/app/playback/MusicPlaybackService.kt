@@ -26,6 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -242,19 +243,18 @@ class MusicPlaybackService : MediaLibraryService() {
                     error
                 )
 
-                // Intelligent Error Recovery: Retry current track once; if still failing, skip to preloaded next track
+                // Resilient Current-Track Error Recovery: Retry the selected track up to 3 times
                 trackFailureCount++
-                if (trackFailureCount <= 1) {
-                    android.util.Log.w("MusicPlaybackService", "Retrying failed track (attempt #$trackFailureCount)...")
-                    exoPlayer.prepare()
-                    exoPlayer.play()
-                } else {
-                    android.util.Log.w("MusicPlaybackService", "Skipping unplayable track to keep continuous playback alive...")
-                    if (exoPlayer.hasNextMediaItem()) {
-                        exoPlayer.seekToNextMediaItem()
+                if (trackFailureCount <= 3) {
+                    val delayMs = 300L * trackFailureCount
+                    android.util.Log.w("MusicPlaybackService", "Retrying failed track '${currentItem?.mediaMetadata?.title}' (attempt #$trackFailureCount) in ${delayMs}ms...")
+                    serviceScope.launch {
+                        delay(delayMs)
                         exoPlayer.prepare()
                         exoPlayer.play()
                     }
+                } else {
+                    android.util.Log.w("MusicPlaybackService", "Track unrecoverable after $trackFailureCount attempts: '${currentItem?.mediaMetadata?.title}'")
                 }
             }
         })
@@ -334,6 +334,41 @@ class MusicPlaybackService : MediaLibraryService() {
                 }
             }.toMutableList()
             future.set(resolvedItems)
+            return future
+        }
+
+        override fun onSetMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: MutableList<MediaItem>,
+            startIndex: Int,
+            startPositionMs: Long
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val future = com.google.common.util.concurrent.SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
+            val resolvedItems = mediaItems.map { item ->
+                val uri = item.requestMetadata.mediaUri ?: item.localConfiguration?.uri
+                val uriStr = uri?.toString()
+
+                if (!uriStr.isNullOrBlank() && uri != android.net.Uri.EMPTY) {
+                    item.buildUpon().setUri(uri).build()
+                } else {
+                    val track = MediaItemMapper.fromMediaItem(item)
+                    MediaItemMapper.toMediaItem(track)
+                }
+            }.toMutableList()
+
+            val safeStartIndex = if (resolvedItems.isNotEmpty()) startIndex.coerceIn(0, resolvedItems.size - 1) else 0
+            val safePositionMs = startPositionMs.coerceAtLeast(0L)
+
+            val currentSelectedTitle = resolvedItems.getOrNull(safeStartIndex)?.mediaMetadata?.title
+            val currentSelectedId = resolvedItems.getOrNull(safeStartIndex)?.mediaId
+            android.util.Log.i(
+                "MusicPlaybackService",
+                "🎯 [QUEUE_SET] onSetMediaItems: Total = ${resolvedItems.size}, StartIndex = $safeStartIndex, StartPos = ${safePositionMs}ms | Current Track = '$currentSelectedTitle' ($currentSelectedId)"
+            )
+
+            val result = MediaSession.MediaItemsWithStartPosition(resolvedItems, safeStartIndex, safePositionMs)
+            future.set(result)
             return future
         }
 

@@ -320,17 +320,15 @@ fun NowPlayingSheet(
                     contentAlignment = Alignment.Center
                 ) {
                     val rawUrl = track.artworkUrl
-                    if (!rawUrl.isNullOrBlank()) {
-                        val cleanArtworkUrl = if (rawUrl.contains("hqdefault.jpg")) {
-                            rawUrl.replace("hqdefault.jpg", "mqdefault.jpg")
-                        } else {
-                            rawUrl
-                        }
+                    val imageRequest = com.musync.app.util.ImageQualityHelper.buildOptimizedImageRequest(
+                        context = LocalContext.current,
+                        url = rawUrl,
+                        videoId = track.id
+                    )
+
+                    if (!rawUrl.isNullOrBlank() || track.id.isNotBlank()) {
                         AsyncImage(
-                            model = coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-                                .data(cleanArtworkUrl)
-                                .crossfade(true)
-                                .build(),
+                            model = imageRequest,
                             contentDescription = track.title,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop

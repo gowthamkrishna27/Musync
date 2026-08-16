@@ -502,14 +502,8 @@ private fun GlassSongCard(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val imageRequest = androidx.compose.runtime.remember(track.artworkUrl) {
-        ImageRequest.Builder(context)
-            .data(track.artworkUrl)
-            .crossfade(true)
-            .size(240, 240)
-            .memoryCachePolicy(CachePolicy.ENABLED)
-            .diskCachePolicy(CachePolicy.ENABLED)
-            .build()
+    val imageRequest = androidx.compose.runtime.remember(track.artworkUrl, track.id) {
+        com.musync.app.util.ImageQualityHelper.buildOptimizedImageRequest(context, track.artworkUrl, track.id)
     }
 
     Column(
@@ -529,7 +523,7 @@ private fun GlassSongCard(
                 .background(Color(0x20FFFFFF)),
             contentAlignment = Alignment.Center
         ) {
-            if (!track.artworkUrl.isNullOrBlank()) {
+            if (!track.artworkUrl.isNullOrBlank() || track.id.isNotBlank()) {
                 AsyncImage(
                     model = imageRequest,
                     contentDescription = track.title,

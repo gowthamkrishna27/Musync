@@ -205,7 +205,7 @@ class YouTubeMusicProvider(
         } catch (_: Exception) {}
 
         // Fallback: construct standard Track with targetRenderUrl/stream
-        val artUrl = "https://i.ytimg.com/vi/$videoId/mqdefault.jpg"
+        val artUrl = "https://i.ytimg.com/vi/$videoId/hq720.jpg"
         val artist = Artist(id = "yt_artist_$videoId", name = "YouTube Music", imageUrl = artUrl)
         val album = Album(id = "yt_album_$videoId", name = "Single", artist = artist, artworkUrl = artUrl)
         Track(
