@@ -21,10 +21,10 @@ object MediaItemMapper {
     ): MediaItem {
         val cleanId = track.id.removePrefix("yt_")
 
-        val targetStreamUrl = if (!track.streamUrl.isNullOrBlank()) {
-            track.streamUrl
-        } else if (track.id.startsWith("content://") || track.id.startsWith("file://")) {
+        val targetStreamUrl = if (track.id.startsWith("content://") || track.id.startsWith("file://")) {
             track.id
+        } else if (!track.streamUrl.isNullOrBlank() && !track.streamUrl.contains("/stream?id=")) {
+            track.streamUrl
         } else {
             "$baseUrl/stream?id=$cleanId&quality=$quality"
         }
