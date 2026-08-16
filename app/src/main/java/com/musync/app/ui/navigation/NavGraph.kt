@@ -85,16 +85,45 @@ import com.musync.app.ui.theme.TextGreyMuted
 import com.musync.app.ui.theme.TextWhite
 
 /**
- * Small static colored dot indicating current network quality.
+ * Live-reactive colored dot indicating current network quality.
  * 🟢 Green = WiFi / 5G / LTE  |  🟡 Amber = 3G  |  🔴 Red = 2G / offline
- * No animation — sits cleanly beside the "Musync" title.
+ * Updates automatically whenever network type changes via ConnectivityManager.NetworkCallback.
  */
 @Composable
 fun NetworkQualityDot(isBuffering: Boolean = false, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val quality = remember(Unit) {
-        com.musync.app.util.NetworkQualityHelper.getRecommendedQuality(context)
-    }
+
+    // produceState + NetworkCallback: re-emits quality string whenever the
+    // active network changes (WiFi <-> LTE <-> 3G <-> offline).
+    val quality by androidx.compose.runtime.produceState(
+        initialValue = com.musync.app.util.NetworkQualityHelper.getRecommendedQuality(context),
+        producer = {
+            val cm = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE)
+                    as android.net.ConnectivityManager
+
+            val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    value = com.musync.app.util.NetworkQualityHelper.getRecommendedQuality(context)
+                }
+                override fun onLost(network: android.net.Network) {
+                    value = "saver" // treat as very slow / offline
+                }
+                override fun onCapabilitiesChanged(
+                    network: android.net.Network,
+                    caps: android.net.NetworkCapabilities
+                ) {
+                    value = com.musync.app.util.NetworkQualityHelper.getRecommendedQuality(context)
+                }
+            }
+
+            val request = android.net.NetworkRequest.Builder().build()
+            cm.registerNetworkCallback(request, callback)
+
+            // Unregister when the composable leaves composition
+            awaitDispose { cm.unregisterNetworkCallback(callback) }
+        }
+    )
+
     val dotColor = when (quality) {
         "saver" -> Color(0xFFFF4444)   // red — 2G / offline
         "low"   -> Color(0xFFFFB300)   // amber — 3G
