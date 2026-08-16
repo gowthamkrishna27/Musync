@@ -1,15 +1,30 @@
 # Android Studio & Gradle
 *.iml
-.gradle
-/local.properties
-/.idea
+.gradle/
+local.properties
+.idea/
 .DS_Store
-/build
-*/build
-.cxx
+build/
+*/build/
+.cxx/
 captures/
-.externalNativeBuild
+.externalNativeBuild/
 .kotlin/
+
+# Android build outputs & keystores
+*.jks
+*.keystore
+*.apk
+*.aab
+output-metadata.json
+
+# Node.js
+node_modules/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
 
 # Python
 __pycache__/
@@ -19,22 +34,12 @@ venv/
 env/
 .env
 
-# Keystores & sensitive keys
-*.jks
-*.keystore
-*.apk
+# Temporary / Scratch & Local Scripts
+*.ps1
+*.bat
+cloudflared.exe
+*.exe
+load_test/
+scratch/
 oauth.json
 browser.json
-
-# Node.js
-# Node.js
-node_modules/
-dist/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Binaries
-*.exe
-cloudflared.exe
-
