@@ -157,7 +157,8 @@ fun NowPlayingSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = Color.Transparent,
+        containerColor = BackgroundBlack,
+        shape = androidx.compose.ui.graphics.RectangleShape,
         dragHandle = null
     ) {
         val playingFromText = remember(track) {
