@@ -114,14 +114,24 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Musync",
-                                style = MaterialTheme.typography.headlineMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 24.sp
-                                ),
-                                color = TextWhite
-                            )
+                            Row(
+                                verticalAlignment = Alignment.Bottom
+                            ) {
+                                Text(
+                                    text = "Musync",
+                                    style = MaterialTheme.typography.headlineMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 24.sp
+                                    ),
+                                    color = TextWhite
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                com.musync.app.ui.navigation.NetworkQualityDot(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .padding(bottom = 3.dp)
+                                )
+                            }
 
                             // Glass Search Pill
                             Box(

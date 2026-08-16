@@ -44,6 +44,51 @@ export interface StreamResolutionResult {
 }
 
 export class StreamManager {
+  // Semaphore: cap concurrent yt-dlp Python spawns to prevent OOM on Railway
+  // Each Python process uses ~50-80MB RAM. 8 = max ~640MB, safe for Railway hobby tier.
+  private static activeResolves = 0;
+  private static readonly MAX_CONCURRENT_RESOLVES = 8;
+  private static resolveQueue: Array<() => void> = [];
+
+  private static acquireResolveSlot(): Promise<void> {
+    return new Promise((resolve) => {
+      if (StreamManager.activeResolves < StreamManager.MAX_CONCURRENT_RESOLVES) {
+        StreamManager.activeResolves++;
+        resolve();
+      } else {
+        StreamManager.resolveQueue.push(() => {
+          StreamManager.activeResolves++;
+          resolve();
+        });
+      }
+    });
+  }
+
+  private static releaseResolveSlot(): void {
+    StreamManager.activeResolves--;
+    const next = StreamManager.resolveQueue.shift();
+    if (next) next();
+  }
+
+  /**
+   * Pre-warm the top N most-played tracks from Redis so their stream URLs
+   * are hot in L1 cache before any user requests them.
+   */
+  static async preWarmPopularTracks(topN: number = 15): Promise<void> {
+    try {
+      const popularIds = await cacheService.getPopularTracks(topN);
+      if (popularIds.length === 0) return;
+      console.log(`[PreWarm] Warming ${popularIds.length} popular tracks...`);
+      const results = await Promise.allSettled(
+        popularIds.map((id) => StreamManager.resolveStream(id, "low"))
+      );
+      const succeeded = results.filter((r) => r.status === "fulfilled" && (r as any).value?.entry).length;
+      console.log(`[PreWarm] ✓ ${succeeded}/${popularIds.length} tracks pre-warmed in L1 cache.`);
+    } catch (err: any) {
+      console.warn("[PreWarm] Failed to pre-warm popular tracks:", err.message);
+    }
+  }
+
   /**
    * Universal Audio Stream Resolver with L1/L2 Shared Caching and Single-Flight Coalescing.
    */
@@ -71,10 +116,18 @@ export class StreamManager {
 
       try {
         const scriptPath = path.join(process.cwd(), "stream_resolver.py");
-        const { stdout, stderr } = await execAsync(
-          `"${PYTHON_BIN}" "${scriptPath}" "${videoId}" "${safeQuality}" "audio"`,
-          { timeout: 25000 }
-        );
+
+        // Acquire semaphore slot — caps concurrent Python spawns to MAX_CONCURRENT_RESOLVES
+        await StreamManager.acquireResolveSlot();
+        let stdout: string, stderr: string;
+        try {
+          ({ stdout, stderr } = await execAsync(
+            `"${PYTHON_BIN}" "${scriptPath}" "${videoId}" "${safeQuality}" "audio"`,
+            { timeout: 25000 }
+          ));
+        } finally {
+          StreamManager.releaseResolveSlot();
+        }
         
         if (stderr && stderr.trim()) {
           console.warn(`[StreamResolver stderr for ${videoId} (${safeQuality})]:`, stderr.trim());

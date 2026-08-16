@@ -1,14 +1,8 @@
 package com.musync.app.ui.navigation
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -53,7 +47,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -92,39 +85,24 @@ import com.musync.app.ui.theme.TextGreyMuted
 import com.musync.app.ui.theme.TextWhite
 
 /**
- * Small colored dot indicating current network quality.
- * 🟢 Green = WiFi / 5G / LTE  |  🟡 Amber = 3G  |  🔴 Red (pulsing) = 2G / offline
+ * Small static colored dot indicating current network quality.
+ * 🟢 Green = WiFi / 5G / LTE  |  🟡 Amber = 3G  |  🔴 Red = 2G / offline
+ * No animation — sits cleanly beside the "Musync" title.
  */
 @Composable
-fun NetworkQualityDot(isBuffering: Boolean, modifier: Modifier = Modifier) {
+fun NetworkQualityDot(isBuffering: Boolean = false, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val quality = remember(Unit) {
         com.musync.app.util.NetworkQualityHelper.getRecommendedQuality(context)
     }
     val dotColor = when (quality) {
-        "saver" -> Color(0xFFFF4444)   // red — 2G / very slow
+        "saver" -> Color(0xFFFF4444)   // red — 2G / offline
         "low"   -> Color(0xFFFFB300)   // amber — 3G
         else    -> Color(0xFF4CAF50)   // green — LTE / 5G / WiFi
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "netDotPulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.7f,
-        targetValue = 1.35f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(700, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseScale"
-    )
-
-    // Pulse on slow connection (2G or 3G), static on good connection
-    val shouldPulse = quality == "saver" || quality == "low"
-
     Box(
         modifier = modifier
-            .size(7.dp)
-            .scale(if (shouldPulse) pulseScale else 1f)
             .clip(CircleShape)
             .background(dotColor)
     )
@@ -199,15 +177,6 @@ fun MainApp(
             .fillMaxSize()
             .background(BackgroundBlack)
     ) {
-        // Global network quality dot — top-right corner, visible on every page
-        NetworkQualityDot(
-            isBuffering = playbackState.isBuffering,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = 52.dp, end = 18.dp)
-                .size(8.dp)
-        )
-
         NavHost(
             navController = navController,
             startDestination = Screen.Home.route,

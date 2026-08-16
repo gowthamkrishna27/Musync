@@ -210,7 +210,15 @@ app.get("/debug/env", async (_req: Request, res: Response) => {
 // 5. In-App OTA Update endpoints
 app.get("/update/check", async (req: Request, res: Response) => {
   const reqHost = `${req.protocol}://${req.get("host")}`;
+  const updateCacheKey = "update:latest:v2";
+
   try {
+    // Serve cached response for 5 minutes to avoid GitHub rate-limits under burst load
+    const cachedUpdate = await cacheService.get<any>(updateCacheKey);
+    if (cachedUpdate) {
+      return res.json({ ...cachedUpdate, direct_url: `${reqHost}/update/latest.apk` });
+    }
+
     const ghRes = await axios.get("https://api.github.com/repos/gowthamkrishna27/Musync/releases/latest", {
       headers: { "User-Agent": "Musync-Server/1.0" },
       timeout: 5000
@@ -225,13 +233,10 @@ app.get("/update/check", async (req: Request, res: Response) => {
       if (apkAsset) downloadUrl = apkAsset.browser_download_url;
     }
 
-    res.json({
-      version,
-      tag_name: tagName,
-      changelog,
-      download_url: downloadUrl,
-      direct_url: `${reqHost}/update/latest.apk`
-    });
+    const payload = { version, tag_name: tagName, changelog, download_url: downloadUrl };
+    await cacheService.set(updateCacheKey, payload, 300); // 5-minute cache
+
+    res.json({ ...payload, direct_url: `${reqHost}/update/latest.apk` });
   } catch (_e: any) {
     res.json({
       version: "1.0.0",
@@ -528,6 +533,9 @@ app.get(["/trending", "/charts"], apiLimiter, async (req: Request, res: Response
 let server: http.Server | null = null;
 
 initYTMusic().then(() => {
+  // Pre-warm top 15 popular tracks into L1 cache 5s after startup (non-blocking)
+  setTimeout(() => StreamManager.preWarmPopularTracks(15), 5000);
+
   server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Musync High-Performance Streaming Server listening on port ${PORT}`);
   });
