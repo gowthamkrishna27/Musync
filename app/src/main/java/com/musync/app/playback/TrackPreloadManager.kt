@@ -52,8 +52,7 @@ class TrackPreloadManager(
         .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
 
     /**
-     * Updates the active playback pipeline.
-     * Call this whenever the active track or queue changes.
+     * Called when a track starts playing. Initiates polite background preloading of next track.
      */
     fun onTrackPlaying(
         currentIndex: Int,
@@ -66,6 +65,9 @@ class TrackPreloadManager(
         currentPreloadJob?.cancel()
         currentPreloadJob = scope.launch(Dispatchers.IO) {
             try {
+                // Give active playing track 100% priority to build initial buffer
+                delay(2500L)
+
                 // 1. Next Track (N+1) -> Preload initial audio bytes to local SimpleCache
                 val nextIndex = currentIndex + 1
                 if (nextIndex < queue.size) {

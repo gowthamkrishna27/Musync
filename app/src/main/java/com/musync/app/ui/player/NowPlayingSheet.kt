@@ -172,17 +172,11 @@ fun NowPlayingSheet(
                 .fillMaxSize()
                 .background(BackgroundBlack)
         ) {
-            // 1. NON-BLOCKING DECOUPLED VIDEO ATMOSPHERE BACKGROUND
-            val videoUrl = remember(track.id, playbackState.videoQuality) {
-                val cleanId = track.id.removePrefix("yt_")
-                "https://musync-production-2fc5.up.railway.app/stream?id=$cleanId&type=video&quality=${playbackState.videoQuality}"
-            }
-
-            BackgroundVideoAtmosphere(
-                videoUrl = videoUrl,
-                isVideoEnabled = playbackState.isVideoMode,
-                isAudioPlaying = playbackState.isPlaying,
-                audioPositionMs = playbackState.currentPositionMs,
+            // 1. ATMOSPHERIC AMBIENT BACKGROUND LAYER (Zero-bandwidth, instant render)
+            AtmosphericBackground(
+                artworkUrl = track.artworkUrl,
+                trackId = track.id,
+                isPlaying = playbackState.isPlaying,
                 modifier = Modifier.fillMaxSize()
             )
 
@@ -190,7 +184,7 @@ fun NowPlayingSheet(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(if (playbackState.isVideoMode) Color.Transparent else BackgroundBlack)
+                    .background(Color.Transparent)
                     .padding(horizontal = 24.dp)
                     .padding(top = 48.dp, bottom = 28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally

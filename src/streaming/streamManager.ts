@@ -202,13 +202,15 @@ export class StreamManager {
     res.on("finish", cleanup);
     res.on("error", cleanup);
 
+    const cacheKey = `stream:v3:${isVideo ? "video" : "audio"}:${videoId}:${quality.toLowerCase()}`;
+
     // 1. Resolve Audio or Video Source
-    const resolution = await StreamManager.resolveStream(videoId, quality, isVideo ? "video" : "audio");
-    const streamEntry = resolution.entry;
+    let resolution = await StreamManager.resolveStream(videoId, quality, isVideo ? "video" : "audio");
+    let streamEntry = resolution.entry;
 
     if (!streamEntry) {
       cleanup();
-      console.warn(`[Stream 502] Resolution failed for ${isVideo ? "video" : "audio"} ${videoId}: ${resolution.error}`);
+      console.warn(`[Stream 502] Initial resolution failed for ${isVideo ? "video" : "audio"} ${videoId}: ${resolution.error}`);
       res.status(502).json({
         error: `Could not resolve stream for ${isVideo ? "video" : "track"}: ${videoId}`,
         details: resolution.error
@@ -216,7 +218,7 @@ export class StreamManager {
       return;
     }
 
-    // 2. Prepare Upstream Request with AbortController
+    // 2. Prepare Upstream Request with AbortController & Automatic Retry
     const abortController = new AbortController();
     req.on("close", () => {
       if (!res.writableEnded) {
@@ -224,10 +226,11 @@ export class StreamManager {
       }
     });
 
-    try {
-      const rangeHeader = req.headers.range;
+    const rangeHeader = req.headers.range;
+
+    const executeUpstreamRequest = async (entry: StreamCacheEntry) => {
       const reqHeaders: Record<string, string> = {
-        ...streamEntry.headers,
+        ...entry.headers,
         "Accept": "*/*",
         "Sec-Fetch-Mode": "navigate"
       };
@@ -236,20 +239,65 @@ export class StreamManager {
         reqHeaders["Range"] = rangeHeader;
       }
 
-      const audioResponse = await streamHttpClient({
+      return await streamHttpClient({
         method: "GET",
-        url: streamEntry.url,
+        url: entry.url,
         headers: reqHeaders,
         responseType: "stream",
         signal: abortController.signal,
         validateStatus: (status) => status < 400
       });
+    };
 
+    let audioResponse;
+    try {
+      audioResponse = await executeUpstreamRequest(streamEntry);
+    } catch (firstErr: any) {
+      if (axios.isCancel(firstErr) || firstErr.name === "AbortError" || req.destroyed) {
+        isClientDisconnected = true;
+        cleanup();
+        return;
+      }
+
+      console.warn(`[Upstream retry] Stream request failed for ${videoId} (${firstErr.message}). Purging cache and re-resolving fresh stream...`);
+      await cacheService.delete(cacheKey);
+
+      try {
+        // Force fresh resolution bypassing cache
+        const freshResolution = await StreamManager.resolveStream(videoId, quality, isVideo ? "video" : "audio");
+        if (freshResolution.entry) {
+          streamEntry = freshResolution.entry;
+          audioResponse = await executeUpstreamRequest(streamEntry);
+        } else {
+          throw new Error(freshResolution.error || "Failed fresh resolution");
+        }
+      } catch (retryErr: any) {
+        if (axios.isCancel(retryErr) || retryErr.name === "AbortError" || req.destroyed) {
+          isClientDisconnected = true;
+          cleanup();
+          return;
+        }
+
+        isUpstreamDisconnected = true;
+        cleanup();
+        await cacheService.delete(cacheKey);
+
+        if (!res.headersSent) {
+          res.status(502).json({
+            error: "Upstream audio delivery error after retry",
+            message: retryErr.message
+          });
+        }
+        return;
+      }
+    }
+
+    try {
       // Pass-through standard status and Range response headers
       const status = audioResponse.status;
       res.status(status);
 
-      const contentType = audioResponse.headers["content-type"] || "audio/webm";
+      const contentType = audioResponse.headers["content-type"] || (isVideo ? "video/mp4" : "audio/webm");
       res.setHeader("Content-Type", String(contentType));
       res.setHeader("Accept-Ranges", "bytes");
 
@@ -290,25 +338,8 @@ export class StreamManager {
 
       // Pipe upstream to client response with native Node backpressure
       audioResponse.data.pipe(res);
-    } catch (err: any) {
-      if (axios.isCancel(err) || err.name === "AbortError" || req.destroyed) {
-        isClientDisconnected = true;
-        cleanup();
-        return;
-      }
-
-      isUpstreamDisconnected = true;
+    } catch (pipeErr: any) {
       cleanup();
-
-      console.warn(`[Axios stream error for ${videoId}]: ${err.message}. Purging cache entry.`);
-      await cacheService.delete(`stream:v2:${videoId}`);
-
-      if (!res.headersSent) {
-        res.status(502).json({
-          error: "Upstream audio delivery error",
-          message: err.message
-        });
-      }
     }
   }
 }
