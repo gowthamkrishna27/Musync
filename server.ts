@@ -56,7 +56,18 @@ let isInitialized = false;
 
 const PYTHON_BIN = process.platform === "win32" ? "python" : "python3";
 
+async function upgradeYtDlp() {
+  try {
+    console.log("Checking and upgrading yt-dlp to latest release...");
+    const { stdout } = await execAsync(`"${PYTHON_BIN}" -m pip install --no-cache-dir --break-system-packages -U yt-dlp`);
+    console.log("✓ yt-dlp check complete:", stdout.trim().split("\n").slice(-1)[0]);
+  } catch (err: any) {
+    console.warn("⚠ yt-dlp runtime upgrade notice:", err.message);
+  }
+}
+
 async function initYTMusic() {
+  await upgradeYtDlp();
   try {
     await ytmusic.initialize();
     isInitialized = true;
