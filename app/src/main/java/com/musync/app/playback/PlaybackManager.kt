@@ -241,18 +241,35 @@ class PlaybackManager(private val context: Context) {
         }
     }
 
+    private var playbackRequestId = 0L
+
     fun play(track: Track) {
-        val index = currentQueue.indexOfFirst { it.id == track.id }
-        if (index >= 0) {
-            playAtIndex(index)
-        } else {
-            currentQueue.add(0, track)
-            playTracks(currentQueue, 0)
+        val requestId = ++playbackRequestId
+        currentQueue.clear()
+        currentQueue.add(track)
+
+        val mediaItem = MediaItemMapper.toMediaItem(track)
+        withController { controller ->
+            if (requestId != playbackRequestId) return@withController
+            android.util.Log.i("PlaybackManager", "▶ USER_SELECTED single track (Req #$requestId): '${track.title}' (${track.id}) | URI: ${mediaItem.requestMetadata.mediaUri}")
+            controller.setMediaItems(listOf(mediaItem), 0, 0L)
+            controller.prepare()
+            controller.play()
+        }
+
+        _playbackState.update {
+            it.copy(
+                queue = currentQueue.toList(),
+                queueIndex = 0,
+                currentTrack = track,
+                errorMessage = null
+            )
         }
     }
 
     fun playTracks(tracks: List<Track>, startIndex: Int = 0) {
         if (tracks.isEmpty()) return
+        val requestId = ++playbackRequestId
         val incomingTracks = tracks.toList()
         currentQueue.clear()
         currentQueue.addAll(incomingTracks)
@@ -261,9 +278,13 @@ class PlaybackManager(private val context: Context) {
         val safeIndex = if (mediaItems.isNotEmpty()) startIndex.coerceIn(0, mediaItems.size - 1) else 0
 
         withController { controller ->
+            if (requestId != playbackRequestId) {
+                android.util.Log.d("PlaybackManager", "playTracks ignored stale request #$requestId (current: #$playbackRequestId)")
+                return@withController
+            }
             if (mediaItems.isNotEmpty()) {
                 val currentTrackUri = mediaItems[safeIndex].requestMetadata.mediaUri
-                android.util.Log.d("PlaybackManager", "playTracks -> setting ${mediaItems.size} items at index $safeIndex to controller. Current track URI: $currentTrackUri")
+                android.util.Log.i("PlaybackManager", "▶ USER_SELECTED (Req #$requestId): '${incomingTracks[safeIndex].title}' (${incomingTracks[safeIndex].id}) at index $safeIndex/${mediaItems.size} | URI: $currentTrackUri")
                 controller.setMediaItems(mediaItems, safeIndex, 0L)
                 controller.prepare()
                 controller.play()
@@ -282,8 +303,11 @@ class PlaybackManager(private val context: Context) {
 
     fun playAtIndex(index: Int) {
         if (index in currentQueue.indices) {
+            val requestId = ++playbackRequestId
             withController { controller ->
+                if (requestId != playbackRequestId) return@withController
                 controller.seekTo(index, 0L)
+                controller.prepare()
                 controller.play()
             }
         }

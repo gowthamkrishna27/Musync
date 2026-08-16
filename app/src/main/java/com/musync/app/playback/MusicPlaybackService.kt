@@ -321,34 +321,19 @@ class MusicPlaybackService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo,
             mediaItems: MutableList<MediaItem>
         ): ListenableFuture<MutableList<MediaItem>> {
-            val app = application as MusyncApplication
             val future = com.google.common.util.concurrent.SettableFuture.create<MutableList<MediaItem>>()
-            serviceScope.launch(Dispatchers.IO) {
-                val resolvedItems = mutableListOf<MediaItem>()
-                for (item in mediaItems) {
-                    val uri = item.requestMetadata.mediaUri ?: item.localConfiguration?.uri
-                    val uriStr = uri?.toString()
+            val resolvedItems = mediaItems.map { item ->
+                val uri = item.requestMetadata.mediaUri ?: item.localConfiguration?.uri
+                val uriStr = uri?.toString()
+
+                if (!uriStr.isNullOrBlank() && uri != android.net.Uri.EMPTY) {
+                    item.buildUpon().setUri(uri).build()
+                } else {
                     val track = MediaItemMapper.fromMediaItem(item)
-
-                    val resolvedStreamUrl = if (!uriStr.isNullOrBlank() && uri != android.net.Uri.EMPTY) {
-                        uriStr
-                    } else {
-                        try {
-                            app.container.universalMusicProvider.getStreamUrl(track)
-                        } catch (e: Exception) {
-                            android.util.Log.w("MusicPlaybackService", "Failed resolving stream for ${track.id}: ${e.message}")
-                            null
-                        }
-                    }
-
-                    if (!resolvedStreamUrl.isNullOrBlank()) {
-                        resolvedItems.add(MediaItemMapper.toMediaItem(track.copy(streamUrl = resolvedStreamUrl)))
-                    } else {
-                        resolvedItems.add(item.buildUpon().setUri(uri ?: android.net.Uri.EMPTY).build())
-                    }
+                    MediaItemMapper.toMediaItem(track)
                 }
-                future.set(resolvedItems)
-            }
+            }.toMutableList()
+            future.set(resolvedItems)
             return future
         }
 

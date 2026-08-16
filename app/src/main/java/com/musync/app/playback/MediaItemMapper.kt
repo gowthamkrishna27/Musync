@@ -1,4 +1,4 @@
-﻿package com.musync.app.playback
+package com.musync.app.playback
 
 import android.net.Uri
 import android.os.Bundle
@@ -12,10 +12,20 @@ object MediaItemMapper {
     private const val EXTRA_TRACK_ID = "musync_extra_track_id"
     private const val EXTRA_ARTIST_ID = "musync_extra_artist_id"
     private const val EXTRA_GENRE = "musync_extra_genre"
+    private const val DEFAULT_BASE_URL = "https://musync-production-2fc5.up.railway.app"
 
     fun toMediaItem(track: Track): MediaItem {
-        val streamUri = track.streamUrl?.let { Uri.parse(it) } ?: Uri.EMPTY
-        val artworkUri = track.artworkUrl?.let { Uri.parse(it) }
+        val targetStreamUrl = if (!track.streamUrl.isNullOrBlank()) {
+            track.streamUrl
+        } else if (track.id.startsWith("content://") || track.id.startsWith("file://")) {
+            track.id
+        } else {
+            val cleanId = track.id.removePrefix("yt_")
+            "$DEFAULT_BASE_URL/stream?id=$cleanId&quality=low"
+        }
+
+        val streamUri = Uri.parse(targetStreamUrl)
+        val artworkUri = track.artworkUrl?.takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
 
         val extras = Bundle().apply {
             putString(EXTRA_TRACK_ID, track.id)

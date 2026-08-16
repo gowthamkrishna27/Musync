@@ -48,12 +48,12 @@ export class StreamManager {
    * High-Speed Audio Stream Resolver with L1/L2 Shared Caching and Single-Flight Coalescing.
    * If 100 users request track X at once, only 1 Python resolver runs!
    */
-  static async resolveAudioStream(videoId: string, quality: string = "high"): Promise<StreamResolutionResult> {
+  static async resolveAudioStream(videoId: string, quality: string = "low"): Promise<StreamResolutionResult> {
     if (!videoId || videoId.length < 3) {
       return { entry: null, error: "Invalid videoId parameter" };
     }
 
-    const safeQuality = ["low", "saver", "standard", "high"].includes(quality.toLowerCase()) ? quality.toLowerCase() : "high";
+    const safeQuality = ["low", "saver", "standard", "high"].includes(quality.toLowerCase()) ? quality.toLowerCase() : "low";
     const cacheKey = `stream:v2:${videoId}:${safeQuality}`;
 
     // 1. Check L1 / L2 Cache
@@ -115,7 +115,7 @@ export class StreamManager {
    */
   static async handleStreamRequest(req: Request, res: Response): Promise<void> {
     const videoId = (req.query.id || req.query.query || req.query.videoId) as string;
-    const quality = (req.query.quality || "high") as string;
+    const quality = (req.query.quality || "low") as string;
     if (!videoId) {
       res.status(400).json({ error: "Missing video ID parameter (?id=...)" });
       return;

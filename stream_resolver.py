@@ -2,7 +2,7 @@ import sys
 import json
 import yt_dlp
 
-def resolve(video_id, quality="high"):
+def resolve(video_id, quality="low"):
     client_configs = [
         ['android_vr', 'web_safari'],
         ['android_vr'],

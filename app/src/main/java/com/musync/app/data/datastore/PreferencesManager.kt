@@ -1,4 +1,4 @@
-﻿package com.musync.app.data.datastore
+package com.musync.app.data.datastore
 
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -71,7 +71,7 @@ class PreferencesManager(private val context: Context) {
     }
 
     val audioQuality: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_AUDIO_QUALITY] ?: "high"
+        prefs[KEY_AUDIO_QUALITY] ?: "low"
     }
 
     val hapticIntensity: Flow<String> = context.dataStore.data.map { prefs ->

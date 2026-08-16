@@ -1,4 +1,4 @@
-﻿package com.musync.app.data.api
+package com.musync.app.data.api
 
 import android.util.Log
 import com.google.gson.Gson
@@ -76,10 +76,10 @@ class YouTubeMusicProvider(
         RAILWAY_URL
     }
 
-    private var currentAudioQuality: String = "high"
+    private var currentAudioQuality: String = "low"
 
     fun updateAudioQuality(quality: String) {
-        currentAudioQuality = if (quality.isNotBlank()) quality else "high"
+        currentAudioQuality = if (quality.isNotBlank()) quality else "low"
         Log.d(TAG, "Audio streaming quality updated -> $currentAudioQuality")
     }
 

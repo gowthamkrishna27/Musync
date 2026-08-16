@@ -22,7 +22,7 @@ data class SettingsUiState(
     val customApiUrl: String = "",
     val apiKey: String = "",
     val isCustomApiConfigured: Boolean = false,
-    val audioQuality: String = "high",
+    val audioQuality: String = "low",
     val hapticIntensity: HapticIntensity = HapticIntensity.OFF,
     val connectionStatus: ConnectionStatus = ConnectionStatus.IDLE,
     val statusMessage: String? = null
