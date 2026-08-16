@@ -69,16 +69,16 @@ class MusicPlaybackService : MediaLibraryService() {
             .setDataSourceFactory(dataSourceFactory)
 
         // Resilient Low-Latency & Anti-Stutter Buffer Tuning:
-        // - 2.5s initial buffer for fast startup with zero starvation
-        // - 5.0s rebuffer threshold to prevent rapid stutter loops
+        // - 1.0s initial buffer for instantaneous startup
+        // - 2.0s rebuffer recovery threshold
         // - 30s-60s continuous safety buffer
         // - 15s back-buffer for instant back-seeking
         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(
                 30000, // minBufferMs (30s)
                 60000, // maxBufferMs (60s)
-                2500,  // bufferForPlaybackMs (2.5s initial startup safety)
-                5000   // bufferForPlaybackAfterRebufferMs (5.0s rebuffer recovery threshold)
+                1000,  // bufferForPlaybackMs (instant 1.0s startup)
+                2000   // bufferForPlaybackAfterRebufferMs (fast 2.0s rebuffer recovery)
             )
             .setBackBuffer(15000, true) // 15s retention for instant backward seeking
             .setPrioritizeTimeOverSizeThresholds(true)
@@ -95,7 +95,7 @@ class MusicPlaybackService : MediaLibraryService() {
                 enableAudioTrackPlaybackParams: Boolean
             ): androidx.media3.exoplayer.audio.AudioSink {
                 return androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
-                    .setEnableFloatOutput(true) // Lossless 32-bit float audio pipeline
+                    .setEnableFloatOutput(false) // Native 16-bit PCM pipeline (low CPU & hardware compatibility)
                     .setAudioProcessors(arrayOf(beatAudioProcessor))
                     .build()
             }
