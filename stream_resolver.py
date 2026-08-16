@@ -3,57 +3,42 @@ import json
 import yt_dlp
 
 def resolve(video_id, quality="low", _media_type="audio"):
-    client_configs = [
-        ['android_vr', 'android'],
-        ['android_vr'],
-        ['android'],
-    ]
-
-    last_error = ""
-    format_selector = 'bestaudio/ba/b'
-
-    for clients in client_configs:
-        ydl_opts = {
-            'format': format_selector,
-            'quiet': True,
-            'no_warnings': True,
-            'skip_download': True,
-            'nocheckcertificate': True,
-            'js_runtimes': {'node': {}},
-            'extractor_args': {
-                'youtube': {
-                    'player_client': clients,
-                    'player_skip': ['webpage', 'configs']
-                }
+    ydl_opts = {
+        'format': 'bestaudio/18/ba/b',
+        'quiet': True,
+        'no_warnings': True,
+        'skip_download': True,
+        'nocheckcertificate': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android']
             }
         }
+    }
 
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                url = f"https://www.youtube.com/watch?v={video_id}"
-                info = ydl.extract_info(url, download=False)
-                
-                if not info:
-                    continue
-
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            url = f"https://www.youtube.com/watch?v={video_id}"
+            info = ydl.extract_info(url, download=False)
+            
+            if info:
                 stream_url = info.get('url')
                 if stream_url:
                     headers = info.get('http_headers', {})
-                    ext = info.get('ext', 'webm')
+                    ext = info.get('ext', 'mp4')
                     
                     return {
                         'url': stream_url,
                         'headers': headers,
-                        'client': '+'.join(clients),
+                        'client': 'android',
                         'quality': quality,
                         'media_type': 'audio',
                         'ext': ext
                     }
-        except Exception as e:
-            last_error = str(e)
-            continue
+    except Exception as e:
+        return {'error': f"Failed to resolve audio stream: {str(e)}"}
 
-    return {'error': f"Failed to resolve audio stream: {last_error}"}
+    return {'error': "No audio stream found"}
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
