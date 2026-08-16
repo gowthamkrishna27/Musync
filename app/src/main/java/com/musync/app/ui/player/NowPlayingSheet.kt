@@ -172,54 +172,21 @@ fun NowPlayingSheet(
                 .fillMaxSize()
                 .background(BackgroundBlack)
         ) {
-            // 1. VIDEO BACKGROUND LAYER
-            // Renders behind existing music-player UI using the authoritative Media3 player
-            androidx.compose.animation.AnimatedVisibility(
-                visible = playbackState.isVideoMode,
-                enter = fadeIn(tween(600)),
-                exit = fadeOut(tween(400)),
+            // 1. NON-BLOCKING DECOUPLED VIDEO ATMOSPHERE BACKGROUND
+            val videoUrl = remember(track.id, playbackState.videoQuality) {
+                val cleanId = track.id.removePrefix("yt_")
+                "https://musync-production-2fc5.up.railway.app/stream?id=$cleanId&type=video&quality=${playbackState.videoQuality}"
+            }
+
+            BackgroundVideoAtmosphere(
+                videoUrl = videoUrl,
+                isVideoEnabled = playbackState.isVideoMode,
+                isAudioPlaying = playbackState.isPlaying,
+                audioPositionMs = playbackState.currentPositionMs,
                 modifier = Modifier.fillMaxSize()
-            ) {
-                AndroidView(
-                    factory = { ctx ->
-                        PlayerView(ctx).apply {
-                            useController = false
-                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                            player = playbackManager.getPlayer()
-                        }
-                    },
-                    update = { playerView ->
-                        val currentPlayer = playbackManager.getPlayer()
-                        if (playerView.player != currentPlayer) {
-                            playerView.player = currentPlayer
-                        }
-                    },
-                    onRelease = { playerView ->
-                        playerView.player = null
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            )
 
-            // 2. DARK / GRADIENT ATMOSPHERIC OVERLAY
-            // Protects readability of typography and controls while letting ambient video shine through
-            if (playbackState.isVideoMode) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color(0xB30B0D13), // 70% dark at top
-                                    Color(0x660B0D13), // 40% translucent in center
-                                    Color(0xF20B0D13)  // 95% dark at bottom behind progress & controls
-                                )
-                            )
-                        )
-                )
-            }
-
-            // 3. EXISTING PLAYER UI (Interactive Foreground Layer)
+            // 2. EXISTING PLAYER UI (Interactive Foreground Layer)
             Column(
                 modifier = Modifier
                     .fillMaxSize()

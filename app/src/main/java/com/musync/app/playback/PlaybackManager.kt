@@ -483,35 +483,8 @@ class PlaybackManager(private val context: Context) {
     }
 
     fun switchToVideoMode(quality: String = "auto") {
-        val currentTrack = _playbackState.value.currentTrack ?: return
         currentVideoQuality = quality
-        withController { controller ->
-            val currentPos = controller.currentPosition.coerceAtLeast(0L)
-            val isPlaying = controller.isPlaying
-            val currentIndex = controller.currentMediaItemIndex
-
-            val updatedTrack = currentTrack.copy(
-                mediaType = com.musync.app.domain.model.MediaType.VIDEO,
-                isVideoAvailable = true
-            )
-            val updatedMediaItem = MediaItemMapper.toMediaItem(updatedTrack, forceVideo = true, videoQuality = quality)
-
-            if (currentIndex in currentQueue.indices) {
-                currentQueue[currentIndex] = updatedTrack
-            }
-
-            android.util.Log.i("PlaybackManager", "🎥 Switching to Video presentation for '${currentTrack.title}' at ${currentPos}ms (Quality: $quality)")
-
-            val updatedItems = currentQueue.mapIndexed { idx, track ->
-                if (idx == currentIndex) updatedMediaItem else MediaItemMapper.toMediaItem(track)
-            }
-            controller.setMediaItems(updatedItems, currentIndex, currentPos)
-            controller.prepare()
-            if (isPlaying) {
-                controller.play()
-            }
-        }
-
+        android.util.Log.i("PlaybackManager", "🎥 Enabled Background Video Atmosphere (Quality: $quality) - Audio timeline unaffected")
         _playbackState.update {
             it.copy(
                 isVideoMode = true,
@@ -522,33 +495,7 @@ class PlaybackManager(private val context: Context) {
     }
 
     fun switchToAudioMode() {
-        val currentTrack = _playbackState.value.currentTrack ?: return
-        withController { controller ->
-            val currentPos = controller.currentPosition.coerceAtLeast(0L)
-            val isPlaying = controller.isPlaying
-            val currentIndex = controller.currentMediaItemIndex
-
-            val updatedTrack = currentTrack.copy(
-                mediaType = com.musync.app.domain.model.MediaType.AUDIO
-            )
-            val updatedMediaItem = MediaItemMapper.toMediaItem(updatedTrack, forceVideo = false)
-
-            if (currentIndex in currentQueue.indices) {
-                currentQueue[currentIndex] = updatedTrack
-            }
-
-            android.util.Log.i("PlaybackManager", "🎵 Switching to Audio presentation for '${currentTrack.title}' at ${currentPos}ms")
-
-            val updatedItems = currentQueue.mapIndexed { idx, track ->
-                if (idx == currentIndex) updatedMediaItem else MediaItemMapper.toMediaItem(track)
-            }
-            controller.setMediaItems(updatedItems, currentIndex, currentPos)
-            controller.prepare()
-            if (isPlaying) {
-                controller.play()
-            }
-        }
-
+        android.util.Log.i("PlaybackManager", "🎵 Disabled Background Video Atmosphere - Pure Audio mode")
         _playbackState.update {
             it.copy(
                 isVideoMode = false,
@@ -559,11 +506,7 @@ class PlaybackManager(private val context: Context) {
 
     fun setVideoQuality(quality: String) {
         currentVideoQuality = quality
-        if (_playbackState.value.isVideoMode) {
-            switchToVideoMode(quality)
-        } else {
-            _playbackState.update { it.copy(videoQuality = quality) }
-        }
+        _playbackState.update { it.copy(videoQuality = quality) }
     }
 
     fun release() {
