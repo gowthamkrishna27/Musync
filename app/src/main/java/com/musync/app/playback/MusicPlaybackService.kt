@@ -115,16 +115,10 @@ class MusicPlaybackService : MediaLibraryService() {
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
 
-        val audioManager = getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
-        val explicitSessionId = try {
-            audioManager.generateAudioSessionId()
-        } catch (_: Exception) {
-            0
-        }
-
-        if (explicitSessionId != 0) {
-            android.util.Log.d("MusicPlaybackService", "Generated explicit audioSessionId: $explicitSessionId")
-            app.container.audioEffectManager.attach(explicitSessionId)
+        val initialSessionId = exoPlayer.audioSessionId
+        if (initialSessionId != 0 && initialSessionId != C.AUDIO_SESSION_ID_UNSET) {
+            android.util.Log.i("MusicPlaybackService", "Initial ExoPlayer audioSessionId: $initialSessionId")
+            app.container.audioEffectManager.attach(initialSessionId)
         }
 
         exoPlayer.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
@@ -132,8 +126,8 @@ class MusicPlaybackService : MediaLibraryService() {
                 eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
                 audioSessionId: Int
             ) {
-                android.util.Log.d("MusicPlaybackService", "AnalyticsListener -> onAudioSessionIdChanged: $audioSessionId")
-                if (audioSessionId != 0) {
+                android.util.Log.i("MusicPlaybackService", "AnalyticsListener -> onAudioSessionIdChanged: $audioSessionId")
+                if (audioSessionId != 0 && audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
                     app.container.audioEffectManager.attach(audioSessionId)
                 }
             }
@@ -211,6 +205,10 @@ class MusicPlaybackService : MediaLibraryService() {
                         "BUFFERING"
                     }
                     Player.STATE_READY -> {
+                        val currentSessionId = exoPlayer.audioSessionId
+                        if (currentSessionId != 0 && currentSessionId != C.AUDIO_SESSION_ID_UNSET) {
+                            app.container.audioEffectManager.attach(currentSessionId)
+                        }
                         if (rebufferStartTime > 0L) {
                             val duration = System.currentTimeMillis() - rebufferStartTime
                             totalRebufferDurationMs += duration

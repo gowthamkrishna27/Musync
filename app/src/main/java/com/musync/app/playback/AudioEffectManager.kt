@@ -1,4 +1,4 @@
-﻿package com.musync.app.playback
+package com.musync.app.playback
 
 import android.content.Context
 import android.media.audiofx.BassBoost
@@ -70,17 +70,21 @@ class AudioEffectManager(
 
     @Synchronized
     fun attach(audioSessionId: Int) {
-        if (audioSessionId == 0) return
+        if (audioSessionId <= 0) return
         if (currentSessionId == audioSessionId && equalizer != null) return
 
         detach()
         currentSessionId = audioSessionId
-        Log.d(TAG, "Attaching Audio Effects to audioSessionId: $audioSessionId")
+        Log.i(TAG, "Attaching Audio Effects to ExoPlayer active audioSessionId: $audioSessionId")
 
         try {
-            // 1. Equalizer
-            equalizer = Equalizer(PRIORITY, audioSessionId).apply {
-                enabled = _state.value.isEnabled
+            // 1. Hardware Equalizer
+            try {
+                equalizer = Equalizer(0, audioSessionId).apply {
+                    enabled = _state.value.isEnabled
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Equalizer init failed for session $audioSessionId: ${e.message}")
             }
 
             // Extract hardware bands
@@ -104,19 +108,27 @@ class AudioEffectManager(
             }
 
             // 2. Bass Boost
-            bassBoost = BassBoost(PRIORITY, audioSessionId).apply {
-                if (strengthSupported) {
-                    setStrength(_state.value.bassBoostStrength)
+            try {
+                bassBoost = BassBoost(0, audioSessionId).apply {
+                    if (strengthSupported) {
+                        setStrength(_state.value.bassBoostStrength)
+                    }
+                    enabled = _state.value.isEnabled
                 }
-                enabled = _state.value.isEnabled
+            } catch (e: Exception) {
+                Log.w(TAG, "BassBoost not supported: ${e.message}")
             }
 
             // 3. Virtualizer (Spatial Surround)
-            virtualizer = Virtualizer(PRIORITY, audioSessionId).apply {
-                if (strengthSupported) {
-                    setStrength(_state.value.virtualizerStrength)
+            try {
+                virtualizer = Virtualizer(0, audioSessionId).apply {
+                    if (strengthSupported) {
+                        setStrength(_state.value.virtualizerStrength)
+                    }
+                    enabled = _state.value.isEnabled
                 }
-                enabled = _state.value.isEnabled
+            } catch (e: Exception) {
+                Log.w(TAG, "Virtualizer not supported: ${e.message}")
             }
 
             // 4. Loudness Enhancer
@@ -129,9 +141,11 @@ class AudioEffectManager(
                 Log.w(TAG, "LoudnessEnhancer not supported: ${e.message}")
             }
 
-            _state.update { it.copy(bands = bandsList) }
+            if (bandsList.isNotEmpty()) {
+                _state.update { it.copy(bands = bandsList) }
+            }
 
-            // Re-apply active preset parameters to hardware
+            // Re-apply active preset parameters directly to the newly attached hardware session
             applyPresetInternal(_state.value.activePreset)
 
             val intent = android.content.Intent(android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION).apply {
@@ -140,7 +154,7 @@ class AudioEffectManager(
             }
             context.sendBroadcast(intent)
 
-            Log.d(TAG, "✓ Hardware Audio Effects attached successfully with $numBands bands")
+            Log.i(TAG, "✓ Hardware Audio Effects attached successfully to session $audioSessionId with $numBands bands")
         } catch (e: Exception) {
             Log.e(TAG, "Failed initializing hardware audiofx: ${e.message}", e)
         }

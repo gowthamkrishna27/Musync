@@ -21,17 +21,15 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.musync.app.ui.theme.BackgroundBlack
 import com.musync.app.util.ImageQualityHelper
 
 /**
- * Ultra-Lightweight Atmospheric Ambient Background.
+ * Edge-to-Edge Glassy Atmospheric Ambient Background.
  *
- * Renders behind the existing music player UI with 0kb extra network bandwidth.
- * - Utilizes the cached HD album art bitmap.
- * - Ambient frosted glass blur (50.dp) + gentle breathing glow when playing.
- * - Multi-stop dark vertical gradient protects 100% typography contrast and controls.
- * - Non-interactive and completely decoupled from audio playback pipeline.
+ * Extends the vibrant, glowing blurred artwork across the ENTIRE player screen (including the bottom controls).
+ * - Full-bleed frosted glass blur (60.dp) + gentle breathing glow.
+ * - Balanced translucent glassmorphic gradient ensures text/control legibility without blacking out the bottom.
+ * - 0kb extra network bandwidth (uses cached HD album art bitmap).
  */
 @Composable
 fun AtmosphericBackground(
@@ -45,19 +43,19 @@ fun AtmosphericBackground(
 
     val infiniteTransition = rememberInfiniteTransition(label = "ambientAtmosphereTransition")
     val ambientScale by infiniteTransition.animateFloat(
-        initialValue = 1.05f,
-        targetValue = 1.18f,
+        initialValue = 1.08f,
+        targetValue = 1.25f,
         animationSpec = infiniteRepeatable(
-            animation = tween(6000, easing = FastOutSlowInEasing),
+            animation = tween(7000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "ambientScale"
     )
     val ambientAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.55f,
+        initialValue = 0.55f,
+        targetValue = 0.75f,
         animationSpec = infiniteRepeatable(
-            animation = tween(6000, easing = FastOutSlowInEasing),
+            animation = tween(7000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "ambientAlpha"
@@ -66,32 +64,47 @@ fun AtmosphericBackground(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(BackgroundBlack)
+            .background(Color(0xFF0D0F14))
     ) {
-        // 1. AMBIENT BLURRED ARTWORK LAYER (0kb extra bandwidth, instant render)
+        // 1. AMBIENT BLURRED ARTWORK LAYER (Full-bleed across top, center & bottom)
         if (!artworkUrl.isNullOrBlank() || trackId.isNotBlank()) {
             AsyncImage(
                 model = imageRequest,
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .scale(if (isPlaying) ambientScale else 1.05f)
-                    .blur(50.dp)
-                    .alpha(if (isPlaying) ambientAlpha else 0.30f),
+                    .scale(if (isPlaying) ambientScale else 1.10f)
+                    .blur(60.dp)
+                    .alpha(if (isPlaying) ambientAlpha else 0.50f),
                 contentScale = ContentScale.Crop
             )
         }
 
-        // 2. DARK / GRADIENT PROTECTIVE OVERLAY
+        // 2. TRANSLUCENT GLASS OVERLAY (Allows full bottom artwork glow through controls)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xD90B0D13), // 85% dark at top
-                            Color(0x730B0D13), // 45% translucent in center for ambient glow
-                            Color(0xFA0B0D13)  // 98% solid dark at bottom behind player controls
+                            Color(0x8A080A0E), // 54% dark at top for status bar legibility
+                            Color(0x35080A0E), // 20% dark in center for vibrant visual glow
+                            Color(0x65080A0E), // 40% dark behind seekbar
+                            Color(0x85080A0E)  // 52% glassy dark at bottom (vibrant glow shines through)
+                        )
+                    )
+                )
+        )
+
+        // 3. SUBTLE FROSTED GLASS SHEEN
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color(0x18FFFFFF),
+                            Color.Transparent
                         )
                     )
                 )

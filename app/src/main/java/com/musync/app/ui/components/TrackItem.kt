@@ -52,11 +52,12 @@ import com.musync.app.ui.theme.DeleteRed
 import com.musync.app.ui.theme.IconGrey
 import com.musync.app.ui.theme.IconMuted
 import com.musync.app.ui.theme.IconWhite
+import com.musync.app.ui.theme.LikePink
+import com.musync.app.ui.theme.StatusGreen
 import com.musync.app.ui.theme.SurfaceBlack
 import com.musync.app.ui.theme.TextGreyMuted
 import com.musync.app.ui.theme.TextGreySecondary
 import com.musync.app.ui.theme.TextWhite
-import androidx.compose.material.icons.filled.Videocam
 
 @Composable
 fun TrackItem(
@@ -70,7 +71,6 @@ fun TrackItem(
     onPlayNext: (() -> Unit)? = null,
     onAddToQueue: (() -> Unit)? = null,
     onAddToPlaylist: (() -> Unit)? = null,
-    onPlayVideo: (() -> Unit)? = null,
     onRemove: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -139,117 +139,82 @@ fun TrackItem(
         ) {
             Text(
                 text = track.title,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = 14.sp,
-                    fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Medium
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 15.sp
                 ),
-                color = TextWhite,
+                color = if (isPlaying) StatusGreen else TextWhite,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
 
             Spacer(modifier = Modifier.height(2.dp))
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = track.artist.name,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                    color = TextGreySecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                if (subtitleExtra != null) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = subtitleExtra,
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                        color = TextGreyMuted
-                    )
-                } else if (!track.genre.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(CardElevated)
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = track.genre,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Normal
-                            ),
-                            color = TextGreyMuted,
-                            maxLines = 1
-                        )
-                    }
-                }
-            }
+            val artistText = track.artist.name
+            val subtitle = if (subtitleExtra != null) "$artistText • $subtitleExtra" else artistText
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = 13.sp
+                ),
+                color = TextGreySecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
 
-        // Custom trailing content or 3-dots / heart menu
+        // Action Buttons: Favorite + Overflow Menu or Custom Trailing Content
         if (trailingContent != null) {
             trailingContent()
         } else {
-            if (onFavoriteToggle != null) {
-                IconButton(
-                    onClick = {
-                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        onFavoriteToggle()
-                    },
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
-                        contentDescription = "Favorite",
-                        tint = if (isFavorite) IconWhite else IconMuted,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-
-            Box {
-                IconButton(
-                    onClick = { showMenu = true },
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = "More Options",
-                        tint = IconGrey,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false },
-                    modifier = Modifier
-                        .background(SurfaceBlack)
-                ) {
-                    if (onPlayVideo != null) {
-                        DropdownMenuItem(
-                            text = { Text("Watch Video", color = com.musync.app.ui.theme.TextWhite, fontSize = 13.sp) },
-                            leadingIcon = { Icon(Icons.Default.Videocam, null, tint = IconGrey, modifier = Modifier.size(18.dp)) },
-                            onClick = {
-                                showMenu = false
-                                onPlayVideo()
-                            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (onFavoriteToggle != null) {
+                    IconButton(
+                        onClick = {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            onFavoriteToggle()
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
+                            contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                            tint = if (isFavorite) LikePink else IconGrey,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
-                    if (onPlayNext != null) {
-                        DropdownMenuItem(
-                            text = { Text("Play Next", color = com.musync.app.ui.theme.TextWhite, fontSize = 13.sp) },
-                            leadingIcon = { Icon(Icons.Default.SkipNext, null, tint = IconGrey, modifier = Modifier.size(18.dp)) },
-                            onClick = {
-                                showMenu = false
-                                onPlayNext()
-                            }
+                }
+
+                Box {
+                    IconButton(
+                        onClick = { showMenu = true },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "More options",
+                            tint = IconGrey,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
+
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        modifier = Modifier.background(CardElevated)
+                    ) {
+                        if (onPlayNext != null) {
+                            DropdownMenuItem(
+                                text = { Text("Play Next", color = TextWhite, fontSize = 13.sp) },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, null, tint = IconGrey, modifier = Modifier.size(18.dp)) },
+                                onClick = {
+                                    showMenu = false
+                                    onPlayNext()
+                                }
+                            )
+                        }
                     if (onAddToQueue != null) {
                         DropdownMenuItem(
                             text = { Text("Add to Queue", color = TextWhite, fontSize = 13.sp) },
@@ -284,5 +249,6 @@ fun TrackItem(
             }
         }
     }
+}
 }
 

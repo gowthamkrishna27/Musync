@@ -41,7 +41,6 @@ class PlaybackManager(private val context: Context) {
     private val currentQueue = mutableListOf<Track>()
     private var retryCount = 0
     private val maxRetries = 3
-    private var currentVideoQuality = "auto"
 
     init {
         initializeController()
@@ -112,7 +111,6 @@ class PlaybackManager(private val context: Context) {
             override fun onPlayerError(error: PlaybackException) {
                 val item = mediaController?.currentMediaItem
                 val uri = item?.requestMetadata?.mediaUri ?: item?.localConfiguration?.uri
-                val isCurrentlyVideo = _playbackState.value.isVideoMode || uri?.toString()?.contains("type=video") == true
 
                 android.util.Log.e(
                     "PlaybackManager",
@@ -154,8 +152,6 @@ class PlaybackManager(private val context: Context) {
         val duration = if (controller.duration > 0) controller.duration else (currentTrack?.durationMs ?: 0L)
         val pos = controller.currentPosition.coerceAtLeast(0L)
         val buf = controller.bufferedPosition.coerceAtLeast(0L)
-        val isVideo = currentTrack?.mediaType == com.musync.app.domain.model.MediaType.VIDEO ||
-                currentItem?.requestMetadata?.mediaUri?.toString()?.contains("type=video") == true
 
         _playbackState.update {
             it.copy(
@@ -172,10 +168,7 @@ class PlaybackManager(private val context: Context) {
                 },
                 isShuffle = controller.shuffleModeEnabled,
                 queue = currentQueue.toList(),
-                queueIndex = controller.currentMediaItemIndex,
-                isVideoMode = isVideo,
-                mediaType = if (isVideo) com.musync.app.domain.model.MediaType.VIDEO else com.musync.app.domain.model.MediaType.AUDIO,
-                videoQuality = currentVideoQuality
+                queueIndex = controller.currentMediaItemIndex
             )
         }
     }
@@ -186,8 +179,6 @@ class PlaybackManager(private val context: Context) {
         val track = item?.let { MediaItemMapper.fromMediaItem(it) }
         val index = controller.currentMediaItemIndex
         val buf = controller.bufferedPosition.coerceAtLeast(0L)
-        val isVideo = track?.mediaType == com.musync.app.domain.model.MediaType.VIDEO ||
-                item?.requestMetadata?.mediaUri?.toString()?.contains("type=video") == true
 
         _playbackState.update {
             it.copy(
@@ -195,9 +186,7 @@ class PlaybackManager(private val context: Context) {
                 queueIndex = index,
                 currentPositionMs = 0L,
                 bufferedPositionMs = buf,
-                durationMs = if (controller.duration > 0) controller.duration else (track?.durationMs ?: 0L),
-                isVideoMode = isVideo,
-                mediaType = if (isVideo) com.musync.app.domain.model.MediaType.VIDEO else com.musync.app.domain.model.MediaType.AUDIO
+                durationMs = if (controller.duration > 0) controller.duration else (track?.durationMs ?: 0L)
             )
         }
     }
@@ -348,43 +337,80 @@ class PlaybackManager(private val context: Context) {
     }
 
     fun seekTo(positionMs: Long) {
-        withController { it.seekTo(positionMs) }
+        withController { controller ->
+            controller.seekTo(positionMs)
+        }
         _playbackState.update { it.copy(currentPositionMs = positionMs) }
     }
 
-    fun skipNext() {
+    fun skipToNext() {
+        withController { it.seekToNextMediaItem() }
+    }
+
+    fun skipNext() = skipToNext()
+
+    fun skipToPrevious() {
         withController { controller ->
-            if (controller.hasNextMediaItem()) {
-                controller.seekToNextMediaItem()
-                controller.play()
+            if (controller.currentPosition > 3000L) {
+                controller.seekTo(0L)
+            } else {
+                controller.seekToPreviousMediaItem()
             }
         }
     }
 
-    fun skipPrevious() {
+    fun skipPrevious() = skipToPrevious()
+
+    fun toggleRepeat() {
         withController { controller ->
-            if (controller.currentPosition > 3000) {
-                controller.seekTo(0L)
-            } else if (controller.hasPreviousMediaItem()) {
-                controller.seekToPreviousMediaItem()
-                controller.play()
-            } else {
-                controller.seekTo(0L)
+            val nextMode = when (controller.repeatMode) {
+                Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                else -> Player.REPEAT_MODE_OFF
             }
+            controller.repeatMode = nextMode
+        }
+    }
+
+    fun toggleRepeatMode() = toggleRepeat()
+
+    fun toggleShuffle() {
+        withController { controller ->
+            controller.shuffleModeEnabled = !controller.shuffleModeEnabled
+        }
+    }
+
+    fun setShuffle(enabled: Boolean) {
+        withController { controller ->
+            controller.shuffleModeEnabled = enabled
         }
     }
 
     fun addToQueue(track: Track) {
         currentQueue.add(track)
-        withController { it.addMediaItem(MediaItemMapper.toMediaItem(track)) }
+        val mediaItem = MediaItemMapper.toMediaItem(track)
+        withController { controller ->
+            controller.addMediaItem(mediaItem)
+        }
         _playbackState.update { it.copy(queue = currentQueue.toList()) }
     }
 
     fun playNext(track: Track) {
+        val nextIndex = (_playbackState.value.queueIndex + 1).coerceAtMost(currentQueue.size)
+        currentQueue.add(nextIndex, track)
+        val mediaItem = MediaItemMapper.toMediaItem(track)
         withController { controller ->
-            val nextIndex = (controller.currentMediaItemIndex + 1).coerceAtMost(currentQueue.size)
-            currentQueue.add(nextIndex, track)
-            controller.addMediaItem(nextIndex, MediaItemMapper.toMediaItem(track))
+            controller.addMediaItem(nextIndex, mediaItem)
+        }
+        _playbackState.update { it.copy(queue = currentQueue.toList()) }
+    }
+
+    fun removeFromQueue(index: Int) {
+        if (index in currentQueue.indices) {
+            currentQueue.removeAt(index)
+            withController { controller ->
+                controller.removeMediaItem(index)
+            }
             _playbackState.update { it.copy(queue = currentQueue.toList()) }
         }
     }
@@ -392,9 +418,7 @@ class PlaybackManager(private val context: Context) {
     fun removeFromQueue(trackId: String) {
         val index = currentQueue.indexOfFirst { it.id == trackId }
         if (index >= 0) {
-            currentQueue.removeAt(index)
-            withController { it.removeMediaItem(index) }
-            _playbackState.update { it.copy(queue = currentQueue.toList()) }
+            removeFromQueue(index)
         }
     }
 
@@ -412,93 +436,9 @@ class PlaybackManager(private val context: Context) {
         _playbackState.update { it.copy(queue = currentQueue.toList()) }
     }
 
-    fun setShuffle(enabled: Boolean) {
-        withController { it.shuffleModeEnabled = enabled }
-        _playbackState.update { it.copy(isShuffle = enabled) }
-    }
-
-    fun setRepeatMode(mode: RepeatMode) {
-        val exoRepeat = when (mode) {
-            RepeatMode.OFF -> Player.REPEAT_MODE_OFF
-            RepeatMode.ALL -> Player.REPEAT_MODE_ALL
-            RepeatMode.ONE -> Player.REPEAT_MODE_ONE
-        }
-        withController { it.repeatMode = exoRepeat }
-        _playbackState.update { it.copy(repeatMode = mode) }
-    }
-
-    fun toggleRepeatMode() {
-        val nextMode = when (_playbackState.value.repeatMode) {
-            RepeatMode.OFF -> RepeatMode.ALL
-            RepeatMode.ALL -> RepeatMode.ONE
-            RepeatMode.ONE -> RepeatMode.OFF
-        }
-        setRepeatMode(nextMode)
-    }
-
-    fun playVideo(track: Track, quality: String = "auto") {
-        val videoTrack = track.copy(
-            mediaType = com.musync.app.domain.model.MediaType.VIDEO,
-            isVideoAvailable = true
-        )
-        currentVideoQuality = quality
-        val requestId = ++playbackRequestId
-        currentQueue.clear()
-        currentQueue.add(videoTrack)
-
-        val mediaItem = MediaItemMapper.toMediaItem(videoTrack, forceVideo = true, videoQuality = quality)
-        withController { controller ->
-            if (requestId != playbackRequestId) return@withController
-            android.util.Log.i("PlaybackManager", "▶ USER_SELECTED Video Track (Req #$requestId): '${track.title}' (${track.id}) | URI: ${mediaItem.requestMetadata.mediaUri}")
-            controller.setMediaItems(listOf(mediaItem), 0, 0L)
-            controller.prepare()
-            controller.play()
-        }
-
-        _playbackState.update {
-            it.copy(
-                queue = currentQueue.toList(),
-                queueIndex = 0,
-                currentTrack = videoTrack,
-                isVideoMode = true,
-                mediaType = com.musync.app.domain.model.MediaType.VIDEO,
-                videoQuality = quality,
-                errorMessage = null
-            )
-        }
-    }
-
-    fun switchToVideoMode(quality: String = "auto") {
-        currentVideoQuality = quality
-        android.util.Log.i("PlaybackManager", "🎥 Enabled Background Video Atmosphere (Quality: $quality) - Audio timeline unaffected")
-        _playbackState.update {
-            it.copy(
-                isVideoMode = true,
-                mediaType = com.musync.app.domain.model.MediaType.VIDEO,
-                videoQuality = quality
-            )
-        }
-    }
-
-    fun switchToAudioMode() {
-        android.util.Log.i("PlaybackManager", "🎵 Disabled Background Video Atmosphere - Pure Audio mode")
-        _playbackState.update {
-            it.copy(
-                isVideoMode = false,
-                mediaType = com.musync.app.domain.model.MediaType.AUDIO
-            )
-        }
-    }
-
-    fun setVideoQuality(quality: String) {
-        currentVideoQuality = quality
-        _playbackState.update { it.copy(videoQuality = quality) }
-    }
-
     fun release() {
         stopProgressTracker()
         controllerFuture?.let { MediaController.releaseFuture(it) }
         mediaController = null
     }
 }
-

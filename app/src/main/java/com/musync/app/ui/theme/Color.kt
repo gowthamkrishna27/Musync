@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.theme
+package com.musync.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
@@ -20,6 +20,7 @@ val IconGrey = Color(0xFFB3B3B3)
 val IconMuted = Color(0xFF777777)
 val StatusGreen = Color(0xFFFFFFFF)
 val DeleteRed = Color(0xFFEF4444)
+val LikePink = Color(0xFFE91E63)
 
 // Retain compatibility mappings
 val BackgroundDark = BackgroundBlack

@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.search
+package com.musync.app.ui.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -10,6 +10,8 @@ import com.musync.app.domain.repository.FavoritesRepository
 import com.musync.app.domain.repository.MusicRepository
 import com.musync.app.playback.PlaybackManager
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -57,7 +59,7 @@ class SearchViewModel(
         }
 
         searchJob = viewModelScope.launch {
-            delay(350)
+            delay(200) // Fast snappy 200ms debounce
             performSearch(newQuery, _uiState.value.filter)
         }
     }
@@ -73,14 +75,19 @@ class SearchViewModel(
         }
     }
 
-    private suspend fun performSearch(query: String, filter: SearchFilter) {
+    private suspend fun performSearch(query: String, filter: SearchFilter) = kotlinx.coroutines.coroutineScope {
         _uiState.update { it.copy(isSearching = true, errorMessage = null) }
         try {
             when (filter) {
                 SearchFilter.ALL -> {
-                    val tracks = musicRepository.search(query).getOrDefault(emptyList())
-                    val artists = musicRepository.searchArtists(query).getOrDefault(emptyList())
-                    val playlists = musicRepository.searchPlaylists(query).getOrDefault(emptyList())
+                    val tracksDef = async { musicRepository.search(query).getOrDefault(emptyList()) }
+                    val artistsDef = async { musicRepository.searchArtists(query).getOrDefault(emptyList()) }
+                    val playlistsDef = async { musicRepository.searchPlaylists(query).getOrDefault(emptyList()) }
+
+                    val tracks = tracksDef.await()
+                    val artists = artistsDef.await()
+                    val playlists = playlistsDef.await()
+
                     _uiState.update {
                         it.copy(
                             isSearching = false,

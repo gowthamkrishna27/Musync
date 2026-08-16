@@ -344,25 +344,8 @@ fun MainApp(
                                             ),
                                             color = Color.White,
                                             maxLines = 1,
-                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f, fill = false)
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                         )
-                                        if (playbackState.isVideoMode) {
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(4.dp))
-                                                    .background(Color(0x6664B5F6))
-                                                    .padding(horizontal = 4.dp, vertical = 1.dp)
-                                            ) {
-                                                Text(
-                                                    text = "VIDEO",
-                                                    fontSize = 8.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color.White
-                                                )
-                                            }
-                                        }
                                     }
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(

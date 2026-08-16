@@ -27,10 +27,12 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -130,8 +132,7 @@ fun NowPlayingSheet(
     onToggleFavorite: () -> Unit,
     onToggleShuffle: () -> Unit,
     onToggleRepeat: () -> Unit,
-    onOpenQueue: () -> Unit,
-    onOpenVideo: (() -> Unit)? = null
+    onOpenQueue: () -> Unit
 ) {
     val track = playbackState.currentTrack ?: return
     val context = LocalContext.current
@@ -156,7 +157,7 @@ fun NowPlayingSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = BackgroundBlack,
+        containerColor = Color.Transparent,
         dragHandle = null
     ) {
         val playingFromText = remember(track) {
@@ -170,9 +171,8 @@ fun NowPlayingSheet(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(BackgroundBlack)
         ) {
-            // 1. ATMOSPHERIC AMBIENT BACKGROUND LAYER (Zero-bandwidth, instant render)
+            // 1. FULL-BLEED EDGE-TO-EDGE ATMOSPHERIC AMBIENT BACKGROUND
             AtmosphericBackground(
                 artworkUrl = track.artworkUrl,
                 trackId = track.id,
@@ -186,7 +186,8 @@ fun NowPlayingSheet(
                     .fillMaxSize()
                     .background(Color.Transparent)
                     .padding(horizontal = 24.dp)
-                    .padding(top = 48.dp, bottom = 28.dp),
+                    .padding(top = 48.dp, bottom = 16.dp)
+                    .navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // 1. Header: Down Arrow, "PLAYING FROM", Video Atmosphere Toggle, 3-dots
@@ -206,13 +207,13 @@ fun NowPlayingSheet(
 
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = if (playbackState.isVideoMode) "VIDEO ATMOSPHERE" else "PLAYING FROM",
+                            text = "PLAYING FROM",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 letterSpacing = 1.sp,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Medium
                             ),
-                            color = if (playbackState.isVideoMode) StatusGreen else TextGreyMuted
+                            color = TextGreyMuted
                         )
                         Text(
                             text = playingFromText,
@@ -225,35 +226,13 @@ fun NowPlayingSheet(
                         )
                     }
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (track.isVideoAvailable) {
-                            IconButton(
-                                onClick = {
-                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                    if (playbackState.isVideoMode) {
-                                        playbackManager.switchToAudioMode()
-                                    } else {
-                                        playbackManager.switchToVideoMode(playbackState.videoQuality)
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Videocam,
-                                    contentDescription = "Video Background",
-                                    tint = if (playbackState.isVideoMode) StatusGreen else IconGrey,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-
-                        IconButton(onClick = { showOptionsSheet = true }) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "Options",
-                                tint = IconWhite,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                    IconButton(onClick = { showOptionsSheet = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "Options",
+                            tint = IconWhite,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
 
@@ -332,41 +311,6 @@ fun NowPlayingSheet(
                             modifier = Modifier.fillMaxSize(),
                             iconSize = 64.dp,
                             shape = RoundedCornerShape(26.dp)
-                        )
-                    }
-                }
-            }
-
-            // Video Available Action Pill
-            if (track.isVideoAvailable && onOpenVideo != null) {
-                Spacer(modifier = Modifier.height(14.dp))
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0x2AFFFFFF))
-                        .border(1.dp, Color(0x44FFFFFF), RoundedCornerShape(20.dp))
-                        .clickable {
-                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                            onOpenVideo()
-                        }
-                        .padding(horizontal = 16.dp, vertical = 7.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Videocam,
-                            contentDescription = "Watch Music Video",
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "Watch Music Video",
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
@@ -965,72 +909,6 @@ fun NowPlayingSheet(
                     Icon(Icons.AutoMirrored.Filled.QueueMusic, null, tint = IconWhite, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(14.dp))
                     Text("Go to Queue", color = TextWhite)
-                }
-
-                // Video Background Atmosphere Toggle & Quality
-                if (track.isVideoAvailable) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                if (playbackState.isVideoMode) {
-                                    playbackManager.switchToAudioMode()
-                                } else {
-                                    playbackManager.switchToVideoMode(playbackState.videoQuality)
-                                }
-                            }
-                            .padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Videocam,
-                            contentDescription = null,
-                            tint = if (playbackState.isVideoMode) StatusGreen else IconWhite,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(14.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Video Atmosphere Background", color = TextWhite)
-                            Text(
-                                if (playbackState.isVideoMode) "Active (${playbackState.videoQuality})" else "Disabled (Audio Only)",
-                                color = if (playbackState.isVideoMode) StatusGreen else TextGreyMuted,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-
-                    if (playbackState.isVideoMode) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp)
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            listOf("auto", "1080p", "720p", "480p", "360p", "144p").forEach { quality ->
-                                val isSelected = playbackState.videoQuality.equals(quality, ignoreCase = true)
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(if (isSelected) StatusGreen else CardElevated)
-                                        .border(1.dp, if (isSelected) StatusGreen else BorderStroke, RoundedCornerShape(16.dp))
-                                        .clickable {
-                                            playbackManager.setVideoQuality(quality)
-                                        }
-                                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                                ) {
-                                    Text(
-                                        text = quality.uppercase(),
-                                        color = if (isSelected) Color.Black else TextWhite,
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
                 }
 
                 Row(

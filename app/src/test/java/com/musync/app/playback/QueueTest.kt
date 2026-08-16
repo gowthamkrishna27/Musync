@@ -66,34 +66,28 @@ class QueueTest {
     }
 
     @Test
-    fun testMixedAudioVideoQueueContinuity() {
-        val audioA = Track(id = "1", title = "Audio A", artist = artist, mediaType = com.musync.app.domain.model.MediaType.AUDIO)
-        val videoB = Track(id = "2", title = "Video B", artist = artist, mediaType = com.musync.app.domain.model.MediaType.VIDEO, isVideoAvailable = true)
-        val audioC = Track(id = "3", title = "Audio C", artist = artist, mediaType = com.musync.app.domain.model.MediaType.AUDIO)
-        val videoD = Track(id = "4", title = "Video D", artist = artist, mediaType = com.musync.app.domain.model.MediaType.VIDEO, isVideoAvailable = true)
+    fun testAudioQueueContinuity() {
+        val trackA = Track(id = "1", title = "Track A", artist = artist)
+        val trackB = Track(id = "2", title = "Track B", artist = artist)
+        val trackC = Track(id = "3", title = "Track C", artist = artist)
+        val trackD = Track(id = "4", title = "Track D", artist = artist)
 
-        val queue = listOf(audioA, videoB, audioC, videoD)
+        val queue = listOf(trackA, trackB, trackC, trackD)
 
         assertEquals(4, queue.size)
-        assertEquals(com.musync.app.domain.model.MediaType.AUDIO, queue[0].mediaType)
-        assertEquals(com.musync.app.domain.model.MediaType.VIDEO, queue[1].mediaType)
-        assertEquals(com.musync.app.domain.model.MediaType.AUDIO, queue[2].mediaType)
-        assertEquals(com.musync.app.domain.model.MediaType.VIDEO, queue[3].mediaType)
 
-        // Validate that queue survives index transitions
+        // Validate that queue transitions sequentially
         var currentIndex = 0
-        assertEquals("Audio A", queue[currentIndex].title)
+        assertEquals("Track A", queue[currentIndex].title)
 
         currentIndex++
-        assertEquals("Video B", queue[currentIndex].title)
-        assertTrue(queue[currentIndex].isVideoAvailable)
+        assertEquals("Track B", queue[currentIndex].title)
 
         currentIndex++
-        assertEquals("Audio C", queue[currentIndex].title)
+        assertEquals("Track C", queue[currentIndex].title)
 
         currentIndex++
-        assertEquals("Video D", queue[currentIndex].title)
-        assertTrue(queue[currentIndex].isVideoAvailable)
+        assertEquals("Track D", queue[currentIndex].title)
     }
 }
 

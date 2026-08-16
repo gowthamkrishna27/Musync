@@ -247,23 +247,94 @@ app.get("/update/latest.apk", (_req: Request, res: Response) => {
   res.redirect("https://github.com/gowthamkrishna27/Musync/releases/latest/download/Musync.apk");
 });
 
-// 6. Search endpoint with L1/L2 caching
+// 6. Advanced Relevance-Ranked Search Engine with Multi-Tier Fallback & Deduplication
 app.get(["/search", "/result/"], apiLimiter, async (req: Request, res: Response) => {
-  const query = (req.query.query || req.query.q || "Trending") as string;
+  const rawQuery = (req.query.query || req.query.q || "Trending") as string;
+  const query = rawQuery.trim();
   const reqHost = `${req.protocol}://${req.get("host")}`;
-  const cacheKey = `search:${query.toLowerCase().trim()}`;
+  const cacheKey = `search:v2:${query.toLowerCase()}`;
 
   try {
     const cached = await cacheService.get<any[]>(cacheKey);
-    if (cached) {
+    if (cached && Array.isArray(cached) && cached.length > 0) {
       return res.json(cached);
     }
 
-    const results = await ytmusic.searchSongs(query);
-    const formatted = results.map((item) => formatTrack(item, reqHost));
+    // 1. Parallel Multi-Query Search
+    const normalizedQuery = query.toLowerCase();
+    const queryTokens = normalizedQuery.split(/\s+/).filter(t => t.length > 0);
 
-    // Cache search results for 30 minutes
-    await cacheService.set(cacheKey, formatted, 1800);
+    let songResults: any[] = [];
+    try {
+      songResults = await ytmusic.searchSongs(query);
+    } catch (_e) {
+      songResults = [];
+    }
+
+    let generalResults: any[] = [];
+    if (songResults.length < 5) {
+      try {
+        const general = await ytmusic.search(query);
+        generalResults = general.filter((item: any) => item.type === "song" || item.type === "video" || !item.type);
+      } catch (_e) {
+        generalResults = [];
+      }
+    }
+
+    // Combine and deduplicate by track ID and Title + Artist
+    const seenIds = new Set<string>();
+    const seenSignatures = new Set<string>();
+    const allRawItems: any[] = [];
+
+    for (const item of [...songResults, ...generalResults]) {
+      const id = item.videoId || item.id || "";
+      if (!id || seenIds.has(id)) continue;
+
+      const title = (item.name || item.title || "").toLowerCase().trim();
+      const artist = (item.artist?.name || item.artists?.[0]?.name || item.author || "").toLowerCase().trim();
+      const sig = `${title}:${artist}`;
+
+      if (seenSignatures.has(sig)) continue;
+      seenIds.add(id);
+      seenSignatures.add(sig);
+      allRawItems.push(item);
+    }
+
+    // 2. Intelligent Relevance Scoring
+    const scoredItems = allRawItems.map((item) => {
+      const title = (item.name || item.title || "").toLowerCase();
+      const artist = (item.artist?.name || item.artists?.[0]?.name || item.author || "").toLowerCase();
+      const album = (item.album?.name || "").toLowerCase();
+      let score = 0;
+
+      // Exact match
+      if (title === normalizedQuery) score += 100;
+      else if (title.startsWith(normalizedQuery)) score += 60;
+      else if (title.includes(normalizedQuery)) score += 40;
+
+      // Artist match
+      if (artist === normalizedQuery) score += 50;
+      else if (artist.includes(normalizedQuery)) score += 30;
+
+      // Album match
+      if (album && album.includes(normalizedQuery)) score += 15;
+
+      // Token matching
+      for (const token of queryTokens) {
+        if (title.includes(token)) score += 10;
+        if (artist.includes(token)) score += 8;
+      }
+
+      return { item, score };
+    });
+
+    // Sort by relevance score descending
+    scoredItems.sort((a, b) => b.score - a.score);
+
+    const formatted = scoredItems.map((s) => formatTrack(s.item, reqHost));
+
+    // Cache search results for 45 minutes
+    await cacheService.set(cacheKey, formatted, 2700);
     res.json(formatted);
   } catch (error: any) {
     console.error("Search error:", error);
@@ -334,55 +405,21 @@ app.get(["/song", "/song/"], apiLimiter, async (req: Request, res: Response) => 
   }
 });
 
-// 9. Direct high-performance audio & video stream endpoint
+// 9. Direct high-performance progressive audio stream endpoint
 app.get(["/stream", "/stream/"], streamLimiter, async (req: Request, res: Response) => {
   await StreamManager.handleStreamRequest(req, res);
 });
 
-// 9a. Explicit Video Stream Endpoint
-app.get(["/video/stream", "/video"], streamLimiter, async (req: Request, res: Response) => {
-  req.query.type = "video";
-  await StreamManager.handleStreamRequest(req, res);
-});
-
-// 9b. Video Info / Stream Resolution Endpoint
-app.get(["/video/info", "/stream/info"], apiLimiter, async (req: Request, res: Response) => {
-  const videoId = (req.query.id || req.query.query || req.query.videoId) as string;
-  const quality = (req.query.quality || "auto") as string;
-  if (!videoId) {
-    return res.status(400).json({ error: "Missing video ID parameter (?id=...)" });
-  }
-
-  const resolution = await StreamManager.resolveVideoStream(videoId, quality);
-  if (resolution.entry) {
-    res.json({
-      success: true,
-      videoId,
-      quality,
-      mediaType: "video",
-      availableQualities: resolution.availableQualities || ['Auto', '1080p', '720p', '480p', '360p', '144p'],
-      source: resolution.source
-    });
-  } else {
-    res.status(502).json({
-      success: false,
-      videoId,
-      error: resolution.error || "Video stream unavailable"
-    });
-  }
-});
-
-// 9c. Next-track early stream pre-warm & resolution endpoint
+// 9a. Next-track early stream pre-warm & resolution endpoint
 app.get(["/stream/preload", "/preload"], apiLimiter, async (req: Request, res: Response) => {
   const videoId = (req.query.id || req.query.query || req.query.videoId) as string;
   const quality = (req.query.quality || "low") as string;
-  const type = ((req.query.type || req.query.mediaType || "audio") as string).toLowerCase();
   if (!videoId) {
     return res.status(400).json({ error: "Missing video ID parameter (?id=...)" });
   }
 
   const start = Date.now();
-  const resolution = await StreamManager.resolveStream(videoId, quality, type === "video" ? "video" : "audio");
+  const resolution = await StreamManager.resolveStream(videoId, quality);
   const durationMs = Date.now() - start;
 
   if (resolution.entry) {
@@ -390,7 +427,7 @@ app.get(["/stream/preload", "/preload"], apiLimiter, async (req: Request, res: R
       success: true,
       videoId,
       quality,
-      mediaType: resolution.mediaType || "audio",
+      mediaType: "audio",
       source: resolution.source || "resolver",
       durationMs,
       cached: resolution.source === "l1" || resolution.source === "redis"
@@ -399,7 +436,7 @@ app.get(["/stream/preload", "/preload"], apiLimiter, async (req: Request, res: R
     res.status(502).json({
       success: false,
       videoId,
-      error: resolution.error || "Failed to resolve stream"
+      error: resolution.error || "Failed to resolve audio stream"
     });
   }
 });
