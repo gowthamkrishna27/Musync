@@ -75,16 +75,17 @@ class MusicPlaybackService : MediaLibraryService() {
             .setDataSourceFactory(dataSourceFactory)
 
         // Resilient Low-Latency & Anti-Stutter Buffer Tuning:
-        // - 1.5s initial buffer for safe startup without stall on slow connections
-        // - 3.0s rebuffer recovery threshold (more headroom)
-        // - 8s-60s adaptive safety buffer (8s min is enough to stay ahead; 60s max for long sessions)
+        // - 0.8s initial buffer: start playing as soon as 0.8s of audio is ready.
+        //   At 48kbps that's ~5KB — arrives in <100ms once the stream proxy connects.
+        // - 1.5s rebuffer recovery threshold (enough headroom without perceptible delay)
+        // - 8s-60s adaptive safety buffer (8s min avoids stutter; 60s max for long sessions)
         // - 15s back-buffer for instant back-seeking
         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                8000,  // minBufferMs (8s — was 30s; 8s is enough to avoid stutter without blocking startup)
+                8000,  // minBufferMs (8s — enough to stay ahead of the bitrate)
                 60000, // maxBufferMs (60s)
-                1500,  // bufferForPlaybackMs (1.5s startup — slightly safer than 1.0s on weak connections)
-                3000   // bufferForPlaybackAfterRebufferMs (3.0s rebuffer recovery — more headroom than 2.0s)
+                800,   // bufferForPlaybackMs (0.8s startup — fast first-audio without stutter risk)
+                1500   // bufferForPlaybackAfterRebufferMs (1.5s rebuffer recovery)
             )
             .setBackBuffer(15000, true) // 15s retention for instant backward seeking
             .setPrioritizeTimeOverSizeThresholds(true)

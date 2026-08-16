@@ -172,14 +172,14 @@ app.get("/debug/env", async (_req: Request, res: Response) => {
   };
 
   try {
-    const { stdout: pyVer } = await execAsync(`"${PYTHON_BIN}" --version`);
+    const { stdout: pyVer } = await execAsync(`"${PYTHON_BIN}" --version`, { timeout: 18000 });
     diagnostics.pythonVersion = pyVer.trim();
   } catch (e: any) {
     diagnostics.pythonError = e.message;
   }
 
   try {
-    const { stdout: ytdlpVer } = await execAsync(`"${PYTHON_BIN}" -m yt_dlp --version`);
+    const { stdout: ytdlpVer } = await execAsync(`"${PYTHON_BIN}" -m yt_dlp --version`, { timeout: 18000 });
     diagnostics.ytdlpVersion = ytdlpVer.trim();
   } catch (e: any) {
     diagnostics.ytdlpError = e.message;
@@ -262,6 +262,8 @@ app.get(["/search", "/result/"], apiLimiter, async (req: Request, res: Response)
   try {
     const cached = await cacheService.get<any[]>(cacheKey);
     if (cached && Array.isArray(cached) && cached.length > 0) {
+      // Pre-warm top 5 from cache hit too (noop if already warm)
+      setImmediate(() => prewarmSearchResults(cached));
       return res.json(cached);
     }
 
@@ -341,11 +343,33 @@ app.get(["/search", "/result/"], apiLimiter, async (req: Request, res: Response)
     // Cache search results for 45 minutes
     await cacheService.set(cacheKey, formatted, 2700);
     res.json(formatted);
+
+    // Fire-and-forget: pre-warm top 5 stream URLs in background so user's first tap is instant
+    setImmediate(() => prewarmSearchResults(formatted));
   } catch (error: any) {
     console.error("Search error:", error);
     res.status(500).json({ error: error.message || "Failed to search songs", data: [] });
   }
 });
+
+/** Pre-warms the top N stream URLs after a search/trending response, non-blocking. */
+function prewarmSearchResults(tracks: any[], topN: number = 5): void {
+  const ids = tracks
+    .slice(0, topN)
+    .map((t: any) => (t.videoId || t.id || "").toString().trim())
+    .filter((id: string) => id.length >= 3);
+
+  if (ids.length === 0) return;
+  console.log(`[SearchPrewarm] Pre-warming ${ids.length} track(s): ${ids.join(", ")}`);
+
+  Promise.allSettled(
+    ids.map((id: string) => StreamManager.resolveStream(id, "low"))
+  ).then((results) => {
+    const ok = results.filter(r => r.status === "fulfilled" && (r as any).value?.entry).length;
+    console.log(`[SearchPrewarm] ✓ ${ok}/${ids.length} stream(s) pre-warmed.`);
+  }).catch(() => {});
+}
+
 
 // 7. Search autocomplete suggestions with caching
 app.get("/suggestions", apiLimiter, async (req: Request, res: Response) => {
@@ -518,16 +542,23 @@ app.get(["/trending", "/charts"], apiLimiter, async (req: Request, res: Response
   const cacheKey = "trending:global";
   try {
     const cached = await cacheService.get<any[]>(cacheKey);
-    if (cached) return res.json(cached);
+    if (cached) {
+      setImmediate(() => prewarmSearchResults(cached));
+      return res.json(cached);
+    }
 
     const results = await ytmusic.searchSongs("Top Global Hits 2026");
     const formatted = results.map((item) => formatTrack(item, reqHost));
     await cacheService.set(cacheKey, formatted, 3600); // 1 hour TTL
     res.json(formatted);
+
+    // Fire-and-forget: pre-warm top 5 trending stream URLs
+    setImmediate(() => prewarmSearchResults(formatted));
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to fetch trending songs", data: [] });
   }
 });
+
 
 // Start server and handle graceful shutdown
 let server: http.Server | null = null;
