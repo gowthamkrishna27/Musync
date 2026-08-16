@@ -4,7 +4,6 @@ import yt_dlp
 
 def resolve(video_id, quality="low", _media_type="audio"):
     client_configs = [
-        ['android_vr', 'web_safari'],
         ['android_vr'],
         ['android'],
         ['web'],

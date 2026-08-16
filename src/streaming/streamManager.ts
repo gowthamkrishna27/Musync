@@ -82,7 +82,7 @@ export class StreamManager {
 
         const parsed = JSON.parse(stdout.trim());
         if (parsed.url) {
-          const ttlSeconds = 4 * 3600; // 4 hours TTL
+          const ttlSeconds = 2 * 3600; // 2 hours TTL — keeps signed URLs well within their expiry window
           const entry: StreamCacheEntry = {
             url: parsed.url,
             headers: parsed.headers || {},
@@ -295,8 +295,19 @@ export class StreamManager {
         res.setHeader("Content-Range", String(contentRange));
       }
 
+      // Hint ExoPlayer with audio duration so it can size its buffer correctly
+      // even when Content-Length is absent (e.g., chunked transfer encoding)
+      if (!contentLength) {
+        // Provide a conservative estimated size hint based on format & typical duration
+        // This lets ExoPlayer allocate its buffer without waiting for the full transfer
+        const estimatedBitrateKbps = quality === "saver" || quality === "low" ? 48 : (quality === "standard" ? 96 : 128);
+        const estimatedBytes = estimatedBitrateKbps * 1000 / 8 * 240; // 4 minutes max estimate
+        res.setHeader("X-Content-Duration", "240"); // seconds hint
+        res.setHeader("X-Estimated-Content-Length", String(Math.round(estimatedBytes)));
+      }
+
       // Add cache-control to prevent intermediaries from corrupting range streams
-      res.setHeader("Cache-Control", "public, max-age=14400, no-transform");
+      res.setHeader("Cache-Control", "public, max-age=7200, no-transform");
 
       // Monitor chunk streams for TTFB, byte counts, and backpressure
       audioResponse.data.on("data", (chunk: Buffer) => {

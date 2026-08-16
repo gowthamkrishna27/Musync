@@ -59,8 +59,8 @@ class MusicPlaybackService : MediaLibraryService() {
         val httpDataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
             .setUserAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
             .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15000)
-            .setReadTimeoutMs(20000)
+            .setConnectTimeoutMs(20000)
+            .setReadTimeoutMs(30000)
             .setDefaultRequestProperties(mapOf("Connection" to "keep-alive"))
 
         // Media3 Local Disk Cache (200MB LRU) for instant zero-bandwidth replays
@@ -75,16 +75,16 @@ class MusicPlaybackService : MediaLibraryService() {
             .setDataSourceFactory(dataSourceFactory)
 
         // Resilient Low-Latency & Anti-Stutter Buffer Tuning:
-        // - 1.0s initial buffer for instantaneous startup
-        // - 2.0s rebuffer recovery threshold
-        // - 30s-60s continuous safety buffer
+        // - 1.5s initial buffer for safe startup without stall on slow connections
+        // - 3.0s rebuffer recovery threshold (more headroom)
+        // - 8s-60s adaptive safety buffer (8s min is enough to stay ahead; 60s max for long sessions)
         // - 15s back-buffer for instant back-seeking
         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                30000, // minBufferMs (30s)
+                8000,  // minBufferMs (8s — was 30s; 8s is enough to avoid stutter without blocking startup)
                 60000, // maxBufferMs (60s)
-                1000,  // bufferForPlaybackMs (instant 1.0s startup)
-                2000   // bufferForPlaybackAfterRebufferMs (fast 2.0s rebuffer recovery)
+                1500,  // bufferForPlaybackMs (1.5s startup — slightly safer than 1.0s on weak connections)
+                3000   // bufferForPlaybackAfterRebufferMs (3.0s rebuffer recovery — more headroom than 2.0s)
             )
             .setBackBuffer(15000, true) // 15s retention for instant backward seeking
             .setPrioritizeTimeOverSizeThresholds(true)

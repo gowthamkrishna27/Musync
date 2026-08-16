@@ -32,11 +32,15 @@ class TrackPreloadManager(
 ) {
     companion object {
         private const val TAG = "TrackPreloadManager"
-        private const val PRELOAD_CHUNK_SIZE_WIFI = 256L * 1024L // 256 KB
+        private const val PRELOAD_CHUNK_SIZE_WIFI = 512L * 1024L   // 512 KB — larger initial buffer head-start on Wi-Fi
         private const val PRELOAD_CHUNK_SIZE_MOBILE = 128L * 1024L // 128 KB
+        private const val PRELOAD_STALE_MS = 90L * 60L * 1000L    // Preload keys expire after 90 minutes
     }
 
-    private val preloadedUrls = ConcurrentHashMap.newKeySet<String>()
+    // Maps videoId -> timestamp of last successful preload.
+    // Using videoId (not full URL) so entries survive URL rotation.
+    // Keyed with a 90-minute expiry bucket to auto-invalidate stale preloads.
+    private val preloadedUrls = ConcurrentHashMap<String, Long>()
     private var currentPreloadJob: Job? = null
 
     private val cache = MediaCacheManager.getCache(context)
@@ -100,8 +104,12 @@ class TrackPreloadManager(
         val videoId = track.id.removePrefix("yt_")
         val streamUrl = track.streamUrl ?: "$baseUrl/stream?id=$videoId&quality=$quality"
 
-        if (preloadedUrls.contains(streamUrl)) {
-            Log.d(TAG, "Track '${track.title}' (${track.id}) is already preloaded in cache.")
+        // Dedup by videoId + 90-minute time bucket so stale preloads are invalidated
+        // without relying on the URL being stable across Redis flushes or server restarts.
+        val nowMs = System.currentTimeMillis()
+        val lastPreloadMs = preloadedUrls[videoId] ?: 0L
+        if (nowMs - lastPreloadMs < PRELOAD_STALE_MS) {
+            Log.d(TAG, "Track '${track.title}' ($videoId) is already preloaded and still fresh (age: ${(nowMs - lastPreloadMs) / 1000}s).")
             return@withContext
         }
 
@@ -128,7 +136,7 @@ class TrackPreloadManager(
             }
             dataSource.close()
 
-            preloadedUrls.add(streamUrl)
+            preloadedUrls[videoId] = System.currentTimeMillis()
             val duration = System.currentTimeMillis() - startTime
             Log.d(
                 TAG,
