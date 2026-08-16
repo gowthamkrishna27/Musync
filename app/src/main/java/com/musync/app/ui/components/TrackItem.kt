@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.components
+package com.musync.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -56,6 +56,7 @@ import com.musync.app.ui.theme.SurfaceBlack
 import com.musync.app.ui.theme.TextGreyMuted
 import com.musync.app.ui.theme.TextGreySecondary
 import com.musync.app.ui.theme.TextWhite
+import androidx.compose.material.icons.filled.Videocam
 
 @Composable
 fun TrackItem(
@@ -69,6 +70,7 @@ fun TrackItem(
     onPlayNext: (() -> Unit)? = null,
     onAddToQueue: (() -> Unit)? = null,
     onAddToPlaylist: (() -> Unit)? = null,
+    onPlayVideo: (() -> Unit)? = null,
     onRemove: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -223,9 +225,19 @@ fun TrackItem(
                     modifier = Modifier
                         .background(SurfaceBlack)
                 ) {
+                    if (onPlayVideo != null) {
+                        DropdownMenuItem(
+                            text = { Text("Watch Video", color = com.musync.app.ui.theme.TextWhite, fontSize = 13.sp) },
+                            leadingIcon = { Icon(Icons.Default.Videocam, null, tint = IconGrey, modifier = Modifier.size(18.dp)) },
+                            onClick = {
+                                showMenu = false
+                                onPlayVideo()
+                            }
+                        )
+                    }
                     if (onPlayNext != null) {
                         DropdownMenuItem(
-                            text = { Text("Play Next", color = TextWhite, fontSize = 13.sp) },
+                            text = { Text("Play Next", color = com.musync.app.ui.theme.TextWhite, fontSize = 13.sp) },
                             leadingIcon = { Icon(Icons.Default.SkipNext, null, tint = IconGrey, modifier = Modifier.size(18.dp)) },
                             onClick = {
                                 showMenu = false

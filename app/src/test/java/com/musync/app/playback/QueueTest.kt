@@ -1,4 +1,4 @@
-﻿package com.musync.app.playback
+package com.musync.app.playback
 
 import com.musync.app.domain.model.Artist
 import com.musync.app.domain.model.RepeatMode
@@ -63,6 +63,37 @@ class QueueTest {
 
         mode = nextMode(mode)
         assertEquals(RepeatMode.OFF, mode)
+    }
+
+    @Test
+    fun testMixedAudioVideoQueueContinuity() {
+        val audioA = Track(id = "1", title = "Audio A", artist = artist, mediaType = com.musync.app.domain.model.MediaType.AUDIO)
+        val videoB = Track(id = "2", title = "Video B", artist = artist, mediaType = com.musync.app.domain.model.MediaType.VIDEO, isVideoAvailable = true)
+        val audioC = Track(id = "3", title = "Audio C", artist = artist, mediaType = com.musync.app.domain.model.MediaType.AUDIO)
+        val videoD = Track(id = "4", title = "Video D", artist = artist, mediaType = com.musync.app.domain.model.MediaType.VIDEO, isVideoAvailable = true)
+
+        val queue = listOf(audioA, videoB, audioC, videoD)
+
+        assertEquals(4, queue.size)
+        assertEquals(com.musync.app.domain.model.MediaType.AUDIO, queue[0].mediaType)
+        assertEquals(com.musync.app.domain.model.MediaType.VIDEO, queue[1].mediaType)
+        assertEquals(com.musync.app.domain.model.MediaType.AUDIO, queue[2].mediaType)
+        assertEquals(com.musync.app.domain.model.MediaType.VIDEO, queue[3].mediaType)
+
+        // Validate that queue survives index transitions
+        var currentIndex = 0
+        assertEquals("Audio A", queue[currentIndex].title)
+
+        currentIndex++
+        assertEquals("Video B", queue[currentIndex].title)
+        assertTrue(queue[currentIndex].isVideoAvailable)
+
+        currentIndex++
+        assertEquals("Audio C", queue[currentIndex].title)
+
+        currentIndex++
+        assertEquals("Video D", queue[currentIndex].title)
+        assertTrue(queue[currentIndex].isVideoAvailable)
     }
 }
 

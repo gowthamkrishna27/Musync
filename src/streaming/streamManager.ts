@@ -41,25 +41,30 @@ export interface StreamResolutionResult {
   entry: StreamCacheEntry | null;
   error?: string;
   source?: "l1" | "redis" | "resolver";
+  availableQualities?: string[];
+  mediaType?: "audio" | "video";
 }
 
 export class StreamManager {
   /**
-   * High-Speed Audio Stream Resolver with L1/L2 Shared Caching and Single-Flight Coalescing.
-   * If 100 users request track X at once, only 1 Python resolver runs!
+   * Universal Audio/Video Stream Resolver with L1/L2 Shared Caching and Single-Flight Coalescing.
    */
-  static async resolveAudioStream(videoId: string, quality: string = "low"): Promise<StreamResolutionResult> {
+  static async resolveStream(videoId: string, quality: string = "low", mediaType: "audio" | "video" = "audio"): Promise<StreamResolutionResult> {
     if (!videoId || videoId.length < 3) {
       return { entry: null, error: "Invalid videoId parameter" };
     }
 
-    const safeQuality = ["low", "saver", "standard", "high"].includes(quality.toLowerCase()) ? quality.toLowerCase() : "low";
-    const cacheKey = `stream:v2:${videoId}:${safeQuality}`;
+    const isVideo = mediaType === "video" || ["144p", "360p", "480p", "720p", "1080p"].includes(quality.toLowerCase());
+    const safeQuality = isVideo 
+      ? (["144p", "360p", "480p", "720p", "1080p", "auto"].includes(quality.toLowerCase()) ? quality.toLowerCase() : "auto")
+      : (["low", "saver", "standard", "high"].includes(quality.toLowerCase()) ? quality.toLowerCase() : "low");
+
+    const cacheKey = `stream:v3:${isVideo ? "video" : "audio"}:${videoId}:${safeQuality}`;
 
     // 1. Check L1 / L2 Cache
     const cached = await cacheService.get<StreamCacheEntry>(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
-      return { entry: cached, source: "l1" };
+      return { entry: cached, source: "l1", mediaType: isVideo ? "video" : "audio", availableQualities: ['Auto', '1080p', '720p', '480p', '360p', '144p'] };
     }
 
     // 2. Coalesced Resolution (Single-Flight)
@@ -67,25 +72,29 @@ export class StreamManager {
       // Re-check cache in case another worker just resolved it
       const recheck = await cacheService.get<StreamCacheEntry>(cacheKey);
       if (recheck && recheck.expiresAt > Date.now()) {
-        return { entry: recheck, source: "redis" };
+        return { entry: recheck, source: "redis", mediaType: isVideo ? "video" : "audio", availableQualities: ['Auto', '1080p', '720p', '480p', '360p', '144p'] };
       }
 
       try {
         const scriptPath = path.join(process.cwd(), "stream_resolver.py");
-        const { stdout, stderr } = await execAsync(`"${PYTHON_BIN}" "${scriptPath}" "${videoId}" "${safeQuality}"`, { timeout: 25000 });
+        const { stdout, stderr } = await execAsync(
+          `"${PYTHON_BIN}" "${scriptPath}" "${videoId}" "${safeQuality}" "${isVideo ? "video" : "audio"}"`,
+          { timeout: 25000 }
+        );
         
         if (stderr && stderr.trim()) {
-          console.warn(`[StreamResolver stderr for ${videoId} (${safeQuality})]:`, stderr.trim());
+          console.warn(`[StreamResolver stderr for ${videoId} (${safeQuality}, ${isVideo ? "video" : "audio"})]:`, stderr.trim());
         }
 
         const parsed = JSON.parse(stdout.trim());
         if (parsed.url) {
           const ttlSeconds = 4 * 3600; // 4 hours TTL
+          const format = isVideo ? `video/${parsed.ext || "mp4"}` : `audio/${parsed.ext || "webm"}`;
           const entry: StreamCacheEntry = {
             url: parsed.url,
             headers: parsed.headers || {},
             expiresAt: Date.now() + ttlSeconds * 1000,
-            format: "audio/webm",
+            format: format,
             source: parsed.client || "android_vr"
           };
 
@@ -94,7 +103,12 @@ export class StreamManager {
           // Increment popularity
           await cacheService.recordTrackPlay(videoId);
 
-          return { entry, source: "resolver" };
+          return {
+            entry,
+            source: "resolver",
+            mediaType: isVideo ? "video" : "audio",
+            availableQualities: parsed.available_qualities || ['Auto', '1080p', '720p', '480p', '360p', '144p']
+          };
         } else if (parsed.error) {
           return { entry: null, error: parsed.error };
         }
@@ -106,16 +120,27 @@ export class StreamManager {
     });
   }
 
+  static async resolveAudioStream(videoId: string, quality: string = "low"): Promise<StreamResolutionResult> {
+    return this.resolveStream(videoId, quality, "audio");
+  }
+
+  static async resolveVideoStream(videoId: string, quality: string = "auto"): Promise<StreamResolutionResult> {
+    return this.resolveStream(videoId, quality, "video");
+  }
+
   /**
    * High-Performance Range-Aware Streaming Proxy
    * - Full support for Range: bytes=0-, bytes=1000000-, bytes=1000000-2000000
+   * - Supports both Audio and Video stream delivery
    * - Immediate upstream abort when client disconnects (zero socket leaks)
    * - Backpressure propagation
-   * - Comprehensive safe streaming diagnostics & download throughput vs bitrate analysis
    */
   static async handleStreamRequest(req: Request, res: Response): Promise<void> {
     const videoId = (req.query.id || req.query.query || req.query.videoId) as string;
     const quality = (req.query.quality || "low") as string;
+    const type = ((req.query.type || req.query.mediaType || "audio") as string).toLowerCase();
+    const isVideo = type === "video" || ["144p", "360p", "480p", "720p", "1080p"].includes(quality.toLowerCase());
+
     if (!videoId) {
       res.status(400).json({ error: "Missing video ID parameter (?id=...)" });
       return;
@@ -140,15 +165,16 @@ export class StreamManager {
         const downstreamRateKbps = (bytesSent * 8) / (1000 * durationSec);
         const upstreamRateKbps = (bytesReceived * 8) / (1000 * durationSec);
 
-        // Estimate estimated audio bitrate (approx 128 kbps for high, 96 for standard, 48 for saver)
-        const estimatedBitrateKbps = quality === "saver" || quality === "low" ? 48 : (quality === "standard" ? 96 : 128);
+        const estimatedBitrateKbps = isVideo
+          ? (quality === "1080p" ? 2500 : (quality === "720p" ? 1500 : (quality === "480p" ? 800 : 500)))
+          : (quality === "saver" || quality === "low" ? 48 : (quality === "standard" ? 96 : 128));
         const throughputRatio = (downstreamRateKbps / estimatedBitrateKbps).toFixed(2);
         const healthStatus = parseFloat(throughputRatio) >= 1.0 ? "HEALTHY (Buffer growing)" : "RISK (Throughput < Bitrate, buffer depleting)";
 
-        // Safe structured stream diagnostics (NO secrets/tokens logged)
         console.log(JSON.stringify({
           streamDiagnostic: {
             trackId: videoId,
+            mediaType: isVideo ? "video" : "audio",
             quality,
             streamStartTime: new Date(streamStartTime).toISOString(),
             timeToFirstByteMs: timeToFirstByte,
@@ -157,7 +183,7 @@ export class StreamManager {
             connectionDurationSec: parseFloat(durationSec.toFixed(2)),
             upstreamRateKbps: parseFloat(upstreamRateKbps.toFixed(1)),
             downstreamRateKbps: parseFloat(downstreamRateKbps.toFixed(1)),
-            audioBitrateKbps: estimatedBitrateKbps,
+            bitrateKbps: estimatedBitrateKbps,
             throughputRatio: `${throughputRatio}x`,
             streamHealth: healthStatus,
             clientDisconnect: isClientDisconnected,
@@ -176,15 +202,15 @@ export class StreamManager {
     res.on("finish", cleanup);
     res.on("error", cleanup);
 
-    // 1. Resolve Audio Source
-    const resolution = await StreamManager.resolveAudioStream(videoId, quality);
+    // 1. Resolve Audio or Video Source
+    const resolution = await StreamManager.resolveStream(videoId, quality, isVideo ? "video" : "audio");
     const streamEntry = resolution.entry;
 
     if (!streamEntry) {
       cleanup();
-      console.warn(`[Stream 502] Resolution failed for video ${videoId}: ${resolution.error}`);
+      console.warn(`[Stream 502] Resolution failed for ${isVideo ? "video" : "audio"} ${videoId}: ${resolution.error}`);
       res.status(502).json({
-        error: `Could not resolve stream for video: ${videoId}`,
+        error: `Could not resolve stream for ${isVideo ? "video" : "track"}: ${videoId}`,
         details: resolution.error
       });
       return;

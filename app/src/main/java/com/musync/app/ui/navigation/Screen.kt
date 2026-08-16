@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.navigation
+package com.musync.app.ui.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Home
@@ -15,6 +15,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector?
     data object PlaylistDetail : Screen("playlist/{playlistId}", "Playlist") {
         fun createRoute(playlistId: String) = "playlist/$playlistId"
     }
+    data object FullScreenVideo : Screen("fullscreen_video", "Video")
 
     companion object {
         // Search removed from bottom nav bar as requested: 3 floating items (Home, Library, Settings)

@@ -33,9 +33,15 @@ class PlaybackManager(private val context: Context) {
     private val _playbackState = MutableStateFlow(PlaybackState())
     val playbackState: StateFlow<PlaybackState> = _playbackState.asStateFlow()
 
+    private val _playerFlow = MutableStateFlow<Player?>(null)
+    val playerFlow: StateFlow<Player?> = _playerFlow.asStateFlow()
+
+    fun getPlayer(): Player? = mediaController
+
     private val currentQueue = mutableListOf<Track>()
     private var retryCount = 0
     private val maxRetries = 3
+    private var currentVideoQuality = "auto"
 
     init {
         initializeController()
@@ -52,6 +58,7 @@ class PlaybackManager(private val context: Context) {
                 try {
                     val controller = controllerFuture?.get()
                     mediaController = controller
+                    _playerFlow.value = controller
                     if (controller != null) {
                         setupPlayerListener(controller)
                         updateStateFromController()
@@ -105,11 +112,20 @@ class PlaybackManager(private val context: Context) {
             override fun onPlayerError(error: PlaybackException) {
                 val item = mediaController?.currentMediaItem
                 val uri = item?.requestMetadata?.mediaUri ?: item?.localConfiguration?.uri
+                val isCurrentlyVideo = _playbackState.value.isVideoMode || uri?.toString()?.contains("type=video") == true
+
                 android.util.Log.e(
                     "PlaybackManager",
-                    "ExoPlayer playback error (attempt $retryCount/$maxRetries) | Track: ${item?.mediaMetadata?.title} (${item?.mediaId}) | URI: $uri | ErrorCode: ${error.errorCode} (${error.errorCodeName}) | Message: ${error.message}",
+                    "ExoPlayer playback error (isVideo: $isCurrentlyVideo, attempt $retryCount/$maxRetries) | Track: ${item?.mediaMetadata?.title} (${item?.mediaId}) | URI: $uri | ErrorCode: ${error.errorCode} (${error.errorCodeName}) | Message: ${error.message}",
                     error
                 )
+
+                // Video Error Recovery: If video playback fails, seamlessly fallback to audio stream of the same track
+                if (isCurrentlyVideo) {
+                    android.util.Log.w("PlaybackManager", "Video playback encountered error. Falling back to authorized audio stream...")
+                    switchToAudioMode()
+                    return
+                }
 
                 // Resilient exponential backoff retry with jitter for temporary network interruptions
                 if (retryCount < maxRetries) {
@@ -138,7 +154,7 @@ class PlaybackManager(private val context: Context) {
                     it.copy(
                         isPlaying = false,
                         isBuffering = false,
-                        errorMessage = "Streaming error (${error.errorCodeName}): ${error.message ?: "Failed to load audio stream"}"
+                        errorMessage = "Streaming error (${error.errorCodeName}): ${error.message ?: "Failed to load media stream"}"
                     )
                 }
             }
@@ -152,6 +168,8 @@ class PlaybackManager(private val context: Context) {
         val duration = if (controller.duration > 0) controller.duration else (currentTrack?.durationMs ?: 0L)
         val pos = controller.currentPosition.coerceAtLeast(0L)
         val buf = controller.bufferedPosition.coerceAtLeast(0L)
+        val isVideo = currentTrack?.mediaType == com.musync.app.domain.model.MediaType.VIDEO ||
+                currentItem?.requestMetadata?.mediaUri?.toString()?.contains("type=video") == true
 
         _playbackState.update {
             it.copy(
@@ -168,7 +186,10 @@ class PlaybackManager(private val context: Context) {
                 },
                 isShuffle = controller.shuffleModeEnabled,
                 queue = currentQueue.toList(),
-                queueIndex = controller.currentMediaItemIndex
+                queueIndex = controller.currentMediaItemIndex,
+                isVideoMode = isVideo,
+                mediaType = if (isVideo) com.musync.app.domain.model.MediaType.VIDEO else com.musync.app.domain.model.MediaType.AUDIO,
+                videoQuality = currentVideoQuality
             )
         }
     }
@@ -179,6 +200,8 @@ class PlaybackManager(private val context: Context) {
         val track = item?.let { MediaItemMapper.fromMediaItem(it) }
         val index = controller.currentMediaItemIndex
         val buf = controller.bufferedPosition.coerceAtLeast(0L)
+        val isVideo = track?.mediaType == com.musync.app.domain.model.MediaType.VIDEO ||
+                item?.requestMetadata?.mediaUri?.toString()?.contains("type=video") == true
 
         _playbackState.update {
             it.copy(
@@ -186,7 +209,9 @@ class PlaybackManager(private val context: Context) {
                 queueIndex = index,
                 currentPositionMs = 0L,
                 bufferedPositionMs = buf,
-                durationMs = if (controller.duration > 0) controller.duration else (track?.durationMs ?: 0L)
+                durationMs = if (controller.duration > 0) controller.duration else (track?.durationMs ?: 0L),
+                isVideoMode = isVideo,
+                mediaType = if (isVideo) com.musync.app.domain.model.MediaType.VIDEO else com.musync.app.domain.model.MediaType.AUDIO
             )
         }
     }
@@ -423,6 +448,122 @@ class PlaybackManager(private val context: Context) {
             RepeatMode.ONE -> RepeatMode.OFF
         }
         setRepeatMode(nextMode)
+    }
+
+    fun playVideo(track: Track, quality: String = "auto") {
+        val videoTrack = track.copy(
+            mediaType = com.musync.app.domain.model.MediaType.VIDEO,
+            isVideoAvailable = true
+        )
+        currentVideoQuality = quality
+        val requestId = ++playbackRequestId
+        currentQueue.clear()
+        currentQueue.add(videoTrack)
+
+        val mediaItem = MediaItemMapper.toMediaItem(videoTrack, forceVideo = true, videoQuality = quality)
+        withController { controller ->
+            if (requestId != playbackRequestId) return@withController
+            android.util.Log.i("PlaybackManager", "▶ USER_SELECTED Video Track (Req #$requestId): '${track.title}' (${track.id}) | URI: ${mediaItem.requestMetadata.mediaUri}")
+            controller.setMediaItems(listOf(mediaItem), 0, 0L)
+            controller.prepare()
+            controller.play()
+        }
+
+        _playbackState.update {
+            it.copy(
+                queue = currentQueue.toList(),
+                queueIndex = 0,
+                currentTrack = videoTrack,
+                isVideoMode = true,
+                mediaType = com.musync.app.domain.model.MediaType.VIDEO,
+                videoQuality = quality,
+                errorMessage = null
+            )
+        }
+    }
+
+    fun switchToVideoMode(quality: String = "auto") {
+        val currentTrack = _playbackState.value.currentTrack ?: return
+        currentVideoQuality = quality
+        withController { controller ->
+            val currentPos = controller.currentPosition.coerceAtLeast(0L)
+            val isPlaying = controller.isPlaying
+            val currentIndex = controller.currentMediaItemIndex
+
+            val updatedTrack = currentTrack.copy(
+                mediaType = com.musync.app.domain.model.MediaType.VIDEO,
+                isVideoAvailable = true
+            )
+            val updatedMediaItem = MediaItemMapper.toMediaItem(updatedTrack, forceVideo = true, videoQuality = quality)
+
+            if (currentIndex in currentQueue.indices) {
+                currentQueue[currentIndex] = updatedTrack
+            }
+
+            android.util.Log.i("PlaybackManager", "🎥 Switching to Video presentation for '${currentTrack.title}' at ${currentPos}ms (Quality: $quality)")
+
+            val updatedItems = currentQueue.mapIndexed { idx, track ->
+                if (idx == currentIndex) updatedMediaItem else MediaItemMapper.toMediaItem(track)
+            }
+            controller.setMediaItems(updatedItems, currentIndex, currentPos)
+            controller.prepare()
+            if (isPlaying) {
+                controller.play()
+            }
+        }
+
+        _playbackState.update {
+            it.copy(
+                isVideoMode = true,
+                mediaType = com.musync.app.domain.model.MediaType.VIDEO,
+                videoQuality = quality
+            )
+        }
+    }
+
+    fun switchToAudioMode() {
+        val currentTrack = _playbackState.value.currentTrack ?: return
+        withController { controller ->
+            val currentPos = controller.currentPosition.coerceAtLeast(0L)
+            val isPlaying = controller.isPlaying
+            val currentIndex = controller.currentMediaItemIndex
+
+            val updatedTrack = currentTrack.copy(
+                mediaType = com.musync.app.domain.model.MediaType.AUDIO
+            )
+            val updatedMediaItem = MediaItemMapper.toMediaItem(updatedTrack, forceVideo = false)
+
+            if (currentIndex in currentQueue.indices) {
+                currentQueue[currentIndex] = updatedTrack
+            }
+
+            android.util.Log.i("PlaybackManager", "🎵 Switching to Audio presentation for '${currentTrack.title}' at ${currentPos}ms")
+
+            val updatedItems = currentQueue.mapIndexed { idx, track ->
+                if (idx == currentIndex) updatedMediaItem else MediaItemMapper.toMediaItem(track)
+            }
+            controller.setMediaItems(updatedItems, currentIndex, currentPos)
+            controller.prepare()
+            if (isPlaying) {
+                controller.play()
+            }
+        }
+
+        _playbackState.update {
+            it.copy(
+                isVideoMode = false,
+                mediaType = com.musync.app.domain.model.MediaType.AUDIO
+            )
+        }
+    }
+
+    fun setVideoQuality(quality: String) {
+        currentVideoQuality = quality
+        if (_playbackState.value.isVideoMode) {
+            switchToVideoMode(quality)
+        } else {
+            _playbackState.update { it.copy(videoQuality = quality) }
+        }
     }
 
     fun release() {

@@ -322,21 +322,55 @@ app.get(["/song", "/song/"], apiLimiter, async (req: Request, res: Response) => 
   }
 });
 
-// 9. Direct high-performance audio stream endpoint
+// 9. Direct high-performance audio & video stream endpoint
 app.get(["/stream", "/stream/"], streamLimiter, async (req: Request, res: Response) => {
   await StreamManager.handleStreamRequest(req, res);
 });
 
-// 9b. Next-track early stream pre-warm & resolution endpoint
+// 9a. Explicit Video Stream Endpoint
+app.get(["/video/stream", "/video"], streamLimiter, async (req: Request, res: Response) => {
+  req.query.type = "video";
+  await StreamManager.handleStreamRequest(req, res);
+});
+
+// 9b. Video Info / Stream Resolution Endpoint
+app.get(["/video/info", "/stream/info"], apiLimiter, async (req: Request, res: Response) => {
+  const videoId = (req.query.id || req.query.query || req.query.videoId) as string;
+  const quality = (req.query.quality || "auto") as string;
+  if (!videoId) {
+    return res.status(400).json({ error: "Missing video ID parameter (?id=...)" });
+  }
+
+  const resolution = await StreamManager.resolveVideoStream(videoId, quality);
+  if (resolution.entry) {
+    res.json({
+      success: true,
+      videoId,
+      quality,
+      mediaType: "video",
+      availableQualities: resolution.availableQualities || ['Auto', '1080p', '720p', '480p', '360p', '144p'],
+      source: resolution.source
+    });
+  } else {
+    res.status(502).json({
+      success: false,
+      videoId,
+      error: resolution.error || "Video stream unavailable"
+    });
+  }
+});
+
+// 9c. Next-track early stream pre-warm & resolution endpoint
 app.get(["/stream/preload", "/preload"], apiLimiter, async (req: Request, res: Response) => {
   const videoId = (req.query.id || req.query.query || req.query.videoId) as string;
   const quality = (req.query.quality || "low") as string;
+  const type = ((req.query.type || req.query.mediaType || "audio") as string).toLowerCase();
   if (!videoId) {
     return res.status(400).json({ error: "Missing video ID parameter (?id=...)" });
   }
 
   const start = Date.now();
-  const resolution = await StreamManager.resolveAudioStream(videoId, quality);
+  const resolution = await StreamManager.resolveStream(videoId, quality, type === "video" ? "video" : "audio");
   const durationMs = Date.now() - start;
 
   if (resolution.entry) {
@@ -344,6 +378,7 @@ app.get(["/stream/preload", "/preload"], apiLimiter, async (req: Request, res: R
       success: true,
       videoId,
       quality,
+      mediaType: resolution.mediaType || "audio",
       source: resolution.source || "resolver",
       durationMs,
       cached: resolution.source === "l1" || resolution.source === "redis"

@@ -231,6 +231,20 @@ fun MainApp(
                 )
             }
 
+            // Full-screen Music Video presentation screen (Media3 PlayerView)
+            composable(
+                route = Screen.FullScreenVideo.route,
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = "musync://video" },
+                    navDeepLink { uriPattern = "musync://video" }
+                )
+            ) {
+                com.musync.app.ui.player.FullScreenVideoScreen(
+                    playbackManager = container.playbackManager,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
             // Deep links for direct track playback
             composable(
                 route = "track/{id}",
@@ -259,15 +273,17 @@ fun MainApp(
         // True Floating Glassmorphism Bottom Bar Overlay with Dark Frosted Glass Background
         val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
         val isPlayingTrack = playbackState.currentTrack != null
+        val isFullScreenVideoRoute = currentRoute == Screen.FullScreenVideo.route
 
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(Color.Transparent)
-                .padding(start = 14.dp, end = 14.dp, bottom = 24.dp),
-            contentAlignment = Alignment.Center
-        ) {
+        if (!isFullScreenVideoRoute) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(Color.Transparent)
+                    .padding(start = 14.dp, end = 14.dp, bottom = 24.dp),
+                contentAlignment = Alignment.Center
+            ) {
             Row(
                 modifier = if (isPlayingTrack) Modifier.fillMaxWidth() else Modifier.wrapContentWidth(),
                 horizontalArrangement = if (isPlayingTrack) Arrangement.spacedBy(8.dp) else Arrangement.Center,
@@ -292,7 +308,11 @@ fun MainApp(
                                 .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(36.dp))
                                 .clickable {
                                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                    showNowPlaying = true
+                                    if (playbackState.isVideoMode) {
+                                        navController.navigate(Screen.FullScreenVideo.route)
+                                    } else {
+                                        showNowPlaying = true
+                                    }
                                 }
                                 .padding(start = 8.dp, end = 10.dp, top = 7.dp, bottom = 7.dp),
                             contentAlignment = Alignment.CenterStart
@@ -335,16 +355,35 @@ fun MainApp(
                                 Column(
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Text(
-                                        text = track.title,
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Bold
-                                        ),
-                                        color = Color.White,
-                                        maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = track.title,
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold
+                                            ),
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                        if (playbackState.isVideoMode) {
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(4.dp))
+                                                    .background(Color(0x6664B5F6))
+                                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                                            ) {
+                                                Text(
+                                                    text = "VIDEO",
+                                                    fontSize = 8.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                            }
+                                        }
+                                    }
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(
                                         text = track.artist.name,
@@ -474,6 +513,7 @@ fun MainApp(
                 }
             }
         }
+    }
 
         // Now Playing Sheet
         if (showNowPlaying && playbackState.currentTrack != null) {
@@ -491,6 +531,11 @@ fun MainApp(
                 onOpenQueue = {
                     showNowPlaying = false
                     showQueue = true
+                },
+                onOpenVideo = {
+                    showNowPlaying = false
+                    container.playbackManager.switchToVideoMode()
+                    navController.navigate(Screen.FullScreenVideo.route)
                 }
             )
         }

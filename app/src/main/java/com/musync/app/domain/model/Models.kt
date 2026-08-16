@@ -1,5 +1,10 @@
 package com.musync.app.domain.model
 
+enum class MediaType {
+    AUDIO,
+    VIDEO
+}
+
 data class Track(
     val id: String,
     val title: String,
@@ -8,6 +13,10 @@ data class Track(
     val artworkUrl: String? = null,
     val durationMs: Long? = null,
     val streamUrl: String? = null,
+    val videoUrl: String? = null,
+    val mediaType: MediaType = MediaType.AUDIO,
+    val isVideoAvailable: Boolean = true,
+    val availableVideoQualities: List<String> = emptyList(),
     val genre: String? = null,
     val playCount: Long? = null,
     val explicit: Boolean = false
@@ -58,6 +67,11 @@ data class PlaybackState(
     val isShuffle: Boolean = false,
     val queue: List<Track> = emptyList(),
     val queueIndex: Int = -1,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val mediaType: MediaType = MediaType.AUDIO,
+    val isVideoMode: Boolean = false,
+    val videoQuality: String = "auto",
+    val availableVideoQualities: List<String> = listOf("Auto", "1080p", "720p", "480p", "360p", "144p")
 )
+
 
