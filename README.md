@@ -10,7 +10,7 @@ Get the latest official version of Musync for your Android device:
 
 [![Download APK](https://img.shields.io/badge/Download-Musync_APK-4CAF50?style=for-the-badge&logo=android&logoColor=white)](https://github.com/gowthamkrishna27/Musync/releases/latest/download/Musync.apk)
 
-* **Version**: `1.1.4.6`
+* **Version**: `1.1.4.7`
 * **Compatibility**: Android 8.0 (Oreo) and above
 * **Permissions**: Internet, Background Playback, Notifications, Haptics (Vibration)
 

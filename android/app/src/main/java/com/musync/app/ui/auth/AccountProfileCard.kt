@@ -56,17 +56,17 @@ fun AccountProfileCard(
 
     val cardGradient = Brush.verticalGradient(
         colors = listOf(
-            Color(0xFF1E222D),
-            Color(0xFF141720)
+            Color(0xFF141414),
+            Color(0xFF0D0D0D)
         )
     )
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(cardGradient)
-            .border(1.dp, Brush.verticalGradient(listOf(Color(0x33FFFFFF), Color(0x11FFFFFF))), RoundedCornerShape(22.dp))
+            .border(1.dp, Color(0xFF1F1F1F), RoundedCornerShape(20.dp))
             .padding(16.dp)
     ) {
         if (user != null && !user.isAnonymous) {
@@ -141,15 +141,15 @@ fun AccountProfileCard(
                             // Provider Badge
                             val (badgeBg, badgeText, badgeColor) = when (user.provider) {
                                 AuthProviderType.GITHUB -> Triple(Color(0xFF24292E), "GitHub", Color.White)
-                                AuthProviderType.GOOGLE -> Triple(Color(0x224285F4), "Google", Color(0xFF93C5FD))
-                                else -> Triple(Color(0x223B82F6), "Account", Color(0xFF93C5FD))
+                                AuthProviderType.GOOGLE -> Triple(Color(0xFF1E2638), "Google", Color(0xFF93C5FD))
+                                else -> Triple(Color(0xFF1E222A), "Account", Color(0xFFE2E8F0))
                             }
 
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(badgeBg)
-                                    .border(0.5.dp, Color(0x33FFFFFF), RoundedCornerShape(8.dp))
+                                    .border(0.5.dp, Color(0xFF2E2E2E), RoundedCornerShape(8.dp))
                                     .padding(horizontal = 7.dp, vertical = 2.5.dp)
                             ) {
                                 Text(
@@ -214,7 +214,7 @@ fun AccountProfileCard(
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(CircleShape)
-                                .background(Color(0x1EFFFFFF))
+                                .background(Color(0xFF1C1C1C))
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Sync,
@@ -237,7 +237,7 @@ fun AccountProfileCard(
                                 .background(Color(0x1AEF4444))
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Logout,
+                                imageVector = Icons.AutoMirrored.Filled.Logout,
                                 contentDescription = "Sign Out",
                                 tint = Color(0xFFEF4444),
                                 modifier = Modifier.size(18.dp)
@@ -252,24 +252,20 @@ fun AccountProfileCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Cloud Sync Icon with circular glass badge
+                // Cloud Sync Icon with circular dark badge
                 Box(
                     modifier = Modifier
-                        .size(50.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
-                        .background(
-                            Brush.linearGradient(
-                                listOf(Color(0x2A3B82F6), Color(0x1A1E293B))
-                            )
-                        )
-                        .border(1.dp, Color(0x3360A5FA), CircleShape),
+                        .background(Color(0xFF1C1C1C))
+                        .border(1.dp, Color(0xFF2A2A2A), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.CloudQueue,
                         contentDescription = null,
-                        tint = Color(0xFF93C5FD),
-                        modifier = Modifier.size(26.dp)
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
 
@@ -299,14 +295,14 @@ fun AccountProfileCard(
                 // Modern Sign In Pill Button
                 Button(
                     onClick = onSignInClick,
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.White,
                         contentColor = Color.Black
                     ),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
-                    modifier = Modifier.height(38.dp)
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
+                    modifier = Modifier.height(36.dp)
                 ) {
                     Text(
                         text = "Sign In",

@@ -62,6 +62,9 @@ interface PlaylistDao {
     suspend fun getPlaylistTracksSync(playlistId: Long): List<PlaylistItemEntity>
 
     @Query("SELECT * FROM playlist_items ORDER BY playlistId ASC, position ASC")
+    fun getAllPlaylistItemsFlow(): Flow<List<PlaylistItemEntity>>
+
+    @Query("SELECT * FROM playlist_items ORDER BY playlistId ASC, position ASC")
     suspend fun getAllPlaylistItems(): List<PlaylistItemEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

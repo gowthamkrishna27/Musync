@@ -137,13 +137,19 @@ class PlaylistRepositoryImpl(
 ) : PlaylistRepository {
 
     override fun getPlaylists(): Flow<List<Playlist>> {
-        return playlistDao.getAllPlaylists().map { list ->
-            list.map { entity ->
+        return kotlinx.coroutines.flow.combine(
+            playlistDao.getAllPlaylists(),
+            playlistDao.getAllPlaylistItemsFlow()
+        ) { playlists, items ->
+            val itemsByPlaylist = items.groupBy { it.playlistId }
+            playlists.map { entity ->
+                val playlistItems = itemsByPlaylist[entity.id] ?: emptyList()
                 Playlist(
                     id = entity.id.toString(),
                     name = entity.name,
                     description = entity.description,
-                    artworkUrl = entity.artworkUrl,
+                    artworkUrl = playlistItems.firstOrNull()?.artworkUrl ?: entity.artworkUrl,
+                    tracks = playlistItems.map { it.toTrack() },
                     isCustom = true,
                     createdAt = entity.createdAt
                 )
