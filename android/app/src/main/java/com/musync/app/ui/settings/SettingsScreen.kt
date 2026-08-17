@@ -602,124 +602,104 @@ fun SettingsScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 3.dp)
-                                    .clip(RoundedCornerShape(14.dp))
+                                    .padding(vertical = 2.dp)
+                                    .clip(RoundedCornerShape(12.dp))
                                     .background(
-                                        if (isModeSelected && eqState.isEnabled) Color(0x28FFFFFF) else Color(0x10FFFFFF)
+                                        if (isModeSelected && eqState.isEnabled) Color(0x28FFFFFF) else Color(0x0EFFFFFF)
                                     )
                                     .border(
                                         1.dp,
-                                        if (isModeSelected && eqState.isEnabled) Color(0x66FFFFFF) else Color(0x18FFFFFF),
-                                        RoundedCornerShape(14.dp)
+                                        if (isModeSelected && eqState.isEnabled) Color(0x66FFFFFF) else Color(0x14FFFFFF),
+                                        RoundedCornerShape(12.dp)
                                     )
                                     .clickable {
                                         audioEffectManager.setEngineMode(mode)
                                     }
-                                    .padding(12.dp)
+                                    .padding(horizontal = 10.dp, vertical = 8.dp)
                             ) {
-                                Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
                                     ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.weight(1f, fill = false)
+                                        Box(
+                                            modifier = Modifier
+                                                .size(26.dp)
+                                                .clip(RoundedCornerShape(7.dp))
+                                                .background(if (isModeSelected && eqState.isEnabled) Color(0x33FFFFFF) else Color(0x14FFFFFF)),
+                                            contentAlignment = Alignment.Center
                                         ) {
+                                            Icon(
+                                                imageVector = when (mode.iconType) {
+                                                    "music" -> Icons.Default.MusicNote
+                                                    "cinema" -> Icons.Default.Videocam
+                                                    "studio" -> Icons.Default.Tune
+                                                    "bolt" -> Icons.Default.Speaker
+                                                    "spatial" -> Icons.Default.GraphicEq
+                                                    "warm" -> Icons.Default.Tune
+                                                    "direct" -> Icons.Default.Headphones
+                                                    else -> Icons.Default.GraphicEq
+                                                },
+                                                contentDescription = mode.title,
+                                                tint = if (isModeSelected && eqState.isEnabled) Color.White else Color(0x99FFFFFF),
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                        Column {
                                             Text(
                                                 text = mode.title,
                                                 color = TextWhite,
-                                                fontSize = 13.sp,
+                                                fontSize = 12.5.sp,
                                                 fontWeight = if (isModeSelected) FontWeight.Bold else FontWeight.SemiBold
                                             )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            // 5-Band Acoustic Curve Preview
-                                            Row(
-                                                modifier = Modifier.height(12.dp),
-                                                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                                                verticalAlignment = Alignment.Bottom
-                                            ) {
-                                                mode.bandGains.take(5).forEach { gain ->
-                                                    val normalized = ((gain + 1000f) / 2000f).coerceIn(0.2f, 1.0f)
-                                                    val barHeight = (12 * normalized).dp.coerceAtLeast(2.dp)
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .width(2.dp)
-                                                            .height(barHeight)
-                                                            .clip(RoundedCornerShape(1.dp))
-                                                            .background(if (isModeSelected && eqState.isEnabled) Color.White else Color(0x44FFFFFF))
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            if (mode.recommendationTag != null) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .clip(RoundedCornerShape(6.dp))
-                                                        .background(if (isModeSelected) Color(0x33FFFFFF) else Color(0x14FFFFFF))
-                                                        .border(1.dp, Color(0x20FFFFFF), RoundedCornerShape(6.dp))
-                                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                                ) {
-                                                    Text(
-                                                        text = mode.recommendationTag,
-                                                        color = Color(0xDDFFFFFF),
-                                                        fontSize = 8.5.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        letterSpacing = 0.3.sp
-                                                    )
-                                                }
-                                            }
-
-                                            if (isModeSelected && eqState.isEnabled) {
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(16.dp)
-                                                        .clip(CircleShape)
-                                                        .background(Color.White),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Check,
-                                                        contentDescription = "Active",
-                                                        tint = Color.Black,
-                                                        modifier = Modifier.size(11.dp)
-                                                    )
-                                                }
-                                            }
+                                            Text(
+                                                text = mode.subtitle,
+                                                color = if (isModeSelected && eqState.isEnabled) Color(0xBBFFFFFF) else Color(0x77FFFFFF),
+                                                fontSize = 10.sp
+                                            )
                                         }
                                     }
 
-                                    Spacer(modifier = Modifier.height(3.dp))
-                                    Text(
-                                        text = mode.description,
-                                        color = if (isModeSelected && eqState.isEnabled) Color(0xCCFFFFFF) else Color(0x80FFFFFF),
-                                        fontSize = 10.sp,
-                                        lineHeight = 14.sp
-                                    )
-
-                                    if (mode.traitChips.isNotEmpty()) {
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            mode.traitChips.forEach { trait ->
-                                                Box(
-                                                    modifier = Modifier
-                                                        .clip(RoundedCornerShape(4.dp))
-                                                        .background(if (isModeSelected) Color(0x1EFFFFFF) else Color(0x0EFFFFFF))
-                                                        .border(0.8.dp, Color(0x1EFFFFFF), RoundedCornerShape(4.dp))
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (mode.recommendationTag != null) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(5.dp))
+                                                    .background(if (isModeSelected) Color(0x33FFFFFF) else Color(0x14FFFFFF))
+                                                    .border(0.8.dp, Color(0x22FFFFFF), RoundedCornerShape(5.dp))
                                                     .padding(horizontal = 5.dp, vertical = 2.dp)
                                             ) {
                                                 Text(
-                                                    text = trait,
-                                                    color = if (isModeSelected) Color(0xEEFFFFFF) else Color(0x99FFFFFF),
-                                                    fontSize = 9.sp,
-                                                    fontWeight = FontWeight.Medium
+                                                    text = mode.recommendationTag,
+                                                    color = Color(0xDDFFFFFF),
+                                                    fontSize = 8.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    letterSpacing = 0.3.sp
+                                                )
+                                            }
+                                        }
+
+                                        if (isModeSelected && eqState.isEnabled) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(15.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color.White),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = "Active",
+                                                    tint = Color.Black,
+                                                    modifier = Modifier.size(9.dp)
                                                 )
                                             }
                                         }
@@ -729,8 +709,7 @@ fun SettingsScreen(
                         }
                     }
                 }
-            }
-        },
+            },
             confirmButton = {
                 Box(
                     modifier = Modifier

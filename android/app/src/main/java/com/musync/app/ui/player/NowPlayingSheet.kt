@@ -892,7 +892,7 @@ fun NowPlayingSheet(
                         letterSpacing = 1.sp
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     val engineModes = com.musync.app.playback.SoundEngineRegistry.getModesForEngine(eqState.currentEngine)
 
@@ -902,127 +902,107 @@ fun NowPlayingSheet(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .clip(RoundedCornerShape(16.dp))
+                                .padding(vertical = 2.5.dp)
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(
-                                    if (isModeSelected && eqState.isEnabled) Color(0x28FFFFFF) else Color(0x10FFFFFF)
+                                    if (isModeSelected && eqState.isEnabled) Color(0x28FFFFFF) else Color(0x0EFFFFFF)
                                 )
                                 .border(
                                     1.dp,
-                                    if (isModeSelected && eqState.isEnabled) Color(0x66FFFFFF) else Color(0x18FFFFFF),
-                                    RoundedCornerShape(16.dp)
+                                    if (isModeSelected && eqState.isEnabled) Color(0x66FFFFFF) else Color(0x14FFFFFF),
+                                    RoundedCornerShape(12.dp)
                                 )
                                 .clickable {
                                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                                     audioEffectManager.setEngineMode(mode)
                                 }
-                                .padding(14.dp)
+                                .padding(horizontal = 12.dp, vertical = 9.dp)
                         ) {
-                            Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.weight(1f, fill = false)
+                                    // Respective Symbol Icon in dark frosted glass container
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isModeSelected && eqState.isEnabled) Color(0x33FFFFFF) else Color(0x14FFFFFF)),
+                                        contentAlignment = Alignment.Center
                                     ) {
+                                        Icon(
+                                            imageVector = when (mode.iconType) {
+                                                "music" -> Icons.Default.MusicNote
+                                                "cinema" -> Icons.Default.Videocam
+                                                "studio" -> Icons.Default.Tune
+                                                "bolt" -> Icons.Default.Speaker
+                                                "spatial" -> Icons.Default.GraphicEq
+                                                "warm" -> Icons.Default.Tune
+                                                "direct" -> Icons.Default.Headphones
+                                                else -> Icons.Default.GraphicEq
+                                            },
+                                            contentDescription = mode.title,
+                                            tint = if (isModeSelected && eqState.isEnabled) Color.White else Color(0x99FFFFFF),
+                                            modifier = Modifier.size(15.dp)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                    Column {
                                         Text(
                                             text = mode.title,
                                             color = TextWhite,
-                                            fontSize = 14.sp,
+                                            fontSize = 13.sp,
                                             fontWeight = if (isModeSelected) FontWeight.Bold else FontWeight.SemiBold
                                         )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        // 5-Band Acoustic Curve Preview
-                                        Row(
-                                            modifier = Modifier.height(13.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                                            verticalAlignment = Alignment.Bottom
-                                        ) {
-                                            mode.bandGains.take(5).forEach { gain ->
-                                                val normalized = ((gain + 1000f) / 2000f).coerceIn(0.2f, 1.0f)
-                                                val barHeight = (13 * normalized).dp.coerceAtLeast(2.5.dp)
-                                                Box(
-                                                    modifier = Modifier
-                                                        .width(2.5.dp)
-                                                        .height(barHeight)
-                                                        .clip(RoundedCornerShape(1.dp))
-                                                        .background(if (isModeSelected && eqState.isEnabled) Color.White else Color(0x44FFFFFF))
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (mode.recommendationTag != null) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(if (isModeSelected) Color(0x33FFFFFF) else Color(0x14FFFFFF))
-                                                    .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(6.dp))
-                                                    .padding(horizontal = 7.dp, vertical = 2.dp)
-                                            ) {
-                                                Text(
-                                                    text = mode.recommendationTag,
-                                                    color = Color(0xDDFFFFFF),
-                                                    fontSize = 8.5.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    letterSpacing = 0.4.sp
-                                                )
-                                            }
-                                        }
-
-                                        if (isModeSelected && eqState.isEnabled) {
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(18.dp)
-                                                    .clip(CircleShape)
-                                                    .background(Color.White),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Check,
-                                                    contentDescription = "Active",
-                                                    tint = Color.Black,
-                                                    modifier = Modifier.size(12.dp)
-                                                )
-                                            }
-                                        }
+                                        Text(
+                                            text = mode.subtitle,
+                                            color = if (isModeSelected && eqState.isEnabled) Color(0xBBFFFFFF) else Color(0x77FFFFFF),
+                                            fontSize = 10.5.sp
+                                        )
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = mode.description,
-                                    color = if (isModeSelected && eqState.isEnabled) Color(0xCCFFFFFF) else Color(0x80FFFFFF),
-                                    fontSize = 11.sp,
-                                    lineHeight = 15.sp
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (mode.recommendationTag != null) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(5.dp))
+                                                .background(if (isModeSelected) Color(0x33FFFFFF) else Color(0x14FFFFFF))
+                                                .border(0.8.dp, Color(0x22FFFFFF), RoundedCornerShape(5.dp))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = mode.recommendationTag,
+                                                color = Color(0xDDFFFFFF),
+                                                fontSize = 8.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.3.sp
+                                            )
+                                        }
+                                    }
 
-                                if (mode.traitChips.isNotEmpty()) {
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        mode.traitChips.forEach { trait ->
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(if (isModeSelected) Color(0x1EFFFFFF) else Color(0x0EFFFFFF))
-                                                    .border(0.8.dp, Color(0x1EFFFFFF), RoundedCornerShape(6.dp))
-                                                    .padding(horizontal = 6.dp, vertical = 2.5.dp)
-                                            ) {
-                                                Text(
-                                                    text = trait,
-                                                    color = if (isModeSelected) Color(0xEEFFFFFF) else Color(0x99FFFFFF),
-                                                    fontSize = 9.5.sp,
-                                                    fontWeight = FontWeight.Medium
-                                                )
-                                            }
+                                    if (isModeSelected && eqState.isEnabled) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .size(16.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.White),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "Active",
+                                                tint = Color.Black,
+                                                modifier = Modifier.size(10.dp)
+                                            )
                                         }
                                     }
                                 }
