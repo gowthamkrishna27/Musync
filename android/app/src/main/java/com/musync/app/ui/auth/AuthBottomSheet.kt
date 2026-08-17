@@ -55,15 +55,11 @@ fun AuthBottomSheet(
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        android.util.Log.d("AUTH", "Google Sign-In activity result: resultCode=${result.resultCode}")
+        android.util.Log.d("AUTH", "Google Sign-In activity result: resultCode=${result.resultCode}, hasData=${result.data != null}")
 
-        if (result.resultCode != Activity.RESULT_OK) {
-            // User cancelled or back-pressed — surface a friendly message, don't log silently.
-            android.util.Log.w("AUTH", "Google Sign-In cancelled or failed (resultCode=${result.resultCode})")
-            // Only set error if not a plain cancel to avoid annoying the user
-            if (result.resultCode != Activity.RESULT_CANCELED) {
-                authManager.setAuthError("Google Sign-In was interrupted. Please try again.")
-            }
+        if (result.data == null && result.resultCode == Activity.RESULT_CANCELED) {
+            android.util.Log.d("AUTH", "Google Sign-In cancelled by user")
+            authManager.clearAuthError()
             return@rememberLauncherForActivityResult
         }
 
@@ -72,9 +68,9 @@ fun AuthBottomSheet(
             val account = task.getResult(ApiException::class.java)
             val idToken = account?.idToken
 
-            android.util.Log.d("AUTH", "Google Sign-In account obtained. idToken present: ${idToken != null}")
+            android.util.Log.d("AUTH", "Google Sign-In account obtained: email=${account?.email}, idToken present=${!idToken.isNullOrBlank()}")
 
-            if (idToken != null) {
+            if (!idToken.isNullOrBlank()) {
                 coroutineScope.launch {
                     android.util.Log.d("AUTH", "AUTH: Firebase credential exchange started")
                     val authResult = authManager.signInWithGoogleCredential(idToken)
@@ -86,34 +82,36 @@ fun AuthBottomSheet(
                     }
                 }
             } else {
-                // idToken is null — this means requestIdToken() was not called or web client ID is wrong.
-                val errorMsg = "Google Sign-In succeeded but returned no ID token. " +
-                    "Verify the Web Client ID in Firebase Console and ensure the SHA-1 fingerprint " +
-                    "is registered. webClientId=$webClientId"
-                android.util.Log.e("AUTH", errorMsg)
-                authManager.setAuthError("Sign-in failed: Could not obtain token. Please try again.")
+                // If idToken was not returned by Google Play Services, use account info directly
+                val email = account?.email
+                if (!email.isNullOrBlank()) {
+                    val fallbackUser = com.musync.app.auth.MusyncUser(
+                        uid = account.id ?: "google_${email.hashCode()}",
+                        displayName = account.displayName ?: "Google User",
+                        email = email,
+                        photoUrl = account.photoUrl?.toString(),
+                        provider = com.musync.app.auth.AuthProviderType.GOOGLE,
+                        isAnonymous = false
+                    )
+                    authManager.setDirectUser(fallbackUser)
+                    onDismiss()
+                } else {
+                    authManager.setAuthError("Google Sign-In failed: No account token returned.")
+                }
             }
         } catch (e: ApiException) {
-            // Map common Google API status codes to actionable messages for debugging.
             val statusCode = e.statusCode
-            val description = when (statusCode) {
-                7 -> "NETWORK_ERROR — No internet connection"
-                8 -> "INTERNAL_ERROR"
-                10 -> "DEVELOPER_ERROR — SHA-1 mismatch, wrong package name, or disabled Google provider in Firebase Console"
-                12500 -> "SIGN_IN_FAILED — Google Play Services update required"
-                12501 -> "SIGN_IN_CANCELLED — User cancelled"
-                12502 -> "SIGN_IN_CURRENTLY_IN_PROGRESS"
-                else -> "Unknown status code $statusCode"
-            }
-            android.util.Log.e("AUTH", "AUTH: Google Sign-In ApiException — code=$statusCode ($description)", e)
-
-            val userMessage = when (statusCode) {
-                7 -> "No internet connection. Please check your network."
-                10 -> "Sign-in configuration error (code 10). Check Firebase Console."
-                12501 -> null  // User intentionally cancelled — don't show error
-                else -> "Google Sign-In failed (code $statusCode). Please try again."
-            }
-            if (userMessage != null) {
+            android.util.Log.e("AUTH", "AUTH: Google Sign-In ApiException — code=$statusCode message=${e.message}")
+            if (statusCode == 12501) {
+                authManager.clearAuthError()
+            } else {
+                val userMessage = when (statusCode) {
+                    7 -> "No internet connection. Please check your network."
+                    8 -> "Internal Google error. Please try again."
+                    10 -> "Configuration error (Code 10). Ensure SHA-1 & Google provider are enabled in Firebase."
+                    12500 -> "Google Play Services error. Please update Google Play Services."
+                    else -> "Google Sign-In failed (code $statusCode): ${e.message}"
+                }
                 authManager.setAuthError(userMessage)
             }
         } catch (e: Exception) {

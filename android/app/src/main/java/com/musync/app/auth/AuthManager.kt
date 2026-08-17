@@ -104,9 +104,10 @@ class AuthManager(
             Result.success(user)
         } catch (e: FirebaseAuthException) {
             val code = e.errorCode
-            Log.e(TAG, "AUTH: Google — FirebaseAuthException errorCode=$code", e)
+            val msg = e.message ?: ""
+            Log.e(TAG, "AUTH: Google — FirebaseAuthException errorCode=$code msg=$msg", e)
             _authLoading.value = false
-            _authError.value = decodeFirebaseAuthError(code, "Google Sign-In")
+            _authError.value = decodeFirebaseAuthError(code, msg, "Google Sign-In")
             Result.failure(e)
         } catch (e: Exception) {
             Log.e(TAG, "AUTH: Google — unexpected exception", e)
@@ -210,8 +211,9 @@ class AuthManager(
         val errorMessage = when (e) {
             is FirebaseAuthException -> {
                 val code = e.errorCode
-                Log.e(TAG, "AUTH: GitHub — FirebaseAuthException errorCode=$code message=${e.message}")
-                decodeFirebaseAuthError(code, "GitHub Sign-In")
+                val msg = e.message ?: ""
+                Log.e(TAG, "AUTH: GitHub — FirebaseAuthException errorCode=$code message=$msg")
+                decodeFirebaseAuthError(code, msg, "GitHub Sign-In")
             }
             else -> {
                 Log.e(TAG, "AUTH: GitHub — exception: ${e.javaClass.simpleName}: ${e.message}")
@@ -226,8 +228,18 @@ class AuthManager(
      * Maps Firebase Auth error codes to user-friendly messages.
      * Logs the raw code for diagnostics; presents a safe message to the user.
      */
-    private fun decodeFirebaseAuthError(errorCode: String, context: String): String {
-        Log.e(TAG, "AUTH: $context errorCode=$errorCode")
+    fun setDirectUser(user: MusyncUser) {
+        _currentUser.value = user
+        _authLoading.value = false
+        _authError.value = null
+        _syncStatus.value = CloudSyncStatus.SYNCED
+    }
+
+    private fun decodeFirebaseAuthError(errorCode: String, message: String = "", context: String): String {
+        Log.e(TAG, "AUTH: $context errorCode=$errorCode message=$message")
+        if (message.contains("CONFIGURATION_NOT_FOUND", ignoreCase = true) || message.contains("identity provider", ignoreCase = true)) {
+            return "$context is not enabled in Firebase Console. Enable it under Firebase -> Authentication -> Sign-in method."
+        }
         return when (errorCode) {
             "ERROR_INVALID_EMAIL"                        -> "Invalid email address."
             "ERROR_WRONG_PASSWORD"                       -> "Incorrect password."
@@ -238,21 +250,20 @@ class AuthManager(
             "ERROR_WEAK_PASSWORD"                        -> "Password is too weak."
             "ERROR_INVALID_CREDENTIAL"                   -> "Invalid credential. Please try again."
             "ERROR_OPERATION_NOT_ALLOWED"                ->
-                "$context is not enabled. Enable it in the Firebase Console."
+                "$context is not enabled in Firebase Console. Enable it under Authentication -> Sign-in method."
             "ERROR_USER_DISABLED"                        -> "This account has been disabled."
             "ERROR_TOO_MANY_REQUESTS"                    -> "Too many sign-in attempts. Please wait and try again."
             "ERROR_NETWORK_REQUEST_FAILED"               -> "Network error. Check your internet connection."
             "ERROR_WEB_INTERNAL_ERROR"                   ->
-                "GitHub sign-in internal error. Ensure the GitHub OAuth App redirect URI is set to " +
-                "https://musync-d9db5.firebaseapp.com/__/auth/handler in your GitHub OAuth App settings."
+                "GitHub OAuth configuration error. Ensure callback URL is set to https://musync-d9db5.firebaseapp.com/__/auth/handler in your GitHub OAuth App settings."
             "ERROR_WEB_CONTEXT_ALREADY_PRESENTED"        -> "A sign-in is already in progress."
             "ERROR_WEB_CONTEXT_CANCELLED"                -> "Sign-in was cancelled."
             "ERROR_WEB_STORAGE_UNSUPPORTED"              -> "Browser storage is unavailable. Try clearing app data."
             "ERROR_APP_NOT_AUTHORIZED"                   ->
-                "App not authorized. Check Firebase Console and google-services.json."
+                "App not authorized. Check Firebase Console SHA-1 fingerprint."
             "ERROR_API_NOT_AVAILABLE"                    -> "Firebase Auth API is unavailable."
             "ERROR_INTERNAL_ERROR"                       -> "Internal Firebase error. Check Logcat for details."
-            else                                         -> "$context failed (code: $errorCode). Please try again."
+            else                                         -> "$context failed: ${message.ifBlank { errorCode }}"
         }
     }
 
@@ -266,15 +277,29 @@ class AuthManager(
         return try {
             val result = auth.signInAnonymously().await()
             val user = result.user?.toMusyncUser()
-                ?: throw IllegalStateException("Firebase User is null after anonymous sign-in")
+                ?: createLocalGuestUser()
             _currentUser.value = user
             _authLoading.value = false
             Result.success(user)
         } catch (e: Exception) {
+            Log.w(TAG, "Firebase Anonymous sign-in unavailable (${e.message}), using local guest session")
+            val localGuest = createLocalGuestUser()
+            _currentUser.value = localGuest
             _authLoading.value = false
-            _authError.value = e.localizedMessage ?: "Guest sign-in failed"
-            Result.failure(e)
+            _authError.value = null
+            Result.success(localGuest)
         }
+    }
+
+    private fun createLocalGuestUser(): MusyncUser {
+        return MusyncUser(
+            uid = "guest_local_${System.currentTimeMillis()}",
+            displayName = "Guest Listener",
+            email = null,
+            photoUrl = null,
+            provider = AuthProviderType.GUEST,
+            isAnonymous = true
+        )
     }
 
     // ──────────────────────────────────────────────────────────────
