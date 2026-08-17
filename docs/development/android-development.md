@@ -14,8 +14,8 @@
 | **minSdk** | `26` (Android 8.0 Oreo) | `android/app/build.gradle.kts` |
 | **Java Compatibility** | `JavaVersion.VERSION_21` | `android/app/build.gradle.kts` |
 | **JVM Target** | `21` | `android/app/build.gradle.kts` |
-| **Version Code** | `1141` | `android/app/build.gradle.kts` |
-| **Version Name** | `1.1.4.1` | `android/app/build.gradle.kts` |
+| **Version Code** | `1142` | `android/app/build.gradle.kts` |
+| **Version Name** | `1.1.4.2` | `android/app/build.gradle.kts` |
 
 ---
 
