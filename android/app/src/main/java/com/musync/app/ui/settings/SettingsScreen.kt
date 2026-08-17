@@ -479,152 +479,9 @@ fun SettingsScreen(
                             }
                         }
                     } else {
-                        // 1. Translucent Dark Glass Drop Box for Engine Selection
+                        // Direct 7 Actual Sound Engines
                         Text(
-                            text = "SOUND ENGINE",
-                            color = Color(0x88FFFFFF),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(Color(0x18FFFFFF))
-                                .border(1.dp, if (isEngineDropdownExpanded) Color(0x66FFFFFF) else Color(0x28FFFFFF), RoundedCornerShape(14.dp))
-                                .clickable { isEngineDropdownExpanded = !isEngineDropdownExpanded }
-                                .padding(horizontal = 14.dp, vertical = 12.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    modifier = Modifier.weight(1f),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(30.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0x24FFFFFF)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        com.musync.app.ui.components.SoundEngineSymbol(
-                                            engineId = eqState.currentEngine.id,
-                                            tint = TextWhite,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column {
-                                        Text(
-                                            text = eqState.currentEngine.title,
-                                            color = TextWhite,
-                                            fontSize = 13.5.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = eqState.currentEngine.recommendation,
-                                            color = Color(0x99FFFFFF),
-                                            fontSize = 10.sp
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .size(26.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0x1EFFFFFF)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = if (isEngineDropdownExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                        contentDescription = "Dropdown",
-                                        tint = TextWhite,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        // Expanded Translucent Dark Glass Dropdown List
-                        if (isEngineDropdownExpanded) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(Color(0x24FFFFFF))
-                                    .border(1.dp, Color(0x38FFFFFF), RoundedCornerShape(14.dp))
-                                    .padding(4.dp)
-                            ) {
-                                com.musync.app.playback.SoundEngine.values().forEach { engine ->
-                                    val isEngineSelected = eqState.currentEngine == engine
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(if (isEngineSelected) Color(0x38FFFFFF) else Color.Transparent)
-                                            .clickable {
-                                                audioEffectManager.selectEngine(engine)
-                                                isEngineDropdownExpanded = false
-                                            }
-                                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(26.dp)
-                                                .clip(RoundedCornerShape(7.dp))
-                                                .background(if (isEngineSelected) Color(0x40FFFFFF) else Color(0x18FFFFFF)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            com.musync.app.ui.components.SoundEngineSymbol(
-                                                engineId = engine.id,
-                                                tint = if (isEngineSelected) Color.White else Color(0x88FFFFFF),
-                                                modifier = Modifier.size(15.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = engine.title,
-                                                color = TextWhite,
-                                                fontSize = 12.5.sp,
-                                                fontWeight = if (isEngineSelected) FontWeight.Bold else FontWeight.Medium
-                                            )
-                                            Text(
-                                                text = engine.recommendation,
-                                                color = Color(0x88FFFFFF),
-                                                fontSize = 9.5.sp
-                                            )
-                                        }
-                                        if (isEngineSelected) {
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = "Selected",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // 2. Square Symboled Mode Buttons
-                        Text(
-                            text = "${eqState.currentEngine.title.uppercase()} MODES",
+                            text = "SOUND ENGINES",
                             color = Color(0x88FFFFFF),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -633,43 +490,42 @@ fun SettingsScreen(
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        val engineModes = com.musync.app.playback.SoundEngineRegistry.getModesForEngine(eqState.currentEngine)
+                        val signatureEngines = com.musync.app.playback.SoundEngineRegistry.signatureEngines
 
-                        // Square Mode Buttons Row
+                        // 7 Engine Square Buttons Row
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            engineModes.forEach { mode ->
-                                val isModeSelected = eqState.currentMode.id == mode.id
+                            signatureEngines.forEach { engineMode ->
+                                val isEngineSelected = eqState.currentEngine == engineMode.engine
 
                                 Box(
                                     modifier = Modifier
                                         .size(52.dp)
                                         .clip(RoundedCornerShape(12.dp))
                                         .background(
-                                            if (isModeSelected && eqState.isEnabled) Color(0x38FFFFFF) else Color(0x14FFFFFF)
+                                            if (isEngineSelected && eqState.isEnabled) Color(0x38FFFFFF) else Color(0x14FFFFFF)
                                         )
                                         .border(
-                                            if (isModeSelected && eqState.isEnabled) 1.5.dp else 1.dp,
-                                            if (isModeSelected && eqState.isEnabled) Color.White else Color(0x24FFFFFF),
+                                            if (isEngineSelected && eqState.isEnabled) 1.5.dp else 1.dp,
+                                            if (isEngineSelected && eqState.isEnabled) Color.White else Color(0x24FFFFFF),
                                             RoundedCornerShape(12.dp)
                                         )
                                         .clickable {
-                                            audioEffectManager.setEngineMode(mode)
+                                            audioEffectManager.setEngineMode(engineMode)
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    com.musync.app.ui.components.SoundModeSymbol(
-                                        iconType = mode.iconType,
-                                        modeId = mode.id,
-                                        tint = if (isModeSelected && eqState.isEnabled) Color.White else Color(0x77FFFFFF),
+                                    com.musync.app.ui.components.SoundEngineSymbol(
+                                        engineId = engineMode.engine.id,
+                                        tint = if (isEngineSelected && eqState.isEnabled) Color.White else Color(0x77FFFFFF),
                                         modifier = Modifier.size(22.dp)
                                     )
 
-                                    if (isModeSelected && eqState.isEnabled) {
+                                    if (isEngineSelected && eqState.isEnabled) {
                                         Box(
                                             modifier = Modifier
                                                 .align(Alignment.BottomCenter)
@@ -685,7 +541,7 @@ fun SettingsScreen(
 
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        // Active Mode Info Card (Translucent Dark Glass Pill)
+                        // Active Engine & Signature Mode Info Card
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -699,18 +555,37 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = eqState.currentMode.title,
-                                        color = TextWhite,
-                                        fontSize = 12.5.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = eqState.currentMode.subtitle,
-                                        color = Color(0x99FFFFFF),
-                                        fontSize = 10.sp
-                                    )
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0x24FFFFFF)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        com.musync.app.ui.components.SoundEngineSymbol(
+                                            engineId = eqState.currentEngine.id,
+                                            tint = TextWhite,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = eqState.currentMode.title,
+                                            color = TextWhite,
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = eqState.currentMode.subtitle,
+                                            color = Color(0x99FFFFFF),
+                                            fontSize = 10.sp
+                                        )
+                                    }
                                 }
 
                                 val modeTag = eqState.currentMode.recommendationTag

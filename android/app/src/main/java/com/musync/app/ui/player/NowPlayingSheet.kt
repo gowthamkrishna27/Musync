@@ -49,6 +49,7 @@ import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import com.musync.app.ui.components.AddToPlaylistDialog
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GraphicEq
@@ -631,7 +632,7 @@ fun NowPlayingSheet(
         val authManager = app.container.authManager
         val currentUser by authManager.currentUser.collectAsState()
         val isLoggedIn = currentUser != null && !currentUser!!.isAnonymous
-        val eqSheetState = rememberModalBottomSheetState()
+        val eqSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
         var isEngineDropdownExpanded by remember { mutableStateOf(false) }
 
@@ -703,20 +704,38 @@ fun NowPlayingSheet(
                             )
                         }
                     }
-                    if (isLoggedIn) {
-                        Switch(
-                            checked = eqState.isEnabled,
-                            onCheckedChange = {
-                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                audioEffectManager.setEnabled(it)
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.Black,
-                                checkedTrackColor = Color.White,
-                                uncheckedThumbColor = TextGreyMuted,
-                                uncheckedTrackColor = Color(0x22FFFFFF)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (isLoggedIn) {
+                            Switch(
+                                checked = eqState.isEnabled,
+                                onCheckedChange = {
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    audioEffectManager.setEnabled(it)
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.Black,
+                                    checkedTrackColor = Color.White,
+                                    uncheckedThumbColor = TextGreyMuted,
+                                    uncheckedTrackColor = Color(0x22FFFFFF)
+                                )
                             )
-                        )
+                            Spacer(modifier = Modifier.width(10.dp))
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color(0x22FFFFFF))
+                                .clickable { showEqualizerSheet = false },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
 
@@ -781,25 +800,77 @@ fun NowPlayingSheet(
                         }
                     }
                 } else {
-                    // 1. Translucent Dark Glass Drop Box for Engine Selection
+                    // Direct 7 Actual Sound Engines
                     Text(
-                        text = "SOUND ENGINE",
+                        text = "SOUND ENGINES",
                         color = Color(0x88FFFFFF),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
+                    val signatureEngines = com.musync.app.playback.SoundEngineRegistry.signatureEngines
+
+                    // 7 Engine Square Buttons Row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        signatureEngines.forEach { engineMode ->
+                            val isEngineSelected = eqState.currentEngine == engineMode.engine
+
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(
+                                        if (isEngineSelected && eqState.isEnabled) Color(0x38FFFFFF) else Color(0x14FFFFFF)
+                                    )
+                                    .border(
+                                        if (isEngineSelected && eqState.isEnabled) 1.5.dp else 1.dp,
+                                        if (isEngineSelected && eqState.isEnabled) Color.White else Color(0x24FFFFFF),
+                                        RoundedCornerShape(14.dp)
+                                    )
+                                    .clickable {
+                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                        audioEffectManager.setEngineMode(engineMode)
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                com.musync.app.ui.components.SoundEngineSymbol(
+                                    engineId = engineMode.engine.id,
+                                    tint = if (isEngineSelected && eqState.isEnabled) Color.White else Color(0x77FFFFFF),
+                                    modifier = Modifier.size(24.dp)
+                                )
+
+                                if (isEngineSelected && eqState.isEnabled) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomCenter)
+                                            .padding(bottom = 4.dp)
+                                            .size(4.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Active Engine & Signature Mode Info Card
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .background(Color(0x18FFFFFF))
-                            .border(1.dp, if (isEngineDropdownExpanded) Color(0x66FFFFFF) else Color(0x28FFFFFF), RoundedCornerShape(16.dp))
-                            .clickable { isEngineDropdownExpanded = !isEngineDropdownExpanded }
-                            .padding(horizontal = 16.dp, vertical = 13.dp)
+                            .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(14.dp))
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -826,196 +897,17 @@ fun NowPlayingSheet(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = eqState.currentEngine.title,
+                                        text = eqState.currentMode.title,
                                         color = TextWhite,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold
                                     )
-                                    Spacer(modifier = Modifier.height(1.dp))
                                     Text(
-                                        text = eqState.currentEngine.recommendation,
+                                        text = eqState.currentMode.subtitle,
                                         color = Color(0x99FFFFFF),
-                                        fontSize = 10.5.sp
+                                        fontSize = 11.sp
                                     )
                                 }
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0x1EFFFFFF)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = if (isEngineDropdownExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                    contentDescription = "Dropdown",
-                                    tint = TextWhite,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // Expanded Translucent Dark Glass Dropdown List
-                    if (isEngineDropdownExpanded) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0x24FFFFFF))
-                                .border(1.dp, Color(0x38FFFFFF), RoundedCornerShape(16.dp))
-                                .padding(6.dp)
-                        ) {
-                            com.musync.app.playback.SoundEngine.values().forEach { engine ->
-                                val isEngineSelected = eqState.currentEngine == engine
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (isEngineSelected) Color(0x38FFFFFF) else Color.Transparent)
-                                        .clickable {
-                                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                            audioEffectManager.selectEngine(engine)
-                                            isEngineDropdownExpanded = false
-                                        }
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(if (isEngineSelected) Color(0x40FFFFFF) else Color(0x18FFFFFF)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        com.musync.app.ui.components.SoundEngineSymbol(
-                                            engineId = engine.id,
-                                            tint = if (isEngineSelected) Color.White else Color(0x88FFFFFF),
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = engine.title,
-                                            color = TextWhite,
-                                            fontSize = 13.sp,
-                                            fontWeight = if (isEngineSelected) FontWeight.Bold else FontWeight.Medium
-                                        )
-                                        Text(
-                                            text = engine.recommendation,
-                                            color = Color(0x88FFFFFF),
-                                            fontSize = 10.sp
-                                        )
-                                    }
-                                    if (isEngineSelected) {
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = "Selected",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    // 2. Square Symboled Mode Buttons
-                    Text(
-                        text = "${eqState.currentEngine.title.uppercase()} MODES",
-                        color = Color(0x88FFFFFF),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    val engineModes = com.musync.app.playback.SoundEngineRegistry.getModesForEngine(eqState.currentEngine)
-
-                    // Square Mode Buttons Row
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        engineModes.forEach { mode ->
-                            val isModeSelected = eqState.currentMode.id == mode.id
-
-                            Box(
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(
-                                        if (isModeSelected && eqState.isEnabled) Color(0x38FFFFFF) else Color(0x14FFFFFF)
-                                    )
-                                    .border(
-                                        if (isModeSelected && eqState.isEnabled) 1.5.dp else 1.dp,
-                                        if (isModeSelected && eqState.isEnabled) Color.White else Color(0x24FFFFFF),
-                                        RoundedCornerShape(14.dp)
-                                    )
-                                    .clickable {
-                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                        audioEffectManager.setEngineMode(mode)
-                                    },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                com.musync.app.ui.components.SoundModeSymbol(
-                                    iconType = mode.iconType,
-                                    modeId = mode.id,
-                                    tint = if (isModeSelected && eqState.isEnabled) Color.White else Color(0x77FFFFFF),
-                                    modifier = Modifier.size(24.dp)
-                                )
-
-                                if (isModeSelected && eqState.isEnabled) {
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.BottomCenter)
-                                            .padding(bottom = 4.dp)
-                                            .size(4.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Active Mode Info Card (Translucent Dark Glass Pill)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0x18FFFFFF))
-                            .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(14.dp))
-                            .padding(horizontal = 14.dp, vertical = 10.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = eqState.currentMode.title,
-                                    color = TextWhite,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = eqState.currentMode.subtitle,
-                                    color = Color(0x99FFFFFF),
-                                    fontSize = 10.5.sp
-                                )
                             }
 
                             val modeTag = eqState.currentMode.recommendationTag
@@ -1040,21 +932,21 @@ fun NowPlayingSheet(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 // High-contrast, always visible glossy Done Button
                 Button(
                     onClick = { showEqualizerSheet = false },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(50.dp),
+                        .height(52.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
                     shape = RoundedCornerShape(14.dp)
                 ) {
-                    Text("Done", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Done", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(40.dp))
             }
         }
     }
