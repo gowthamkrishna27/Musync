@@ -19,15 +19,16 @@ import kotlinx.coroutines.launch
 enum class SoundEngine(
     val id: String,
     val title: String,
-    val brandColorHex: Long
+    val recommendation: String,
+    val bestModeId: String
 ) {
-    DOLBY_ATMOS("dolby", "Dolby Atmos 3D", 0xFF6366F1),
-    SONY_360("sony", "Sony 360 Reality", 0xFF06B6D4),
-    DTS_X("dts", "DTS:X Ultra", 0xFFF59E0B),
-    BOSE_EQ("bose", "Bose ActiveEQ", 0xFF10B981),
-    SENNHEISER_AMBEO("ambeo", "Sennheiser AMBEO", 0xFF8B5CF6),
-    VIPER_FX("viper", "Viper Master FX", 0xFFEC4899),
-    HI_RES("hires", "Hi-Res Direct", 0xFFE2E8F0)
+    DOLBY_ATMOS("dolby", "Dolby Atmos 3D", "Recommended for 3D spatial soundstage & cinematic depth", "dolby_music"),
+    SONY_360("sony", "Sony 360 Reality", "Recommended for 360° object sound & live concert recordings", "sony_immersion"),
+    DTS_X("dts", "DTS:X Ultra", "Recommended for high-energy EDM, rock & dynamic punch", "dts_cinema"),
+    BOSE_EQ("bose", "Bose ActiveEQ", "Recommended for warm velvety lows & non-fatiguing daily listening", "bose_warm"),
+    SENNHEISER_AMBEO("ambeo", "Sennheiser AMBEO", "Recommended for acoustic tracks & holographic room decay", "ambeo_boost"),
+    VIPER_FX("viper", "Viper Master FX", "Recommended for heavy bassheads & analog tube warmth", "viper_tube"),
+    HI_RES("hires", "Hi-Res Direct", "Recommended for bit-perfect audiophile studio masters", "hires_direct")
 }
 
 data class EngineMode(
@@ -35,6 +36,7 @@ data class EngineMode(
     val engine: SoundEngine,
     val title: String,
     val description: String,
+    val recommendationTag: String? = null,
     val bassStrength: Short,
     val virtStrength: Short,
     val loudnessGain: Int,
@@ -50,6 +52,7 @@ object SoundEngineRegistry {
             engine = SoundEngine.DOLBY_ATMOS,
             title = "Dolby Music",
             description = "Expanded 3D soundstage, clear vocal separation & tight punchy bass",
+            recommendationTag = "★ BEST FOR DAILY LISTENING",
             bassStrength = 650,
             virtStrength = 750,
             loudnessGain = 220,
@@ -61,6 +64,7 @@ object SoundEngineRegistry {
             engine = SoundEngine.DOLBY_ATMOS,
             title = "Dolby Cinema",
             description = "360° spherical immersion, concert hall reverb & deep sub-woofer rumble",
+            recommendationTag = "★ BEST FOR IMMERSIVE CINEMA",
             bassStrength = 850,
             virtStrength = 950,
             loudnessGain = 320,
@@ -72,6 +76,7 @@ object SoundEngineRegistry {
             engine = SoundEngine.DOLBY_ATMOS,
             title = "Dolby Studio",
             description = "Intimate room acoustics with elevated dialogue clarity and zero echo",
+            recommendationTag = "★ BEST FOR PODCASTS & VOCALS",
             bassStrength = 300,
             virtStrength = 500,
             loudnessGain = 150,
@@ -83,6 +88,7 @@ object SoundEngineRegistry {
             engine = SoundEngine.DOLBY_ATMOS,
             title = "Dynamic Bass Matrix",
             description = "Sub-harmonic bass exciter with tight and punchy transient response",
+            recommendationTag = "★ BEST FOR PUNCHY BASS",
             bassStrength = 950,
             virtStrength = 400,
             loudnessGain = 300,
@@ -96,6 +102,7 @@ object SoundEngineRegistry {
             engine = SoundEngine.SONY_360,
             title = "360° Object Immersion",
             description = "Spherical 3D field with instruments placed in surrounding coordinate space",
+            recommendationTag = "★ BEST FOR SPATIAL 360°",
             bassStrength = 450,
             virtStrength = 950,
             loudnessGain = 200,
@@ -107,6 +114,7 @@ object SoundEngineRegistry {
             engine = SoundEngine.SONY_360,
             title = "Live Arena Sound",
             description = "Expanded stadium acoustics with wide acoustic boundary reflections",
+            recommendationTag = "★ BEST FOR CONCERTS",
             bassStrength = 600,
             virtStrength = 900,
             loudnessGain = 250,
@@ -118,6 +126,7 @@ object SoundEngineRegistry {
             engine = SoundEngine.SONY_360,
             title = "Vocal Center Stage",
             description = "Front-anchored vocal isolation with surrounding airy background instruments",
+            recommendationTag = "★ BEST FOR ACOUSTIC & VOCALS",
             bassStrength = 200,
             virtStrength = 700,
             loudnessGain = 180,
@@ -131,6 +140,7 @@ object SoundEngineRegistry {
             engine = SoundEngine.DTS_X,
             title = "DTS:X Cinema",
             description = "High dynamic range multi-channel surround with deep sub-bass roar",
+            recommendationTag = "★ BEST FOR SURROUND SOUND",
             bassStrength = 850,
             virtStrength = 950,
             loudnessGain = 350,
@@ -142,6 +152,7 @@ object SoundEngineRegistry {
             engine = SoundEngine.DTS_X,
             title = "Heavy Impact",
             description = "Maximum transient slam & high-gain punch optimized for EDM and Rock",
+            recommendationTag = "★ BEST FOR EDM & ROCK",
             bassStrength = 950,
             virtStrength = 850,
             loudnessGain = 400,
@@ -153,6 +164,7 @@ object SoundEngineRegistry {
             engine = SoundEngine.DTS_X,
             title = "Dynamic Studio",
             description = "Balanced spatial multi-channel audio with crystal treble presence",
+            recommendationTag = "★ BEST FOR STUDIO DYNAMICS",
             bassStrength = 650,
             virtStrength = 800,
             loudnessGain = 250,
@@ -166,6 +178,7 @@ object SoundEngineRegistry {
             engine = SoundEngine.BOSE_EQ,
             title = "Warm Balance",
             description = "Velvety smooth lows, rich midrange presence, and fatigue-free highs",
+            recommendationTag = "★ BEST FOR BALANCED AUDIO",
             bassStrength = 700,
             virtStrength = 450,
             loudnessGain = 220,
@@ -177,6 +190,7 @@ object SoundEngineRegistry {
             engine = SoundEngine.BOSE_EQ,
             title = "Deep Bass Contour",
             description = "Sub-harmonic bass boost with dynamic active volume contouring",
+            recommendationTag = "★ BEST FOR DEEP LOWS",
             bassStrength = 900,
             virtStrength = 300,
             loudnessGain = 300,
@@ -188,6 +202,7 @@ object SoundEngineRegistry {
             engine = SoundEngine.BOSE_EQ,
             title = "Acoustic Clarity",
             description = "Crystal acoustic instrument separation and crisp front-stage vocal lift",
+            recommendationTag = "★ BEST FOR VOCAL CLARITY",
             bassStrength = 350,
             virtStrength = 500,
             loudnessGain = 180,
@@ -197,21 +212,11 @@ object SoundEngineRegistry {
 
         // 5. Sennheiser AMBEO 3D Modes
         EngineMode(
-            id = "ambeo_natural",
-            engine = SoundEngine.SENNHEISER_AMBEO,
-            title = "AMBEO Natural",
-            description = "True holographic acoustic depth with uncolored natural room decay",
-            bassStrength = 350,
-            virtStrength = 600,
-            loudnessGain = 120,
-            reverbPreset = PresetReverb.PRESET_SMALLROOM,
-            bandGains = listOf(150, 100, 300, 450, 400)
-        ),
-        EngineMode(
             id = "ambeo_boost",
             engine = SoundEngine.SENNHEISER_AMBEO,
             title = "AMBEO 3D Boost",
             description = "High-definition spherical sound field with rich spatial reverb",
+            recommendationTag = "★ BEST FOR HOLOGRAPHIC 3D",
             bassStrength = 500,
             virtStrength = 900,
             loudnessGain = 250,
@@ -219,10 +224,23 @@ object SoundEngineRegistry {
             bandGains = listOf(350, 200, 400, 600, 600)
         ),
         EngineMode(
+            id = "ambeo_natural",
+            engine = SoundEngine.SENNHEISER_AMBEO,
+            title = "AMBEO Natural",
+            description = "True holographic acoustic depth with uncolored natural room decay",
+            recommendationTag = "★ BEST FOR NATURAL ACOUSTICS",
+            bassStrength = 350,
+            virtStrength = 600,
+            loudnessGain = 120,
+            reverbPreset = PresetReverb.PRESET_SMALLROOM,
+            bandGains = listOf(150, 100, 300, 450, 400)
+        ),
+        EngineMode(
             id = "ambeo_concert",
             engine = SoundEngine.SENNHEISER_AMBEO,
             title = "AMBEO Concert Hall",
             description = "Concert hall acoustic reflections with deep low-end resonance",
+            recommendationTag = "★ BEST FOR WIDE STAGES",
             bassStrength = 650,
             virtStrength = 950,
             loudnessGain = 280,
@@ -236,6 +254,7 @@ object SoundEngineRegistry {
             engine = SoundEngine.VIPER_FX,
             title = "Vacuum Tube Warmth",
             description = "Analog tube harmonic saturation for a warm, vinyl-like vintage tone",
+            recommendationTag = "★ BEST FOR VINTAGE ANALOG",
             bassStrength = 750,
             virtStrength = 600,
             loudnessGain = 300,
@@ -247,6 +266,7 @@ object SoundEngineRegistry {
             engine = SoundEngine.VIPER_FX,
             title = "Sub-Harmonic Exciter",
             description = "Massive club subwoofer rumble with tight bass transients",
+            recommendationTag = "★ BEST FOR BASSHEADS",
             bassStrength = 1000,
             virtStrength = 700,
             loudnessGain = 400,
@@ -258,6 +278,7 @@ object SoundEngineRegistry {
             engine = SoundEngine.VIPER_FX,
             title = "Ultra Clarity & Air",
             description = "Crisp upper treble sparkle with widened stereo imaging",
+            recommendationTag = "★ BEST FOR HIGHS & AIR",
             bassStrength = 400,
             virtStrength = 750,
             loudnessGain = 220,
@@ -271,6 +292,7 @@ object SoundEngineRegistry {
             engine = SoundEngine.HI_RES,
             title = "Bit-Perfect Direct",
             description = "Pure uncompressed studio master audio with zero DSP coloration",
+            recommendationTag = "★ AUDIOPHILE BIT-PERFECT",
             bassStrength = 0,
             virtStrength = 0,
             loudnessGain = 0,
@@ -492,7 +514,9 @@ class AudioEffectManager(
     }
 
     fun selectEngine(engine: SoundEngine) {
-        val defaultMode = SoundEngineRegistry.getModesForEngine(engine).firstOrNull() ?: SoundEngineRegistry.allModes.first()
+        val defaultMode = SoundEngineRegistry.allModes.find { it.id == engine.bestModeId }
+            ?: SoundEngineRegistry.getModesForEngine(engine).firstOrNull()
+            ?: SoundEngineRegistry.allModes.first()
         setEngineMode(defaultMode)
     }
 

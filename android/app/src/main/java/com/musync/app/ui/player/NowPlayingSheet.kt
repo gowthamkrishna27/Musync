@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
@@ -633,10 +634,12 @@ fun NowPlayingSheet(
         val isLoggedIn = currentUser != null && !currentUser!!.isAnonymous
         val eqSheetState = rememberModalBottomSheetState()
 
+        var isEngineDropdownExpanded by remember { mutableStateOf(false) }
+
         ModalBottomSheet(
             onDismissRequest = { showEqualizerSheet = false },
             sheetState = eqSheetState,
-            containerColor = Color(0xF50D0D12),
+            containerColor = Color(0xF20F0F14),
             dragHandle = {
                 Box(
                     modifier = Modifier
@@ -644,7 +647,7 @@ fun NowPlayingSheet(
                         .width(38.dp)
                         .height(4.dp)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(Color(0x44FFFFFF))
+                        .background(Color(0x33FFFFFF))
                 )
             },
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
@@ -653,9 +656,9 @@ fun NowPlayingSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 12.dp)
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
             ) {
-                // Header + Master Toggle
+                // Header + Master Toggle (Dark Glass, no accent colors)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -664,30 +667,30 @@ fun NowPlayingSheet(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
-                                .size(42.dp)
+                                .size(40.dp)
                                 .clip(CircleShape)
-                                .background(if (isLoggedIn && eqState.isDolbyActive) Color(0xFF4F46E5) else Color(0xFF1E1E24))
-                                .border(1.dp, if (isLoggedIn && eqState.isDolbyActive) Color(0xFF818CF8) else Color(0x22FFFFFF), CircleShape),
+                                .background(Color(0x18FFFFFF))
+                                .border(1.dp, Color(0x28FFFFFF), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.GraphicEq,
                                 contentDescription = null,
-                                tint = if (isLoggedIn && eqState.isDolbyActive) Color.White else IconGrey,
-                                modifier = Modifier.size(22.dp)
+                                tint = if (isLoggedIn && eqState.isEnabled) Color.White else IconGrey,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "Studio & Spatial Engines",
+                                text = "Studio & Spatial Audio",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                 color = TextWhite
                             )
                             Text(
-                                text = if (!isLoggedIn) "Member Exclusive" else if (eqState.isEnabled) "Active: ${eqState.currentEngine.title}" else "Bypassed",
+                                text = if (!isLoggedIn) "Member Exclusive" else if (eqState.isEnabled) "DSP Engine Active" else "Bypassed",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = if (!isLoggedIn) Color(0xFFF59E0B) else if (eqState.isEnabled) Color(eqState.currentEngine.brandColorHex) else TextGreyMuted
+                                color = if (!isLoggedIn) Color(0xBBFFFFFF) else if (eqState.isEnabled) Color.White else TextGreyMuted
                             )
                         }
                     }
@@ -696,10 +699,10 @@ fun NowPlayingSheet(
                             checked = eqState.isEnabled,
                             onCheckedChange = { audioEffectManager.setEnabled(it) },
                             colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = Color(0xFF4F46E5),
+                                checkedThumbColor = Color.Black,
+                                checkedTrackColor = Color.White,
                                 uncheckedThumbColor = TextGreyMuted,
-                                uncheckedTrackColor = Color(0xFF22222A)
+                                uncheckedTrackColor = Color(0x22FFFFFF)
                             )
                         )
                     }
@@ -708,17 +711,13 @@ fun NowPlayingSheet(
                 Spacer(modifier = Modifier.height(18.dp))
 
                 if (!isLoggedIn) {
-                    // Glassmorphic Member Exclusive Lock Card
+                    // Minimalist Dark Frosted Lock Card
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(20.dp))
-                            .background(
-                                androidx.compose.ui.graphics.Brush.verticalGradient(
-                                    listOf(Color(0x334F46E5), Color(0x150F172A), Color(0x0A000000))
-                                )
-                            )
-                            .border(1.dp, Color(0x44818CF8), RoundedCornerShape(20.dp))
+                            .background(Color(0x14FFFFFF))
+                            .border(1.dp, Color(0x26FFFFFF), RoundedCornerShape(20.dp))
                             .padding(20.dp)
                     ) {
                         Column(
@@ -727,34 +726,34 @@ fun NowPlayingSheet(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(52.dp)
+                                    .size(48.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF4F46E5)),
+                                    .background(Color(0x22FFFFFF)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Lock,
                                     contentDescription = null,
                                     tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
                             Text(
                                 text = "Member Exclusive Sound Engine",
                                 color = TextWhite,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
+                                fontSize = 15.sp
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Sign in to unlock Dolby Atmos 3D Spatial Surround, custom psychoacoustic hardware curves, and concert hall soundstage.",
-                                color = TextGreySecondary,
+                                text = "Sign in to unlock all 7 spatial sound engines, sub-modes, and psychoacoustic hardware DSP.",
+                                color = Color(0x99FFFFFF),
                                 fontSize = 12.sp,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                lineHeight = 18.sp
+                                lineHeight = 17.sp
                             )
-                            Spacer(modifier = Modifier.height(18.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
                             Button(
                                 onClick = {
                                     showEqualizerSheet = false
@@ -762,7 +761,7 @@ fun NowPlayingSheet(
                                 },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(46.dp),
+                                    .height(44.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
@@ -771,68 +770,131 @@ fun NowPlayingSheet(
                         }
                     }
                 } else {
+                    // 1. Clean Dark Glass Drop Box for Engine Selection
                     Text(
-                        text = "SELECT SOUND ENGINE",
-                        color = Color(0xFF818CF8),
-                        fontSize = 11.sp,
+                        text = "SOUND ENGINE",
+                        color = Color(0x88FFFFFF),
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    // 1. Horizontal Sound Engine Selector
-                    Row(
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0x14FFFFFF))
+                            .border(1.dp, if (isEngineDropdownExpanded) Color(0x66FFFFFF) else Color(0x24FFFFFF), RoundedCornerShape(16.dp))
+                            .clickable { isEngineDropdownExpanded = !isEngineDropdownExpanded }
+                            .padding(horizontal = 16.dp, vertical = 14.dp)
                     ) {
-                        com.musync.app.playback.SoundEngine.values().forEach { engine ->
-                            val isSelected = eqState.currentEngine == engine
-                            val brandColor = Color(engine.brandColorHex)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = eqState.currentEngine.title,
+                                    color = TextWhite,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = eqState.currentEngine.recommendation,
+                                    color = Color(0x99FFFFFF),
+                                    fontSize = 11.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(
-                                        if (isSelected && eqState.isEnabled) brandColor else Color(0x18FFFFFF)
-                                    )
-                                    .border(
-                                        1.dp,
-                                        if (isSelected && eqState.isEnabled) brandColor else Color(0x22FFFFFF),
-                                        RoundedCornerShape(16.dp)
-                                    )
-                                    .clickable {
-                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                        audioEffectManager.selectEngine(engine)
-                                    }
-                                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                                    .size(30.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0x14FFFFFF)),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = engine.title,
-                                    color = if (isSelected && eqState.isEnabled) Color.Black else TextWhite,
-                                    fontSize = 12.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                Icon(
+                                    imageVector = if (isEngineDropdownExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "Dropdown",
+                                    tint = TextWhite,
+                                    modifier = Modifier.size(18.dp)
                                 )
+                            }
+                        }
+                    }
+
+                    // Expanded Dark Glass Dropdown List
+                    if (isEngineDropdownExpanded) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color(0x1CFFFFFF))
+                                .border(1.dp, Color(0x30FFFFFF), RoundedCornerShape(16.dp))
+                                .padding(6.dp)
+                        ) {
+                            com.musync.app.playback.SoundEngine.values().forEach { engine ->
+                                val isEngineSelected = eqState.currentEngine == engine
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (isEngineSelected) Color(0x2EFFFFFF) else Color.Transparent)
+                                        .clickable {
+                                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                            audioEffectManager.selectEngine(engine)
+                                            isEngineDropdownExpanded = false
+                                        }
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = engine.title,
+                                            color = TextWhite,
+                                            fontSize = 14.sp,
+                                            fontWeight = if (isEngineSelected) FontWeight.Bold else FontWeight.Medium
+                                        )
+                                        Spacer(modifier = Modifier.height(1.dp))
+                                        Text(
+                                            text = engine.recommendation,
+                                            color = Color(0x88FFFFFF),
+                                            fontSize = 10.sp
+                                        )
+                                    }
+                                    if (isEngineSelected) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = "Selected",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(20.dp))
 
+                    // 2. Simple Engine Mode Cards with Recommendations
                     Text(
                         text = "${eqState.currentEngine.title.uppercase()} MODES",
-                        color = Color(eqState.currentEngine.brandColorHex),
-                        fontSize = 11.sp,
+                        color = Color(0x88FFFFFF),
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    // 2. Sub-Modes List for Active Engine
                     val engineModes = com.musync.app.playback.SoundEngineRegistry.getModesForEngine(eqState.currentEngine)
-                    val activeBrandColor = Color(eqState.currentEngine.brandColorHex)
 
                     engineModes.forEach { mode ->
                         val isModeSelected = eqState.currentMode.id == mode.id
@@ -843,19 +905,11 @@ fun NowPlayingSheet(
                                 .padding(vertical = 4.dp)
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(
-                                    if (isModeSelected && eqState.isEnabled) {
-                                        androidx.compose.ui.graphics.Brush.horizontalGradient(
-                                            listOf(activeBrandColor.copy(alpha = 0.25f), Color(0x101E1B4B))
-                                        )
-                                    } else {
-                                        androidx.compose.ui.graphics.Brush.horizontalGradient(
-                                            listOf(Color(0x14FFFFFF), Color(0x0AFFFFFF))
-                                        )
-                                    }
+                                    if (isModeSelected && eqState.isEnabled) Color(0x28FFFFFF) else Color(0x10FFFFFF)
                                 )
                                 .border(
                                     1.dp,
-                                    if (isModeSelected && eqState.isEnabled) activeBrandColor else Color(0x1FFFFFFF),
+                                    if (isModeSelected && eqState.isEnabled) Color(0x66FFFFFF) else Color(0x18FFFFFF),
                                     RoundedCornerShape(16.dp)
                                 )
                                 .clickable {
@@ -864,62 +918,64 @@ fun NowPlayingSheet(
                                 }
                                 .padding(14.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (isModeSelected && eqState.isEnabled) activeBrandColor else Color(0x18FFFFFF)
-                                        ),
-                                    contentAlignment = Alignment.Center
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.GraphicEq,
-                                        contentDescription = mode.title,
-                                        tint = if (isModeSelected && eqState.isEnabled) Color.Black else IconGrey,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.width(12.dp))
-
-                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = mode.title,
                                         color = TextWhite,
                                         fontSize = 14.sp,
-                                        fontWeight = if (isModeSelected) FontWeight.Bold else FontWeight.SemiBold
+                                        fontWeight = if (isModeSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                        modifier = Modifier.weight(1f)
                                     )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = mode.description,
-                                        color = if (isModeSelected && eqState.isEnabled) activeBrandColor.copy(alpha = 0.9f) else TextGreySecondary,
-                                        fontSize = 11.sp
-                                    )
-                                }
 
-                                Spacer(modifier = Modifier.width(10.dp))
+                                    if (mode.recommendationTag != null) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(if (isModeSelected) Color(0x33FFFFFF) else Color(0x14FFFFFF))
+                                                .border(1.dp, Color(0x20FFFFFF), RoundedCornerShape(6.dp))
+                                                .padding(horizontal = 7.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = mode.recommendationTag,
+                                                color = Color(0xDDFFFFFF),
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.4.sp
+                                            )
+                                        }
+                                    }
 
-                                if (isModeSelected && eqState.isEnabled) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(22.dp)
-                                            .clip(CircleShape)
-                                            .background(activeBrandColor),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = "Active",
-                                            tint = Color.Black,
-                                            modifier = Modifier.size(14.dp)
-                                        )
+                                    if (isModeSelected && eqState.isEnabled) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.White),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "Active",
+                                                tint = Color.Black,
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                        }
                                     }
                                 }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = mode.description,
+                                    color = if (isModeSelected && eqState.isEnabled) Color(0xCCFFFFFF) else Color(0x80FFFFFF),
+                                    fontSize = 11.sp,
+                                    lineHeight = 15.sp
+                                )
                             }
                         }
                     }
