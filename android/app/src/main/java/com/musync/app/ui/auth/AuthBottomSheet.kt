@@ -198,6 +198,45 @@ fun AuthBottomSheet(
                 textAlign = TextAlign.Center
             )
 
+            // Mode Selector: Sign In vs Sign Up
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0x22FFFFFF))
+                    .padding(3.dp),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (!isSignUpMode) Color.White else Color.Transparent)
+                        .clickable { isSignUpMode = false }
+                        .padding(horizontal = 24.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "Sign In",
+                        color = if (!isSignUpMode) Color.Black else TextGreySecondary,
+                        fontSize = 13.sp,
+                        fontWeight = if (!isSignUpMode) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isSignUpMode) Color.White else Color.Transparent)
+                        .clickable { isSignUpMode = true }
+                        .padding(horizontal = 24.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "Sign Up",
+                        color = if (isSignUpMode) Color.Black else TextGreySecondary,
+                        fontSize = 13.sp,
+                        fontWeight = if (isSignUpMode) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
             AnimatedVisibility(visible = authError != null) {
@@ -217,7 +256,7 @@ fun AuthBottomSheet(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             } else {
-                // 1. Google Sign-In Button
+                // 1. Google Sign-In / Sign-Up Button
                 Button(
                     onClick = {
                         authManager.clearAuthError()
@@ -254,7 +293,7 @@ fun AuthBottomSheet(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Continue with Google",
+                            text = if (isSignUpMode) "Sign up with Google" else "Sign in with Google",
                             color = Color.Black,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
@@ -264,7 +303,7 @@ fun AuthBottomSheet(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // 2. GitHub Sign-In Button
+                // 2. GitHub Sign-In / Sign-Up Button
                 Button(
                     onClick = {
                         val activity = findActivity(context)
@@ -301,7 +340,7 @@ fun AuthBottomSheet(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Continue with GitHub",
+                            text = if (isSignUpMode) "Sign up with GitHub" else "Sign in with GitHub",
                             color = Color.White,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
@@ -330,7 +369,7 @@ fun AuthBottomSheet(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Continue with Email",
+                            text = if (isSignUpMode) "Sign up with Email" else "Sign in with Email",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium
                         )
