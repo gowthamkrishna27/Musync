@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.player
+package com.musync.app.ui.player
 
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
@@ -295,7 +295,7 @@ fun NowPlayingSheet(
                     contentAlignment = Alignment.Center
                 ) {
                     val rawUrl = track.artworkUrl
-                    val imageRequest = com.musync.app.util.ImageQualityHelper.buildOptimizedImageRequest(
+                    val imageRequest = com.musync.app.core.image.ImageQualityHelper.buildOptimizedImageRequest(
                         context = LocalContext.current,
                         url = rawUrl,
                         videoId = track.id
