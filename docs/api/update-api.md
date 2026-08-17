@@ -13,8 +13,8 @@ Queries the latest GitHub Releases tag and returns update metadata with direct d
 
 ```json
 {
-  "version": "1.1.4.2",
-  "tag_name": "v1.1.4.2",
+  "version": "1.1.4.3",
+  "tag_name": "v1.1.4.3",
   "changelog": "Dual-band haptic engine, 200MB local audio cache, and performance improvements.",
   "download_url": "https://github.com/gowthamkrishna27/Musync/releases/latest/download/Musync.apk",
   "direct_url": "http://localhost:5000/update/latest.apk"
