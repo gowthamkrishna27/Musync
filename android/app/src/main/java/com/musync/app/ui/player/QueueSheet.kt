@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.player
+package com.musync.app.ui.player
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -28,8 +28,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,6 +55,13 @@ fun QueueSheet(
     onRemoveFromQueue: (String) -> Unit,
     onClearQueue: () -> Unit
 ) {
+    val context = LocalContext.current
+    val app = context.applicationContext as com.musync.app.MusyncApplication
+    val recommendationViewModel: RecommendationViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = RecommendationViewModel.Factory(app.container.playbackManager, app.container.musicRepository)
+    )
+    val recUiState by recommendationViewModel.uiState.collectAsState()
+
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
@@ -194,6 +204,19 @@ fun QueueSheet(
                                 )
                             }
                         }
+                    }
+
+                    // Section: You May Also Like
+                    item {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        RecommendationSection(
+                            uiState = recUiState,
+                            onTrackClick = { recommendedTrack ->
+                                app.container.playbackManager.play(recommendedTrack)
+                                onDismiss()
+                            },
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
                     }
                 }
             }

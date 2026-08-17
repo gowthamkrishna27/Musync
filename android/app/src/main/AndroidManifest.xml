@@ -85,6 +85,31 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <!--
+            Required for Firebase OAuthProvider (GitHub, Twitter, Microsoft, etc.) sign-in.
+            Firebase uses a Chrome Custom Tab to open the OAuth provider's auth page.
+            After the user authorizes, the provider redirects to
+            https://<project-id>.firebaseapp.com/__/auth/handler, which in turn
+            redirects back into the app via this activity.
+            This entry ensures the redirect is captured correctly on all OEM ROMs.
+        -->
+        <activity
+            android:name="com.google.firebase.auth.internal.GenericIdpActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="musync-d9db5.firebaseapp.com"
+                    android:path="/__/auth/handler"
+                    android:scheme="https" />
+            </intent-filter>
+        </activity>
+
     </application>
 
 </manifest>

@@ -1,4 +1,4 @@
-﻿package com.musync.app.data.repository
+package com.musync.app.data.repository
 
 import com.musync.app.data.local.database.dao.FavoritesDao
 import com.musync.app.data.local.database.dao.PlaylistDao
@@ -90,10 +90,19 @@ class MusicRepositoryImpl(
     override suspend fun testConnection(baseUrl: String?, apiKey: String?): Boolean {
         return provider.testConnection(baseUrl, apiKey)
     }
+
+    override suspend fun getRecommendations(trackId: String, limit: Int): Result<List<Track>> = runCatching {
+        val tracks = provider.getRecommendations(trackId, limit)
+        if (tracks.isNotEmpty()) {
+            trackCacheDao.insertCachedTracks(tracks.map { CachedTrackEntity.fromTrack(it) })
+        }
+        tracks
+    }
 }
 
 class FavoritesRepositoryImpl(
-    private val favoritesDao: FavoritesDao
+    private val favoritesDao: FavoritesDao,
+    private val cloudSyncManager: com.musync.app.data.sync.CloudSyncManager? = null
 ) : FavoritesRepository {
 
     override fun getFavorites(): Flow<List<Track>> {
@@ -108,18 +117,23 @@ class FavoritesRepositoryImpl(
         val exists = favoritesDao.isFavoriteSync(track.id)
         if (exists) {
             favoritesDao.deleteFavorite(track.id)
+            cloudSyncManager?.syncSingleFavorite(track, isFavorite = false)
         } else {
             favoritesDao.insertFavorite(FavoriteEntity.fromTrack(track))
+            cloudSyncManager?.syncSingleFavorite(track, isFavorite = true)
         }
     }
 
     override suspend fun removeFavorite(trackId: String) {
         favoritesDao.deleteFavorite(trackId)
+        val dummyTrack = Track(id = trackId, title = "", artist = Artist(id = "", name = ""))
+        cloudSyncManager?.syncSingleFavorite(dummyTrack, isFavorite = false)
     }
 }
 
 class PlaylistRepositoryImpl(
-    private val playlistDao: PlaylistDao
+    private val playlistDao: PlaylistDao,
+    private val cloudSyncManager: com.musync.app.data.sync.CloudSyncManager? = null
 ) : PlaylistRepository {
 
     override fun getPlaylists(): Flow<List<Playlist>> {
@@ -156,23 +170,28 @@ class PlaylistRepositoryImpl(
     }
 
     override suspend fun createPlaylist(name: String, description: String?): Long {
-        return playlistDao.insertPlaylist(
+        val id = playlistDao.insertPlaylist(
             PlaylistEntity(
                 name = name,
                 description = description
             )
         )
+        cloudSyncManager?.syncCreateOrUpdatePlaylist(id, name, description)
+        return id
     }
 
     override suspend fun renamePlaylist(playlistId: String, newName: String) {
         playlistId.toLongOrNull()?.let { id ->
             playlistDao.updatePlaylistName(id, newName)
+            val entity = playlistDao.getPlaylistById(id)
+            cloudSyncManager?.syncCreateOrUpdatePlaylist(id, newName, entity?.description, entity?.artworkUrl)
         }
     }
 
     override suspend fun deletePlaylist(playlistId: String) {
         playlistId.toLongOrNull()?.let { id ->
             playlistDao.deletePlaylist(id)
+            cloudSyncManager?.syncDeletePlaylist(id)
         }
     }
 
@@ -182,16 +201,19 @@ class PlaylistRepositoryImpl(
         playlistDao.insertPlaylistItem(
             PlaylistItemEntity.fromTrack(idLong, track, currentCount)
         )
+        cloudSyncManager?.syncAddTrackToPlaylist(idLong, track, currentCount)
     }
 
     override suspend fun removeTrackFromPlaylist(playlistId: String, trackId: String) {
         val idLong = playlistId.toLongOrNull() ?: return
         playlistDao.removeTrackFromPlaylist(idLong, trackId)
+        cloudSyncManager?.syncRemoveTrackFromPlaylist(idLong, trackId)
     }
 }
 
 class RecentlyPlayedRepositoryImpl(
-    private val recentlyPlayedDao: RecentlyPlayedDao
+    private val recentlyPlayedDao: RecentlyPlayedDao,
+    private val cloudSyncManager: com.musync.app.data.sync.CloudSyncManager? = null
 ) : RecentlyPlayedRepository {
 
     override fun getRecentlyPlayed(limit: Int): Flow<List<Track>> {
@@ -200,10 +222,12 @@ class RecentlyPlayedRepositoryImpl(
 
     override suspend fun recordPlayed(track: Track) {
         recentlyPlayedDao.insertRecentlyPlayed(RecentlyPlayedEntity.fromTrack(track))
+        cloudSyncManager?.syncRecordPlayed(track)
     }
 
     override suspend fun clearHistory() {
         recentlyPlayedDao.clearAll()
+        cloudSyncManager?.syncClearHistory()
     }
 }
 

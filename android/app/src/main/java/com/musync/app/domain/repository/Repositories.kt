@@ -1,4 +1,4 @@
-﻿package com.musync.app.domain.repository
+package com.musync.app.domain.repository
 
 import com.musync.app.domain.model.Album
 import com.musync.app.domain.model.Artist
@@ -18,6 +18,7 @@ interface MusicRepository {
     suspend fun getPlaylist(id: String): Result<Playlist?>
     suspend fun getStreamUrl(track: Track): String?
     suspend fun testConnection(baseUrl: String?, apiKey: String?): Boolean
+    suspend fun getRecommendations(trackId: String, limit: Int = 5): Result<List<Track>>
 }
 
 interface FavoritesRepository {

@@ -1,4 +1,4 @@
-﻿package com.musync.app.data.remote
+package com.musync.app.data.remote
 
 import com.musync.app.domain.model.Album
 import com.musync.app.domain.model.Artist
@@ -108,6 +108,10 @@ class UniversalMusicProvider(
             return ytMusicProvider.getStreamUrl(track)
         }
         return audiusProvider.getStreamUrl(track) ?: ytMusicProvider.getStreamUrl(track)
+    }
+
+    override suspend fun getRecommendations(trackId: String, limit: Int): List<Track> = withContext(Dispatchers.IO) {
+        ytMusicProvider.getRecommendations(trackId, limit)
     }
 }
 

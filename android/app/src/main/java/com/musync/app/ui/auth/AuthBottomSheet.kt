@@ -42,30 +42,90 @@ fun AuthBottomSheet(
     val isLoading by authManager.authLoading.collectAsState()
     val authError by authManager.authError.collectAsState()
 
+    // Resolve the web client ID at composition time with a safe fallback.
+    // The google-services Gradle plugin auto-generates default_web_client_id from the
+    // type-3 (Web) OAuth client in google-services.json. We also keep a hardcoded
+    // fallback so sign-in always receives a valid client ID.
+    val webClientId = remember {
+        val resId = context.resources.getIdentifier(
+            "default_web_client_id", "string", context.packageName
+        )
+        if (resId != 0) {
+            context.getString(resId)
+        } else {
+            // Fallback: type-3 web client ID from google-services.json
+            "989198851105-m97comku8uiv00cvilvvaen55m745o48.apps.googleusercontent.com"
+        }
+    }
+
     // Google Sign In Launcher
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
-            try {
-                val account = task.getResult(ApiException::class.java)
-                val idToken = account?.idToken
-                if (idToken != null) {
-                    coroutineScope.launch {
-                        val authResult = authManager.signInWithGoogleCredential(idToken)
-                        if (authResult.isSuccess) {
-                            onDismiss()
-                        }
-                    }
-                } else {
-                    android.util.Log.e("AuthBottomSheet", "Google Sign-In returned null ID token. Ensure SHA-1 and Google Provider are enabled in Firebase Console.")
-                }
-            } catch (e: ApiException) {
-                android.util.Log.e("AuthBottomSheet", "Google Sign-In failed with status code ${e.statusCode}: ${e.message}", e)
-            } catch (e: Exception) {
-                android.util.Log.e("AuthBottomSheet", "Google Sign-In unexpected error: ${e.message}", e)
+        android.util.Log.d("AUTH", "Google Sign-In activity result: resultCode=${result.resultCode}")
+
+        if (result.resultCode != Activity.RESULT_OK) {
+            // User cancelled or back-pressed — surface a friendly message, don't log silently.
+            android.util.Log.w("AUTH", "Google Sign-In cancelled or failed (resultCode=${result.resultCode})")
+            // Only set error if not a plain cancel to avoid annoying the user
+            if (result.resultCode != Activity.RESULT_CANCELED) {
+                authManager.setAuthError("Google Sign-In was interrupted. Please try again.")
             }
+            return@rememberLauncherForActivityResult
+        }
+
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            val idToken = account?.idToken
+
+            android.util.Log.d("AUTH", "Google Sign-In account obtained. idToken present: ${idToken != null}")
+
+            if (idToken != null) {
+                coroutineScope.launch {
+                    android.util.Log.d("AUTH", "AUTH: Firebase credential exchange started")
+                    val authResult = authManager.signInWithGoogleCredential(idToken)
+                    if (authResult.isSuccess) {
+                        android.util.Log.d("AUTH", "AUTH: success — currentUser present")
+                        onDismiss()
+                    } else {
+                        android.util.Log.e("AUTH", "AUTH: Firebase credential exchange failed", authResult.exceptionOrNull())
+                    }
+                }
+            } else {
+                // idToken is null — this means requestIdToken() was not called or web client ID is wrong.
+                val errorMsg = "Google Sign-In succeeded but returned no ID token. " +
+                    "Verify the Web Client ID in Firebase Console and ensure the SHA-1 fingerprint " +
+                    "is registered. webClientId=$webClientId"
+                android.util.Log.e("AUTH", errorMsg)
+                authManager.setAuthError("Sign-in failed: Could not obtain token. Please try again.")
+            }
+        } catch (e: ApiException) {
+            // Map common Google API status codes to actionable messages for debugging.
+            val statusCode = e.statusCode
+            val description = when (statusCode) {
+                7 -> "NETWORK_ERROR — No internet connection"
+                8 -> "INTERNAL_ERROR"
+                10 -> "DEVELOPER_ERROR — SHA-1 mismatch, wrong package name, or disabled Google provider in Firebase Console"
+                12500 -> "SIGN_IN_FAILED — Google Play Services update required"
+                12501 -> "SIGN_IN_CANCELLED — User cancelled"
+                12502 -> "SIGN_IN_CURRENTLY_IN_PROGRESS"
+                else -> "Unknown status code $statusCode"
+            }
+            android.util.Log.e("AUTH", "AUTH: Google Sign-In ApiException — code=$statusCode ($description)", e)
+
+            val userMessage = when (statusCode) {
+                7 -> "No internet connection. Please check your network."
+                10 -> "Sign-in configuration error (code 10). Check Firebase Console."
+                12501 -> null  // User intentionally cancelled — don't show error
+                else -> "Google Sign-In failed (code $statusCode). Please try again."
+            }
+            if (userMessage != null) {
+                authManager.setAuthError(userMessage)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("AUTH", "AUTH: Google Sign-In unexpected error: ${e.message}", e)
+            authManager.setAuthError("Unexpected error: ${e.localizedMessage}")
         }
     }
 
@@ -141,14 +201,21 @@ fun AuthBottomSheet(
                 // 1. Google Sign-In Button
                 Button(
                     onClick = {
-                        val clientIdResId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
-                        val gsoBuilder = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                        // Always build GSO with the resolved webClientId.
+                        // requestIdToken() MUST be called or idToken will be null.
+                        android.util.Log.d("AUTH", "AUTH: Google Sign-In requested. webClientId=$webClientId")
+                        authManager.clearAuthError()
+                        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                            .requestIdToken(webClientId)
                             .requestEmail()
-                        if (clientIdResId != 0) {
-                            gsoBuilder.requestIdToken(context.getString(clientIdResId))
+                            .requestProfile()
+                            .build()
+                        val googleSignInClient = GoogleSignIn.getClient(context, gso)
+                        // Sign out first to force account-picker every time.
+                        // Without this, a cached (stale) account may be used silently.
+                        googleSignInClient.signOut().addOnCompleteListener {
+                            googleSignInLauncher.launch(googleSignInClient.signInIntent)
                         }
-                        val googleSignInClient = GoogleSignIn.getClient(context, gsoBuilder.build())
-                        googleSignInLauncher.launch(googleSignInClient.signInIntent)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -185,12 +252,22 @@ fun AuthBottomSheet(
                 // 2. GitHub Sign-In Button
                 Button(
                     onClick = {
-                        if (context is Activity) {
-                            authManager.signInWithGitHub(context) { result ->
+                        // Cast context to Activity safely — find the underlying Activity
+                        // since LocalContext may be a ContextWrapper in some Compose trees.
+                        val activity = findActivity(context)
+                        if (activity != null) {
+                            android.util.Log.d("AUTH", "AUTH: GitHub Sign-In requested")
+                            authManager.clearAuthError()
+                            authManager.signInWithGitHub(activity) { result ->
                                 if (result.isSuccess) {
                                     onDismiss()
+                                } else {
+                                    android.util.Log.e("AUTH", "GitHub Sign-In failed", result.exceptionOrNull())
                                 }
                             }
+                        } else {
+                            android.util.Log.e("AUTH", "GitHub Sign-In failed: could not resolve Activity from context")
+                            authManager.setAuthError("GitHub Sign-In is not available in this context.")
                         }
                     },
                     modifier = Modifier
@@ -241,4 +318,17 @@ fun AuthBottomSheet(
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
+}
+
+/**
+ * Safely traverses the ContextWrapper chain to find the underlying Activity.
+ * Needed because LocalContext in Compose can return a ContextWrapper, not a raw Activity.
+ */
+private fun findActivity(context: android.content.Context): Activity? {
+    var ctx = context
+    while (ctx is android.content.ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }

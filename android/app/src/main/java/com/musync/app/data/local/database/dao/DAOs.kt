@@ -25,6 +25,9 @@ interface FavoritesDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertFavorite(favorite: FavoriteEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertFavorites(favorites: List<FavoriteEntity>)
+
     @Query("DELETE FROM favorites WHERE trackId = :trackId")
     suspend fun deleteFavorite(trackId: String)
 }
@@ -43,6 +46,9 @@ interface PlaylistDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPlaylist(playlist: PlaylistEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPlaylists(playlists: List<PlaylistEntity>)
+
     @Query("UPDATE playlists SET name = :newName WHERE id = :playlistId")
     suspend fun updatePlaylistName(playlistId: Long, newName: String)
 
@@ -55,11 +61,20 @@ interface PlaylistDao {
     @Query("SELECT * FROM playlist_items WHERE playlistId = :playlistId ORDER BY position ASC")
     suspend fun getPlaylistTracksSync(playlistId: Long): List<PlaylistItemEntity>
 
+    @Query("SELECT * FROM playlist_items ORDER BY playlistId ASC, position ASC")
+    suspend fun getAllPlaylistItems(): List<PlaylistItemEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPlaylistItem(item: PlaylistItemEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPlaylistItems(items: List<PlaylistItemEntity>)
+
     @Query("DELETE FROM playlist_items WHERE playlistId = :playlistId AND trackId = :trackId")
     suspend fun removeTrackFromPlaylist(playlistId: Long, trackId: String)
+
+    @Query("DELETE FROM playlist_items WHERE playlistId = :playlistId")
+    suspend fun clearPlaylistTracks(playlistId: Long)
 
     @Query("SELECT COUNT(*) FROM playlist_items WHERE playlistId = :playlistId")
     suspend fun getPlaylistTrackCount(playlistId: Long): Int
@@ -72,6 +87,9 @@ interface RecentlyPlayedDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRecentlyPlayed(entity: RecentlyPlayedEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRecentlyPlayedList(items: List<RecentlyPlayedEntity>)
 
     @Query("DELETE FROM recently_played")
     suspend fun clearAll()

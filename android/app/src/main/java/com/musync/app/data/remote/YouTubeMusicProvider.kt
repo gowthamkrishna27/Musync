@@ -1,4 +1,4 @@
-﻿package com.musync.app.data.remote
+package com.musync.app.data.remote
 
 import android.util.Log
 import com.google.gson.Gson
@@ -522,6 +522,81 @@ class YouTubeMusicProvider(
             }
         }
         return tracks
+    }
+
+    override suspend fun getRecommendations(trackId: String, limit: Int): List<Track> = withContext(Dispatchers.IO) {
+        val cleanId = trackId.removePrefix("yt_").trim()
+        if (cleanId.isBlank()) return@withContext emptyList()
+
+        val targetRenderUrl = getActiveBaseUrl()
+        try {
+            val url = "$targetRenderUrl/recommendations?trackId=$cleanId&limit=$limit"
+            val reqBuilder = Request.Builder()
+                .url(url)
+                .header("User-Agent", "Musync-Android/1.0")
+                .header("Accept", "application/json")
+            if (!customApiKey.isNullOrBlank()) {
+                reqBuilder.header("Authorization", "Bearer $customApiKey")
+            }
+
+            val response = httpClient.newCall(reqBuilder.build()).execute()
+            if (response.isSuccessful) {
+                val body = response.body?.string()
+                if (!body.isNullOrBlank()) {
+                    val root = gson.fromJson(body, JsonElement::class.java)
+                    val recArray = when {
+                        root.isJsonObject && root.asJsonObject.has("recommendations") ->
+                            root.asJsonObject.getAsJsonArray("recommendations")
+                        root.isJsonArray -> root.asJsonArray
+                        else -> null
+                    }
+
+                    if (recArray != null && recArray.size() > 0) {
+                        val tracks = mutableListOf<Track>()
+                        for (elem in recArray) {
+                            if (!elem.isJsonObject) continue
+                            val obj = elem.asJsonObject
+                            val videoId = obj.get("videoId")?.asString ?: obj.get("id")?.asString ?: continue
+                            // Exclude current track just in case
+                            if (videoId == cleanId) continue
+
+                            val title = obj.get("title")?.asString ?: obj.get("song")?.asString ?: "Unknown Title"
+                            val artistName = obj.get("artist")?.asString ?: obj.get("singers")?.asString ?: "YouTube Artist"
+                            val albumName = obj.get("album")?.asString ?: title
+                            val artUrl = obj.get("image_url")?.asString
+                                ?: obj.get("image")?.asString
+                                ?: "https://i.ytimg.com/vi/$videoId/hq720.jpg"
+                            val durationSec = obj.get("duration_seconds")?.asLong
+                                ?: (obj.get("duration")?.asString?.toLongOrNull() ?: 180L)
+                            val streamUrl = obj.get("stream_url")?.asString
+                                ?: obj.get("url")?.asString
+                                ?: "$targetRenderUrl/stream?id=$videoId"
+
+                            val artistObj = Artist(id = "yt_artist_${artistName.hashCode()}", name = artistName, imageUrl = artUrl)
+                            val albumObj = Album(id = "yt_album_${videoId.hashCode()}", name = albumName, artist = artistObj, artworkUrl = artUrl)
+
+                            tracks.add(
+                                Track(
+                                    id = "yt_$videoId",
+                                    title = title,
+                                    artist = artistObj,
+                                    album = albumObj,
+                                    durationMs = durationSec * 1000L,
+                                    streamUrl = streamUrl,
+                                    artworkUrl = artUrl,
+                                    genre = "Music",
+                                    playCount = 0L
+                                )
+                            )
+                        }
+                        if (tracks.isNotEmpty()) return@withContext tracks
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed fetching recommendations for $cleanId: ${e.message}")
+        }
+        emptyList()
     }
 }
 

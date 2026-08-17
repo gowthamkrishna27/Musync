@@ -11,6 +11,7 @@ import rateLimit from "express-rate-limit";
 import { cacheService } from "./cache/cacheService";
 import { metricsService } from "./metrics/metricsService";
 import { StreamManager } from "./streaming/streamManager";
+import { RecommendationEngine } from "./recommendations/recommendationEngine";
 
 dotenv.config();
 
@@ -52,6 +53,7 @@ const streamLimiter = rateLimit({
 
 const PORT = parseInt(process.env.PORT || "5000", 10);
 const ytmusic = new YTMusic();
+const recommendationEngine = new RecommendationEngine(ytmusic);
 let isInitialized = false;
 
 const PYTHON_BIN = process.platform === "win32" ? "python" : "python3";
@@ -139,6 +141,7 @@ app.get("/", (_req: Request, res: Response) => {
       album: "/album?id=<album_id>",
       artist: "/artist?id=<artist_id>",
       trending: "/trending",
+      recommendations: "/recommendations?trackId=<video_id>&limit=<5..10>",
       metrics: "/metrics",
       health: "/health",
       debug: "/debug/env"
@@ -567,6 +570,34 @@ app.get(["/trending", "/charts"], apiLimiter, async (req: Request, res: Response
     setImmediate(() => prewarmSearchResults(formatted));
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to fetch trending songs", data: [] });
+  }
+});
+
+// 14. Lightweight Current-Track Recommendation Engine
+app.get(["/recommendations", "/api/recommendations"], apiLimiter, async (req: Request, res: Response) => {
+  const trackId = (req.query.trackId || req.query.id || req.query.videoId) as string;
+  const limitParam = parseInt((req.query.limit as string) || "5", 10);
+  const limit = isNaN(limitParam) ? 5 : Math.min(10, Math.max(1, limitParam));
+
+  if (!trackId || typeof trackId !== "string" || trackId.trim().length === 0) {
+    return res.status(400).json({
+      error: "Missing required parameter 'trackId' (e.g. ?trackId=3_g2un5M350)",
+      recommendations: []
+    });
+  }
+
+  const reqHost = `${req.protocol}://${req.get("host")}`;
+
+  try {
+    const result = await recommendationEngine.getRecommendations(trackId.trim(), limit, reqHost);
+    res.json(result);
+  } catch (error: any) {
+    console.error(`Recommendation route error for ${trackId}:`, error);
+    res.status(500).json({
+      error: error.message || "Failed to generate recommendations",
+      trackId,
+      recommendations: []
+    });
   }
 });
 

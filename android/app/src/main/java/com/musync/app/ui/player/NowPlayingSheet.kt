@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.player
+package com.musync.app.ui.player
 
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
@@ -138,6 +138,11 @@ fun NowPlayingSheet(
     val context = LocalContext.current
     val app = context.applicationContext as com.musync.app.MusyncApplication
     val playbackManager = app.container.playbackManager
+    val recommendationViewModel: RecommendationViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = RecommendationViewModel.Factory(playbackManager, app.container.musicRepository)
+    )
+    val recUiState by recommendationViewModel.uiState.collectAsState()
+
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -187,8 +192,9 @@ fun NowPlayingSheet(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Transparent)
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = 24.dp)
-                    .padding(top = 48.dp, bottom = 16.dp)
+                    .padding(top = 48.dp, bottom = 24.dp)
                     .navigationBarsPadding(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -238,7 +244,7 @@ fun NowPlayingSheet(
                     }
                 }
 
-                Spacer(modifier = Modifier.weight(0.6f))
+                Spacer(modifier = Modifier.height(18.dp))
 
             // 2. Large Centered Album Artwork Banner with Round Corners & Transparent Glass Halo
             val infiniteTransition = rememberInfiniteTransition(label = "glowAnimation")
@@ -318,7 +324,7 @@ fun NowPlayingSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.weight(0.7f))
+            Spacer(modifier = Modifier.height(18.dp))
 
             // 3. Track Info (Title, Artist, Heart Toggle)
             Row(
@@ -607,6 +613,15 @@ fun NowPlayingSheet(
                     )
                 }
             }
+
+            // 7. Lightweight Current-Track Suggestions Section
+            Spacer(modifier = Modifier.height(16.dp))
+            RecommendationSection(
+                uiState = recUiState,
+                onTrackClick = { recommendedTrack ->
+                    playbackManager.play(recommendedTrack)
+                }
+            )
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿package com.musync.app.core.di
+package com.musync.app.core.di
 
 import android.content.Context
 import com.musync.app.data.remote.UniversalMusicProvider
@@ -56,19 +56,22 @@ class MusyncContainer(private val context: Context) {
 
     val favoritesRepository: FavoritesRepository by lazy {
         FavoritesRepositoryImpl(
-            favoritesDao = database.favoritesDao()
+            favoritesDao = database.favoritesDao(),
+            cloudSyncManager = cloudSyncManager
         )
     }
 
     val playlistRepository: PlaylistRepository by lazy {
         PlaylistRepositoryImpl(
-            playlistDao = database.playlistDao()
+            playlistDao = database.playlistDao(),
+            cloudSyncManager = cloudSyncManager
         )
     }
 
     val recentlyPlayedRepository: RecentlyPlayedRepository by lazy {
         RecentlyPlayedRepositoryImpl(
-            recentlyPlayedDao = database.recentlyPlayedDao()
+            recentlyPlayedDao = database.recentlyPlayedDao(),
+            cloudSyncManager = cloudSyncManager
         )
     }
 

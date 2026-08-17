@@ -1,4 +1,4 @@
-﻿package com.musync.app.domain.provider
+package com.musync.app.domain.provider
 
 import com.musync.app.domain.model.Album
 import com.musync.app.domain.model.Artist
@@ -32,5 +32,6 @@ interface MusicProvider {
     suspend fun getPlaylist(id: String): Playlist?
 
     suspend fun getStreamUrl(track: Track): String?
+    suspend fun getRecommendations(trackId: String, limit: Int = 5): List<Track> = emptyList()
 }
 
