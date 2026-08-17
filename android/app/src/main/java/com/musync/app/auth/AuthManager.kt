@@ -86,6 +86,73 @@ class AuthManager(
     }
 
     // ──────────────────────────────────────────────────────────────
+    //  EMAIL & PASSWORD AUTH
+    // ──────────────────────────────────────────────────────────────
+
+    suspend fun signInWithEmail(email: String, password: String): Result<MusyncUser> {
+        if (email.isBlank() || password.isBlank()) {
+            _authError.value = "Please enter both email and password."
+            return Result.failure(IllegalArgumentException("Email and password required"))
+        }
+        _authLoading.value = true
+        _authError.value = null
+        return try {
+            val result = auth.signInWithEmailAndPassword(email.trim(), password).await()
+            val user = result.user?.toMusyncUser()
+                ?: throw IllegalStateException("User not found after sign in")
+            _currentUser.value = user
+            _authLoading.value = false
+            Result.success(user)
+        } catch (e: FirebaseAuthException) {
+            val code = e.errorCode
+            val msg = e.message ?: ""
+            Log.e(TAG, "AUTH: Email sign-in failed errorCode=$code msg=$msg", e)
+            _authLoading.value = false
+            _authError.value = decodeFirebaseAuthError(code, msg, "Email Sign-In")
+            Result.failure(e)
+        } catch (e: Exception) {
+            _authLoading.value = false
+            _authError.value = e.localizedMessage ?: "Email sign-in failed"
+            Result.failure(e)
+        }
+    }
+
+    suspend fun signUpWithEmail(email: String, password: String, displayName: String = ""): Result<MusyncUser> {
+        if (email.isBlank() || password.length < 6) {
+            _authError.value = "Password must be at least 6 characters."
+            return Result.failure(IllegalArgumentException("Invalid password"))
+        }
+        _authLoading.value = true
+        _authError.value = null
+        return try {
+            val result = auth.createUserWithEmailAndPassword(email.trim(), password).await()
+            val firebaseUser = result.user
+                ?: throw IllegalStateException("User not created")
+            if (displayName.isNotBlank()) {
+                val profileUpdates = com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                    .setDisplayName(displayName.trim())
+                    .build()
+                firebaseUser.updateProfile(profileUpdates).await()
+            }
+            val user = firebaseUser.toMusyncUser()
+            _currentUser.value = user
+            _authLoading.value = false
+            Result.success(user)
+        } catch (e: FirebaseAuthException) {
+            val code = e.errorCode
+            val msg = e.message ?: ""
+            Log.e(TAG, "AUTH: Email sign-up failed errorCode=$code msg=$msg", e)
+            _authLoading.value = false
+            _authError.value = decodeFirebaseAuthError(code, msg, "Account creation")
+            Result.failure(e)
+        } catch (e: Exception) {
+            _authLoading.value = false
+            _authError.value = e.localizedMessage ?: "Account creation failed"
+            Result.failure(e)
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────
     //  GOOGLE SIGN-IN
     // ──────────────────────────────────────────────────────────────
 

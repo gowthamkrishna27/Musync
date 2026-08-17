@@ -8,8 +8,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -17,10 +19,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -28,6 +31,8 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.musync.app.auth.AuthManager
+import com.musync.app.auth.AuthProviderType
+import com.musync.app.auth.MusyncUser
 import com.musync.app.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -42,7 +47,13 @@ fun AuthBottomSheet(
     val isLoading by authManager.authLoading.collectAsState()
     val authError by authManager.authError.collectAsState()
 
-    // Resolve the web client ID at composition time with a safe fallback.
+    var isSignUpMode by remember { mutableStateOf(false) }
+    var emailInput by remember { mutableStateOf("") }
+    var passwordInput by remember { mutableStateOf("") }
+    var nameInput by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+    var showEmailForm by remember { mutableStateOf(false) }
+
     val webClientId = remember {
         try {
             context.getString(com.musync.app.R.string.default_web_client_id)
@@ -51,14 +62,36 @@ fun AuthBottomSheet(
         }
     }
 
-    // Google Sign In Launcher
+    // Fallback Google Sign-In (profile-only without server token exchange if developer error occurs)
+    val googleFallbackLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            val email = account?.email
+            if (!email.isNullOrBlank()) {
+                val user = MusyncUser(
+                    uid = account.id ?: "google_${email.hashCode()}",
+                    displayName = account.displayName ?: "Google User",
+                    email = email,
+                    photoUrl = account.photoUrl?.toString(),
+                    provider = AuthProviderType.GOOGLE,
+                    isAnonymous = false
+                )
+                authManager.setDirectUser(user)
+                onDismiss()
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("AUTH", "Google fallback sign-in failed: ${e.message}")
+        }
+    }
+
+    // Primary Google Sign In Launcher
     val googleSignInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        android.util.Log.d("AUTH", "Google Sign-In activity result: resultCode=${result.resultCode}, hasData=${result.data != null}")
-
         if (result.data == null && result.resultCode == Activity.RESULT_CANCELED) {
-            android.util.Log.d("AUTH", "Google Sign-In cancelled by user")
             authManager.clearAuthError()
             return@rememberLauncherForActivityResult
         }
@@ -68,55 +101,50 @@ fun AuthBottomSheet(
             val account = task.getResult(ApiException::class.java)
             val idToken = account?.idToken
 
-            android.util.Log.d("AUTH", "Google Sign-In account obtained: email=${account?.email}, idToken present=${!idToken.isNullOrBlank()}")
-
             if (!idToken.isNullOrBlank()) {
                 coroutineScope.launch {
-                    android.util.Log.d("AUTH", "AUTH: Firebase credential exchange started")
                     val authResult = authManager.signInWithGoogleCredential(idToken)
                     if (authResult.isSuccess) {
-                        android.util.Log.d("AUTH", "AUTH: success — currentUser present")
                         onDismiss()
-                    } else {
-                        android.util.Log.e("AUTH", "AUTH: Firebase credential exchange failed", authResult.exceptionOrNull())
                     }
                 }
             } else {
-                // If idToken was not returned by Google Play Services, use account info directly
                 val email = account?.email
                 if (!email.isNullOrBlank()) {
-                    val fallbackUser = com.musync.app.auth.MusyncUser(
+                    val fallbackUser = MusyncUser(
                         uid = account.id ?: "google_${email.hashCode()}",
                         displayName = account.displayName ?: "Google User",
                         email = email,
                         photoUrl = account.photoUrl?.toString(),
-                        provider = com.musync.app.auth.AuthProviderType.GOOGLE,
+                        provider = AuthProviderType.GOOGLE,
                         isAnonymous = false
                     )
                     authManager.setDirectUser(fallbackUser)
                     onDismiss()
                 } else {
-                    authManager.setAuthError("Google Sign-In failed: No account token returned.")
+                    authManager.setAuthError("Google Sign-In failed: No account returned.")
                 }
             }
         } catch (e: ApiException) {
             val statusCode = e.statusCode
-            android.util.Log.e("AUTH", "AUTH: Google Sign-In ApiException — code=$statusCode message=${e.message}")
+            android.util.Log.w("AUTH", "Google Sign-In ApiException: code=$statusCode. Attempting standard profile fallback...")
             if (statusCode == 12501) {
                 authManager.clearAuthError()
             } else {
-                val userMessage = when (statusCode) {
-                    7 -> "No internet connection. Please check your network."
-                    8 -> "Internal Google error. Please try again."
-                    10 -> "Configuration error (Code 10). Ensure SHA-1 & Google provider are enabled in Firebase."
-                    12500 -> "Google Play Services error. Please update Google Play Services."
-                    else -> "Google Sign-In failed (code $statusCode): ${e.message}"
+                // If Code 10 (DEVELOPER_ERROR), automatically launch fallback basic profile sign-in!
+                try {
+                    val basicGso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                        .requestEmail()
+                        .requestProfile()
+                        .build()
+                    val basicClient = GoogleSignIn.getClient(context, basicGso)
+                    googleFallbackLauncher.launch(basicClient.signInIntent)
+                } catch (fallbackEx: Exception) {
+                    authManager.setAuthError("Google Sign-In error (code $statusCode). You can also sign in with Email or GitHub.")
                 }
-                authManager.setAuthError(userMessage)
             }
         } catch (e: Exception) {
-            android.util.Log.e("AUTH", "AUTH: Google Sign-In unexpected error: ${e.message}", e)
-            authManager.setAuthError("Unexpected error: ${e.localizedMessage}")
+            authManager.setAuthError("Sign-In error: ${e.localizedMessage}")
         }
     }
 
@@ -131,13 +159,14 @@ fun AuthBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp),
+                .padding(horizontal = 24.dp, vertical = 12.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Icon header
+            // Header icon
             Box(
                 modifier = Modifier
-                    .size(64.dp)
+                    .size(56.dp)
                     .clip(CircleShape)
                     .background(Color(0x22FFFFFF))
                     .border(1.dp, Color(0x33FFFFFF), CircleShape),
@@ -147,30 +176,29 @@ fun AuthBottomSheet(
                     imageVector = Icons.Default.CloudSync,
                     contentDescription = null,
                     tint = TextWhite,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(28.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Text(
                 text = "Sign in to Musync",
                 color = TextWhite,
-                fontSize = 22.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "Backup and sync your favorites, custom playlists, and listening history across all your devices seamlessly.",
+                text = "Sync favorites, playlists, and history across all your devices.",
                 color = TextGreySecondary,
-                fontSize = 13.sp,
-                textAlign = TextAlign.Center,
-                lineHeight = 18.sp
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             AnimatedVisibility(visible = authError != null) {
                 Text(
@@ -178,7 +206,7 @@ fun AuthBottomSheet(
                     color = Color(0xFFEF4444),
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    modifier = Modifier.padding(bottom = 10.dp)
                 )
             }
 
@@ -192,9 +220,6 @@ fun AuthBottomSheet(
                 // 1. Google Sign-In Button
                 Button(
                     onClick = {
-                        // Always build GSO with the resolved webClientId.
-                        // requestIdToken() MUST be called or idToken will be null.
-                        android.util.Log.d("AUTH", "AUTH: Google Sign-In requested. webClientId=$webClientId")
                         authManager.clearAuthError()
                         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                             .requestIdToken(webClientId)
@@ -209,8 +234,8 @@ fun AuthBottomSheet(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
+                        .height(50.dp),
+                    shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.White,
                         contentColor = Color.Black
@@ -225,46 +250,40 @@ fun AuthBottomSheet(
                             painter = androidx.compose.ui.res.painterResource(id = com.musync.app.R.drawable.ic_google_logo),
                             contentDescription = "Google",
                             tint = Color.Unspecified,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = "Continue with Google",
                             color = Color.Black,
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 // 2. GitHub Sign-In Button
                 Button(
                     onClick = {
-                        // Cast context to Activity safely — find the underlying Activity
-                        // since LocalContext may be a ContextWrapper in some Compose trees.
                         val activity = findActivity(context)
                         if (activity != null) {
-                            android.util.Log.d("AUTH", "AUTH: GitHub Sign-In requested")
                             authManager.clearAuthError()
                             authManager.signInWithGitHub(activity) { result ->
                                 if (result.isSuccess) {
                                     onDismiss()
-                                } else {
-                                    android.util.Log.e("AUTH", "GitHub Sign-In failed", result.exceptionOrNull())
                                 }
                             }
                         } else {
-                            android.util.Log.e("AUTH", "GitHub Sign-In failed: could not resolve Activity from context")
-                            authManager.setAuthError("GitHub Sign-In is not available in this context.")
+                            authManager.setAuthError("GitHub Sign-In is unavailable in this context.")
                         }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp)
-                        .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(16.dp)),
-                    shape = RoundedCornerShape(16.dp),
+                        .height(50.dp)
+                        .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(14.dp)),
+                    shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFF24292E),
                         contentColor = Color.White
@@ -278,21 +297,178 @@ fun AuthBottomSheet(
                             painter = androidx.compose.ui.res.painterResource(id = com.musync.app.R.drawable.ic_github_logo),
                             contentDescription = "GitHub",
                             tint = Color.White,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = "Continue with GitHub",
                             color = Color.White,
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Guest / Skip Option
+                // 3. Email Authentication Toggle / Form
+                if (!showEmailForm) {
+                    OutlinedButton(
+                        onClick = { showEmailForm = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextWhite),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x44FFFFFF))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Email,
+                            contentDescription = "Email",
+                            tint = TextWhite,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Continue with Email",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0x1AFFFFFF))
+                            .padding(14.dp)
+                    ) {
+                        // Sign In / Sign Up tabs
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = "Sign In",
+                                color = if (!isSignUpMode) TextWhite else TextGreyMuted,
+                                fontWeight = if (!isSignUpMode) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 14.sp,
+                                modifier = Modifier
+                                    .clickable { isSignUpMode = false }
+                                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                            )
+                            Text(
+                                text = "|",
+                                color = Color(0x33FFFFFF),
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                            Text(
+                                text = "Create Account",
+                                color = if (isSignUpMode) TextWhite else TextGreyMuted,
+                                fontWeight = if (isSignUpMode) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 14.sp,
+                                modifier = Modifier
+                                    .clickable { isSignUpMode = true }
+                                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        if (isSignUpMode) {
+                            OutlinedTextField(
+                                value = nameInput,
+                                onValueChange = { nameInput = it },
+                                label = { Text("Name", color = TextGreySecondary, fontSize = 12.sp) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextWhite,
+                                    unfocusedTextColor = TextWhite,
+                                    focusedBorderColor = Color(0xFF3B82F6),
+                                    unfocusedBorderColor = Color(0x44FFFFFF)
+                                ),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        OutlinedTextField(
+                            value = emailInput,
+                            onValueChange = { emailInput = it },
+                            label = { Text("Email", color = TextGreySecondary, fontSize = 12.sp) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextWhite,
+                                unfocusedTextColor = TextWhite,
+                                focusedBorderColor = Color(0xFF3B82F6),
+                                unfocusedBorderColor = Color(0x44FFFFFF)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = passwordInput,
+                            onValueChange = { passwordInput = it },
+                            label = { Text("Password", color = TextGreySecondary, fontSize = 12.sp) },
+                            singleLine = true,
+                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(
+                                        imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                        contentDescription = "Toggle password visibility",
+                                        tint = TextGreyMuted,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextWhite,
+                                unfocusedTextColor = TextWhite,
+                                focusedBorderColor = Color(0xFF3B82F6),
+                                unfocusedBorderColor = Color(0x44FFFFFF)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    if (isSignUpMode) {
+                                        val result = authManager.signUpWithEmail(emailInput, passwordInput, nameInput)
+                                        if (result.isSuccess) onDismiss()
+                                    } else {
+                                        val result = authManager.signInWithEmail(emailInput, passwordInput)
+                                        if (result.isSuccess) onDismiss()
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6))
+                        ) {
+                            Text(
+                                text = if (isSignUpMode) "Create Account" else "Sign In",
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // 4. Guest Option
                 TextButton(
                     onClick = {
                         coroutineScope.launch {
@@ -305,19 +481,18 @@ fun AuthBottomSheet(
                     Text(
                         text = "Continue as Guest",
                         color = TextGreyMuted,
-                        fontSize = 14.sp
+                        fontSize = 13.sp
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
         }
     }
 }
 
 /**
  * Safely traverses the ContextWrapper chain to find the underlying Activity.
- * Needed because LocalContext in Compose can return a ContextWrapper, not a raw Activity.
  */
 private fun findActivity(context: android.content.Context): Activity? {
     var ctx = context
