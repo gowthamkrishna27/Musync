@@ -63,15 +63,39 @@ class PreferencesManager(private val context: Context) {
         }
     }
 
-    fun getDolbyAtmosMode(): String {
-        return securePrefs.getString("saved_dolby_mode", "OFF") ?: "OFF"
+    fun getSoundEngineId(): String {
+        return securePrefs.getString("saved_engine_id", "dolby") ?: "dolby"
     }
 
-    suspend fun saveDolbyAtmosMode(mode: String) {
-        securePrefs.edit().putString("saved_dolby_mode", mode).apply()
+    suspend fun saveSoundEngineId(engineId: String) {
+        securePrefs.edit().putString("saved_engine_id", engineId).apply()
+    }
+
+    fun getEngineModeId(): String {
+        return securePrefs.getString("saved_engine_mode_id", "dolby_music") ?: "dolby_music"
+    }
+
+    suspend fun saveEngineModeId(modeId: String) {
+        securePrefs.edit().putString("saved_engine_mode_id", modeId).apply()
+    }
+
+    fun getSoundEngineMode(): String {
+        return securePrefs.getString("saved_sound_engine_mode", "DOLBY_ATMOS") ?: "DOLBY_ATMOS"
+    }
+
+    suspend fun saveSoundEngineMode(mode: String) {
+        securePrefs.edit().putString("saved_sound_engine_mode", mode).apply()
         context.dataStore.edit { prefs ->
             prefs[KEY_DOLBY_ATMOS_MODE] = mode
         }
+    }
+
+    fun getDolbyAtmosMode(): String {
+        return getSoundEngineMode()
+    }
+
+    suspend fun saveDolbyAtmosMode(mode: String) {
+        saveSoundEngineMode(mode)
     }
 
     val providerId: Flow<String> = context.dataStore.data.map { prefs ->

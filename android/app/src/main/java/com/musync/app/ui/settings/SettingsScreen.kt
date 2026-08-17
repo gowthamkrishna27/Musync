@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -147,8 +149,9 @@ fun SettingsScreen(
                     )
                     SettingsDivider()
                     SettingsRow(
-                        title = "Equalizer",
-                        value = if (eqState.isEnabled) eqState.activePreset else "Disabled",
+                        title = "Studio & Spatial Engines",
+                        value = if (eqState.isEnabled) eqState.currentMode.title else "Disabled",
+                        valueColor = if (eqState.isEnabled) Color(eqState.currentEngine.brandColorHex) else TextGreyMuted,
                         onClick = { showEqDialog = true }
                     )
                     SettingsDivider()
@@ -347,9 +350,12 @@ fun SettingsScreen(
         )
     }
 
-    // Studio Equalizer Dialog
+    // Dolby Atmos 3D Audio Dialog
     if (showEqDialog) {
         val scrollState = androidx.compose.foundation.rememberScrollState()
+        val user = currentUser
+        val isLoggedIn = user != null && !user.isAnonymous
+
         AlertDialog(
             onDismissRequest = { showEqDialog = false },
             title = {
@@ -358,17 +364,44 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Audio Equalizer", color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    Switch(
-                        checked = eqState.isEnabled,
-                        onCheckedChange = { audioEffectManager.setEnabled(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.Black,
-                            checkedTrackColor = Color.White,
-                            uncheckedThumbColor = TextGreySecondary,
-                            uncheckedTrackColor = CardElevated
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isLoggedIn && eqState.isDolbyActive) Color(0xFF4F46E5) else Color(0xFF1E1E24))
+                                .border(1.dp, if (isLoggedIn && eqState.isDolbyActive) Color(0xFF818CF8) else Color(0x22FFFFFF), RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.GraphicEq,
+                                contentDescription = null,
+                                tint = if (isLoggedIn && eqState.isDolbyActive) Color.White else IconGrey,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text("Studio & Spatial Engines", color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text(
+                                text = if (!isLoggedIn) "Member Exclusive" else if (eqState.isEnabled) "Active: ${eqState.currentEngine.title}" else "Bypassed",
+                                color = if (!isLoggedIn) Color(0xFFF59E0B) else if (eqState.isEnabled) Color(eqState.currentEngine.brandColorHex) else TextGreyMuted,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                    if (isLoggedIn) {
+                        Switch(
+                            checked = eqState.isEnabled,
+                            onCheckedChange = { audioEffectManager.setEnabled(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFF4F46E5),
+                                uncheckedThumbColor = TextGreySecondary,
+                                uncheckedTrackColor = Color(0xFF22222A)
+                            )
                         )
-                    )
+                    }
                 }
             },
             text = {
@@ -377,226 +410,218 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .verticalScroll(scrollState)
                 ) {
-                    // Dolby Atmos 3D Spatial Audio Card
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(
-                                if (eqState.isDolbyActive) {
-                                    androidx.compose.ui.graphics.Brush.horizontalGradient(
-                                        listOf(Color(0xFF0F172A), Color(0xFF1E1B4B))
+                    if (!isLoggedIn) {
+                        // Glassmorphic Member Exclusive Lock Card
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                                        listOf(Color(0x334F46E5), Color(0x150F172A), Color(0x0A000000))
                                     )
-                                } else {
-                                    androidx.compose.ui.graphics.Brush.horizontalGradient(
-                                        listOf(CardElevated, CardElevated)
-                                    )
-                                }
-                            )
-                            .border(
-                                1.dp,
-                                if (eqState.isDolbyActive) Color(0xFF6366F1) else BorderStroke,
-                                RoundedCornerShape(16.dp)
-                            )
-                            .padding(12.dp)
-                    ) {
-                        Column {
-                            Row(
+                                )
+                                .border(1.dp, Color(0x44818CF8), RoundedCornerShape(16.dp))
+                                .padding(18.dp)
+                        ) {
+                            Column(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(46.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF4F46E5)),
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     Icon(
-                                        imageVector = Icons.Default.GraphicEq,
-                                        contentDescription = "Dolby Atmos",
-                                        tint = if (eqState.isDolbyActive) Color(0xFFA5B4FC) else IconGrey,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Dolby Atmos 3D Sound",
-                                        color = TextWhite,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
-                                if (eqState.isDolbyActive) {
-                                    Text("ACTIVE", color = Color(0xFFA5B4FC), fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                com.musync.app.playback.DolbyAtmosMode.values().forEach { mode ->
-                                    val isSelected = eqState.dolbyMode == mode
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(if (isSelected) Color(0xFF4F46E5) else Color(0x22FFFFFF))
-                                            .border(0.5.dp, if (isSelected) Color(0xFF818CF8) else Color(0x11FFFFFF), RoundedCornerShape(8.dp))
-                                            .clickable {
-                                                audioEffectManager.setDolbyMode(mode)
-                                            }
-                                            .padding(vertical = 6.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = mode.label,
-                                            color = if (isSelected) Color.White else TextGreySecondary,
-                                            fontSize = 10.sp,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // 1. Presets Selector
-                    Text("PRESETS", color = TextGreyMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        items(eqState.availablePresets) { preset ->
-                            val isSelected = eqState.activePreset == preset
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(if (isSelected) Color.White else CardElevated)
-                                    .border(1.dp, if (isSelected) Color.White else BorderStroke, RoundedCornerShape(16.dp))
-                                    .clickable { audioEffectManager.setPreset(preset) }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                            ) {
+                                Spacer(modifier = Modifier.height(12.dp))
                                 Text(
-                                    text = preset,
-                                    color = if (isSelected) Color.Black else TextWhite,
+                                    text = "Member Exclusive Sound",
+                                    color = TextWhite,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Sign in to unlock Dolby Atmos 3D Spatial Audio, soundstage reflections, and custom hardware curves.",
+                                    color = TextGreySecondary,
                                     fontSize = 12.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    lineHeight = 16.sp
                                 )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = {
+                                        showEqDialog = false
+                                        showAuthSheet = true
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(42.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Text("Sign In to Unlock", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
                             }
                         }
-                    }
+                    } else {
+                        Text(
+                            text = "SELECT SOUND ENGINE",
+                            color = Color(0xFF818CF8),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
 
-                    // 2. Bass Boost & Virtualizer
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        // Bass Boost
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(CardElevated)
-                                .border(1.dp, BorderStroke, RoundedCornerShape(10.dp))
-                                .padding(10.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("Bass Boost", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                Text("${(eqState.bassBoostStrength / 10)}%", color = StatusGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Slider(
-                                value = eqState.bassBoostStrength.toFloat(),
-                                onValueChange = { audioEffectManager.setBassBoost(it.toInt().toShort()) },
-                                valueRange = 0f..1000f,
-                                enabled = eqState.isEnabled,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = Color.White,
-                                    activeTrackColor = Color.White,
-                                    inactiveTrackColor = Color(0x33FFFFFF)
-                                )
-                            )
-                        }
-
-                        // 3D Virtualizer
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(CardElevated)
-                                .border(1.dp, BorderStroke, RoundedCornerShape(10.dp))
-                                .padding(10.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("3D Surround", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                Text("${(eqState.virtualizerStrength / 10)}%", color = StatusGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Slider(
-                                value = eqState.virtualizerStrength.toFloat(),
-                                onValueChange = { audioEffectManager.setVirtualizer(it.toInt().toShort()) },
-                                valueRange = 0f..1000f,
-                                enabled = eqState.isEnabled,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = Color.White,
-                                    activeTrackColor = Color.White,
-                                    inactiveTrackColor = Color(0x33FFFFFF)
-                                )
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // 3. Graphic Frequency Bands
-                    Text("FREQUENCY BANDS (dB)", color = TextGreyMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    eqState.bands.forEach { band ->
-                        val freqLabel = if (band.centerFreqHz >= 1000) {
-                            "%.1fkHz".format(band.centerFreqHz / 1000.0)
-                        } else {
-                            "${band.centerFreqHz}Hz"
-                        }
-                        val gainDb = band.levelMb / 100.0
-
+                        // 1. Horizontal Sound Engine Selector
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Text(
-                                text = freqLabel,
-                                color = TextWhite,
-                                fontSize = 12.sp,
-                                modifier = Modifier.width(60.dp)
-                            )
-                            Slider(
-                                value = band.levelMb.toFloat(),
-                                onValueChange = { audioEffectManager.setBandLevel(band.index, it.toInt().toShort()) },
-                                valueRange = band.minLevelMb.toFloat()..band.maxLevelMb.toFloat(),
-                                enabled = eqState.isEnabled,
-                                modifier = Modifier.weight(1f),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = Color.White,
-                                    activeTrackColor = Color.White,
-                                    inactiveTrackColor = Color(0x33FFFFFF)
-                                )
-                            )
-                            Text(
-                                text = "${if (gainDb > 0) "+" else ""}${gainDb.toInt()}dB",
-                                color = if (gainDb != 0.0) StatusGreen else TextGreyMuted,
-                                fontSize = 11.sp,
-                                modifier = Modifier.width(44.dp),
-                                textAlign = TextAlign.End
-                            )
+                            com.musync.app.playback.SoundEngine.values().forEach { engine ->
+                                val isSelected = eqState.currentEngine == engine
+                                val brandColor = Color(engine.brandColorHex)
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(
+                                            if (isSelected && eqState.isEnabled) brandColor else Color(0x18FFFFFF)
+                                        )
+                                        .border(
+                                            1.dp,
+                                            if (isSelected && eqState.isEnabled) brandColor else Color(0x22FFFFFF),
+                                            RoundedCornerShape(14.dp)
+                                        )
+                                        .clickable {
+                                            audioEffectManager.selectEngine(engine)
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = engine.title,
+                                        color = if (isSelected && eqState.isEnabled) Color.Black else TextWhite,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text(
+                            text = "${eqState.currentEngine.title.uppercase()} MODES",
+                            color = Color(eqState.currentEngine.brandColorHex),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // 2. Sub-Modes List for Active Engine
+                        val engineModes = com.musync.app.playback.SoundEngineRegistry.getModesForEngine(eqState.currentEngine)
+                        val activeBrandColor = Color(eqState.currentEngine.brandColorHex)
+
+                        engineModes.forEach { mode ->
+                            val isModeSelected = eqState.currentMode.id == mode.id
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 3.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(
+                                        if (isModeSelected && eqState.isEnabled) {
+                                            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                                listOf(activeBrandColor.copy(alpha = 0.25f), Color(0x101E1B4B))
+                                            )
+                                        } else {
+                                            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                                listOf(Color(0x14FFFFFF), Color(0x0AFFFFFF))
+                                            )
+                                        }
+                                    )
+                                    .border(
+                                        1.dp,
+                                        if (isModeSelected && eqState.isEnabled) activeBrandColor else Color(0x1FFFFFFF),
+                                        RoundedCornerShape(14.dp)
+                                    )
+                                    .clickable {
+                                        audioEffectManager.setEngineMode(mode)
+                                    }
+                                    .padding(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(
+                                                if (isModeSelected && eqState.isEnabled) activeBrandColor else Color(0x18FFFFFF)
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.GraphicEq,
+                                            contentDescription = mode.title,
+                                            tint = if (isModeSelected && eqState.isEnabled) Color.Black else IconGrey,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = mode.title,
+                                            color = TextWhite,
+                                            fontSize = 13.sp,
+                                            fontWeight = if (isModeSelected) FontWeight.Bold else FontWeight.SemiBold
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = mode.description,
+                                            color = if (isModeSelected && eqState.isEnabled) activeBrandColor.copy(alpha = 0.9f) else TextGreySecondary,
+                                            fontSize = 10.sp
+                                        )
+                                    }
+
+                                    if (isModeSelected && eqState.isEnabled) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .size(18.dp)
+                                                .clip(RoundedCornerShape(9.dp))
+                                                .background(activeBrandColor),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "Active",
+                                                tint = Color.Black,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -604,17 +629,17 @@ fun SettingsScreen(
             confirmButton = {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0x22FFFFFF))
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.White)
                         .clickable { showEqDialog = false }
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Done", color = Color.White, fontSize = 12.sp)
+                    Text("Done", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             },
-            containerColor = SurfaceBlack,
-            shape = RoundedCornerShape(14.dp)
+            containerColor = Color(0xF50D0D12),
+            shape = RoundedCornerShape(20.dp)
         )
     }
 

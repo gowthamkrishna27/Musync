@@ -16,40 +16,315 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class DolbyAtmosMode(val label: String, val shortDesc: String) {
-    OFF("Off", "Stereo bypass"),
-    MUSIC("Music", "3D soundstage & crystal vocal presence"),
-    CINEMA("Cinema", "360° surround & deep sub-bass rumble"),
-    STUDIO("Studio", "Intimate room acoustics & dialogue clarity")
+enum class SoundEngine(
+    val id: String,
+    val title: String,
+    val brandColorHex: Long
+) {
+    DOLBY_ATMOS("dolby", "Dolby Atmos 3D", 0xFF6366F1),
+    SONY_360("sony", "Sony 360 Reality", 0xFF06B6D4),
+    DTS_X("dts", "DTS:X Ultra", 0xFFF59E0B),
+    BOSE_EQ("bose", "Bose ActiveEQ", 0xFF10B981),
+    SENNHEISER_AMBEO("ambeo", "Sennheiser AMBEO", 0xFF8B5CF6),
+    VIPER_FX("viper", "Viper Master FX", 0xFFEC4899),
+    HI_RES("hires", "Hi-Res Direct", 0xFFE2E8F0)
 }
+
+data class EngineMode(
+    val id: String,
+    val engine: SoundEngine,
+    val title: String,
+    val description: String,
+    val bassStrength: Short,
+    val virtStrength: Short,
+    val loudnessGain: Int,
+    val reverbPreset: Short,
+    val bandGains: List<Short>
+)
+
+object SoundEngineRegistry {
+    val allModes: List<EngineMode> = listOf(
+        // 1. Dolby Atmos Modes
+        EngineMode(
+            id = "dolby_music",
+            engine = SoundEngine.DOLBY_ATMOS,
+            title = "Dolby Music",
+            description = "Expanded 3D soundstage, clear vocal separation & tight punchy bass",
+            bassStrength = 650,
+            virtStrength = 750,
+            loudnessGain = 220,
+            reverbPreset = PresetReverb.PRESET_SMALLROOM,
+            bandGains = listOf(500, 200, 0, 350, 450)
+        ),
+        EngineMode(
+            id = "dolby_cinema",
+            engine = SoundEngine.DOLBY_ATMOS,
+            title = "Dolby Cinema",
+            description = "360° spherical immersion, concert hall reverb & deep sub-woofer rumble",
+            bassStrength = 850,
+            virtStrength = 950,
+            loudnessGain = 320,
+            reverbPreset = PresetReverb.PRESET_MEDIUMHALL,
+            bandGains = listOf(750, 350, -50, 450, 650)
+        ),
+        EngineMode(
+            id = "dolby_studio",
+            engine = SoundEngine.DOLBY_ATMOS,
+            title = "Dolby Studio",
+            description = "Intimate room acoustics with elevated dialogue clarity and zero echo",
+            bassStrength = 300,
+            virtStrength = 500,
+            loudnessGain = 150,
+            reverbPreset = PresetReverb.PRESET_SMALLROOM,
+            bandGains = listOf(200, 100, 350, 500, 300)
+        ),
+        EngineMode(
+            id = "dolby_bass",
+            engine = SoundEngine.DOLBY_ATMOS,
+            title = "Dynamic Bass Matrix",
+            description = "Sub-harmonic bass exciter with tight and punchy transient response",
+            bassStrength = 950,
+            virtStrength = 400,
+            loudnessGain = 300,
+            reverbPreset = PresetReverb.PRESET_NONE,
+            bandGains = listOf(850, 450, 0, 200, 300)
+        ),
+
+        // 2. Sony 360 Reality Audio Modes
+        EngineMode(
+            id = "sony_immersion",
+            engine = SoundEngine.SONY_360,
+            title = "360° Object Immersion",
+            description = "Spherical 3D field with instruments placed in surrounding coordinate space",
+            bassStrength = 450,
+            virtStrength = 950,
+            loudnessGain = 200,
+            reverbPreset = PresetReverb.PRESET_MEDIUMROOM,
+            bandGains = listOf(300, 200, 400, 550, 650)
+        ),
+        EngineMode(
+            id = "sony_arena",
+            engine = SoundEngine.SONY_360,
+            title = "Live Arena Sound",
+            description = "Expanded stadium acoustics with wide acoustic boundary reflections",
+            bassStrength = 600,
+            virtStrength = 900,
+            loudnessGain = 250,
+            reverbPreset = PresetReverb.PRESET_LARGEHALL,
+            bandGains = listOf(450, 250, 300, 400, 500)
+        ),
+        EngineMode(
+            id = "sony_vocal",
+            engine = SoundEngine.SONY_360,
+            title = "Vocal Center Stage",
+            description = "Front-anchored vocal isolation with surrounding airy background instruments",
+            bassStrength = 200,
+            virtStrength = 700,
+            loudnessGain = 180,
+            reverbPreset = PresetReverb.PRESET_SMALLROOM,
+            bandGains = listOf(0, 150, 600, 500, 400)
+        ),
+
+        // 3. DTS:X Ultra Modes
+        EngineMode(
+            id = "dts_cinema",
+            engine = SoundEngine.DTS_X,
+            title = "DTS:X Cinema",
+            description = "High dynamic range multi-channel surround with deep sub-bass roar",
+            bassStrength = 850,
+            virtStrength = 950,
+            loudnessGain = 350,
+            reverbPreset = PresetReverb.PRESET_MEDIUMHALL,
+            bandGains = listOf(700, 350, 0, 450, 600)
+        ),
+        EngineMode(
+            id = "dts_impact",
+            engine = SoundEngine.DTS_X,
+            title = "Heavy Impact",
+            description = "Maximum transient slam & high-gain punch optimized for EDM and Rock",
+            bassStrength = 950,
+            virtStrength = 850,
+            loudnessGain = 400,
+            reverbPreset = PresetReverb.PRESET_NONE,
+            bandGains = listOf(850, 400, -100, 500, 700)
+        ),
+        EngineMode(
+            id = "dts_music",
+            engine = SoundEngine.DTS_X,
+            title = "Dynamic Studio",
+            description = "Balanced spatial multi-channel audio with crystal treble presence",
+            bassStrength = 650,
+            virtStrength = 800,
+            loudnessGain = 250,
+            reverbPreset = PresetReverb.PRESET_SMALLROOM,
+            bandGains = listOf(600, 300, 150, 400, 500)
+        ),
+
+        // 4. Bose ActiveEQ Modes
+        EngineMode(
+            id = "bose_warm",
+            engine = SoundEngine.BOSE_EQ,
+            title = "Warm Balance",
+            description = "Velvety smooth lows, rich midrange presence, and fatigue-free highs",
+            bassStrength = 700,
+            virtStrength = 450,
+            loudnessGain = 220,
+            reverbPreset = PresetReverb.PRESET_NONE,
+            bandGains = listOf(600, 350, 200, 150, 200)
+        ),
+        EngineMode(
+            id = "bose_deep",
+            engine = SoundEngine.BOSE_EQ,
+            title = "Deep Bass Contour",
+            description = "Sub-harmonic bass boost with dynamic active volume contouring",
+            bassStrength = 900,
+            virtStrength = 300,
+            loudnessGain = 300,
+            reverbPreset = PresetReverb.PRESET_NONE,
+            bandGains = listOf(800, 450, 100, 200, 250)
+        ),
+        EngineMode(
+            id = "bose_acoustic",
+            engine = SoundEngine.BOSE_EQ,
+            title = "Acoustic Clarity",
+            description = "Crystal acoustic instrument separation and crisp front-stage vocal lift",
+            bassStrength = 350,
+            virtStrength = 500,
+            loudnessGain = 180,
+            reverbPreset = PresetReverb.PRESET_SMALLROOM,
+            bandGains = listOf(200, 150, 450, 550, 450)
+        ),
+
+        // 5. Sennheiser AMBEO 3D Modes
+        EngineMode(
+            id = "ambeo_natural",
+            engine = SoundEngine.SENNHEISER_AMBEO,
+            title = "AMBEO Natural",
+            description = "True holographic acoustic depth with uncolored natural room decay",
+            bassStrength = 350,
+            virtStrength = 600,
+            loudnessGain = 120,
+            reverbPreset = PresetReverb.PRESET_SMALLROOM,
+            bandGains = listOf(150, 100, 300, 450, 400)
+        ),
+        EngineMode(
+            id = "ambeo_boost",
+            engine = SoundEngine.SENNHEISER_AMBEO,
+            title = "AMBEO 3D Boost",
+            description = "High-definition spherical sound field with rich spatial reverb",
+            bassStrength = 500,
+            virtStrength = 900,
+            loudnessGain = 250,
+            reverbPreset = PresetReverb.PRESET_MEDIUMROOM,
+            bandGains = listOf(350, 200, 400, 600, 600)
+        ),
+        EngineMode(
+            id = "ambeo_concert",
+            engine = SoundEngine.SENNHEISER_AMBEO,
+            title = "AMBEO Concert Hall",
+            description = "Concert hall acoustic reflections with deep low-end resonance",
+            bassStrength = 650,
+            virtStrength = 950,
+            loudnessGain = 280,
+            reverbPreset = PresetReverb.PRESET_LARGEHALL,
+            bandGains = listOf(500, 300, 200, 450, 550)
+        ),
+
+        // 6. Viper Dynamic Master Modes
+        EngineMode(
+            id = "viper_tube",
+            engine = SoundEngine.VIPER_FX,
+            title = "Vacuum Tube Warmth",
+            description = "Analog tube harmonic saturation for a warm, vinyl-like vintage tone",
+            bassStrength = 750,
+            virtStrength = 600,
+            loudnessGain = 300,
+            reverbPreset = PresetReverb.PRESET_NONE,
+            bandGains = listOf(650, 350, 250, 400, 550)
+        ),
+        EngineMode(
+            id = "viper_exciter",
+            engine = SoundEngine.VIPER_FX,
+            title = "Sub-Harmonic Exciter",
+            description = "Massive club subwoofer rumble with tight bass transients",
+            bassStrength = 1000,
+            virtStrength = 700,
+            loudnessGain = 400,
+            reverbPreset = PresetReverb.PRESET_NONE,
+            bandGains = listOf(950, 500, 100, 450, 650)
+        ),
+        EngineMode(
+            id = "viper_air",
+            engine = SoundEngine.VIPER_FX,
+            title = "Ultra Clarity & Air",
+            description = "Crisp upper treble sparkle with widened stereo imaging",
+            bassStrength = 400,
+            virtStrength = 750,
+            loudnessGain = 220,
+            reverbPreset = PresetReverb.PRESET_NONE,
+            bandGains = listOf(200, 100, 300, 700, 900)
+        ),
+
+        // 7. Hi-Res Direct Modes
+        EngineMode(
+            id = "hires_direct",
+            engine = SoundEngine.HI_RES,
+            title = "Bit-Perfect Direct",
+            description = "Pure uncompressed studio master audio with zero DSP coloration",
+            bassStrength = 0,
+            virtStrength = 0,
+            loudnessGain = 0,
+            reverbPreset = PresetReverb.PRESET_NONE,
+            bandGains = listOf(0, 0, 0, 0, 0)
+        )
+    )
+
+    fun getModesForEngine(engine: SoundEngine): List<EngineMode> {
+        return allModes.filter { it.engine == engine }
+    }
+
+    fun findModeById(modeId: String): EngineMode {
+        return allModes.find { it.id == modeId } ?: allModes.first()
+    }
+}
+
+// Compatibility Alias
+typealias SoundEngineMode = SoundEngine
+typealias DolbyAtmosMode = SoundEngine
 
 data class EqualizerBand(
     val index: Int,
     val centerFreqHz: Int,
-    val levelMb: Short, // millibels (-1500 to +1500)
+    val levelMb: Short,
     val minLevelMb: Short,
     val maxLevelMb: Short
 )
 
 data class EqualizerState(
     val isEnabled: Boolean = true,
-    val dolbyMode: DolbyAtmosMode = DolbyAtmosMode.OFF,
-    val activePreset: String = "Bass Boost",
-    val bassBoostStrength: Short = 750, // 0 to 1000
-    val virtualizerStrength: Short = 300, // 0 to 1000
-    val loudnessGainMb: Int = 200, // 0 to 1000 mB
-    val reverbPreset: Short = PresetReverb.PRESET_NONE,
+    val currentEngine: SoundEngine = SoundEngine.DOLBY_ATMOS,
+    val currentMode: EngineMode = SoundEngineRegistry.allModes.first(),
+    val activePreset: String = "Dolby Music",
+    val bassBoostStrength: Short = 650,
+    val virtualizerStrength: Short = 750,
+    val loudnessGainMb: Int = 220,
+    val reverbPreset: Short = PresetReverb.PRESET_SMALLROOM,
     val bands: List<EqualizerBand> = listOf(
-        EqualizerBand(0, 60, 700, -1500, 1500),
-        EqualizerBand(1, 230, 400, -1500, 1500),
+        EqualizerBand(0, 60, 500, -1500, 1500),
+        EqualizerBand(1, 230, 200, -1500, 1500),
         EqualizerBand(2, 910, 0, -1500, 1500),
-        EqualizerBand(3, 3600, 100, -1500, 1500),
-        EqualizerBand(4, 14000, 200, -1500, 1500)
-    ),
-    val availablePresets: List<String> = listOf("Flat", "Bass Boost", "Vocal Focus", "Treble Boost", "Rock", "Electronic", "Dolby Atmos", "Custom")
+        EqualizerBand(3, 3600, 350, -1500, 1500),
+        EqualizerBand(4, 14000, 450, -1500, 1500)
+    )
 ) {
+    val soundEngine: SoundEngine
+        get() = currentEngine
+
+    val dolbyMode: SoundEngine
+        get() = currentEngine
+
     val isDolbyActive: Boolean
-        get() = isEnabled && dolbyMode != DolbyAtmosMode.OFF
+        get() = isEnabled && currentEngine != SoundEngine.HI_RES
 }
 
 class AudioEffectManager(
@@ -73,21 +348,12 @@ class AudioEffectManager(
     private val scope = CoroutineScope(Dispatchers.IO)
 
     init {
-        // Load initial state and saved presets
         scope.launch {
-            val savedPreset = preferencesManager.getEqualizerPreset()
-            val savedDolby = preferencesManager.getDolbyAtmosMode()
-            val dolbyEnum = try {
-                DolbyAtmosMode.valueOf(savedDolby)
-            } catch (_: Exception) {
-                DolbyAtmosMode.OFF
-            }
-
-            if (dolbyEnum != DolbyAtmosMode.OFF) {
-                applyDolbyInternal(dolbyEnum)
-            } else {
-                applyPresetInternal(savedPreset)
-            }
+            val savedEngineId = preferencesManager.getSoundEngineId()
+            val savedModeId = preferencesManager.getEngineModeId()
+            val engine = SoundEngine.values().find { it.id == savedEngineId } ?: SoundEngine.DOLBY_ATMOS
+            val mode = SoundEngineRegistry.allModes.find { it.id == savedModeId } ?: SoundEngineRegistry.getModesForEngine(engine).firstOrNull() ?: SoundEngineRegistry.allModes.first()
+            applyEngineModeInternal(mode)
         }
     }
 
@@ -98,19 +364,17 @@ class AudioEffectManager(
 
         detach()
         currentSessionId = audioSessionId
-        Log.i(TAG, "Attaching Audio Effects & Dolby Atmos Engine to audioSessionId: $audioSessionId")
+        Log.i(TAG, "Attaching Sound Engine hardware audiofx to session: $audioSessionId")
 
         try {
-            // 1. Hardware Equalizer
             try {
                 equalizer = Equalizer(0, audioSessionId).apply {
                     enabled = _state.value.isEnabled
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Equalizer init failed for session $audioSessionId: ${e.message}")
+                Log.e(TAG, "Equalizer init failed: ${e.message}")
             }
 
-            // Extract hardware bands
             val numBands = equalizer?.numberOfBands?.toInt() ?: 0
             val minLevel = equalizer?.bandLevelRange?.getOrNull(0) ?: -1500
             val maxLevel = equalizer?.bandLevelRange?.getOrNull(1) ?: 1500
@@ -130,7 +394,6 @@ class AudioEffectManager(
                 )
             }
 
-            // 2. Bass Boost
             try {
                 bassBoost = BassBoost(0, audioSessionId).apply {
                     if (strengthSupported) {
@@ -142,7 +405,6 @@ class AudioEffectManager(
                 Log.w(TAG, "BassBoost not supported: ${e.message}")
             }
 
-            // 3. Virtualizer (Spatial 3D Sound)
             try {
                 virtualizer = Virtualizer(0, audioSessionId).apply {
                     if (strengthSupported) {
@@ -154,7 +416,6 @@ class AudioEffectManager(
                 Log.w(TAG, "Virtualizer not supported: ${e.message}")
             }
 
-            // 4. Loudness Enhancer
             try {
                 loudnessEnhancer = LoudnessEnhancer(audioSessionId).apply {
                     setTargetGain(_state.value.loudnessGainMb)
@@ -164,7 +425,6 @@ class AudioEffectManager(
                 Log.w(TAG, "LoudnessEnhancer not supported: ${e.message}")
             }
 
-            // 5. Preset Reverb (Acoustic Soundstage)
             try {
                 presetReverb = PresetReverb(0, audioSessionId).apply {
                     preset = _state.value.reverbPreset
@@ -178,12 +438,7 @@ class AudioEffectManager(
                 _state.update { it.copy(bands = bandsList) }
             }
 
-            // Re-apply active state to newly attached hardware session
-            if (_state.value.dolbyMode != DolbyAtmosMode.OFF) {
-                applyDolbyInternal(_state.value.dolbyMode)
-            } else {
-                applyPresetInternal(_state.value.activePreset)
-            }
+            applyEngineModeInternal(_state.value.currentMode)
 
             val intent = android.content.Intent(android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION).apply {
                 putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, audioSessionId)
@@ -191,9 +446,9 @@ class AudioEffectManager(
             }
             context.sendBroadcast(intent)
 
-            Log.i(TAG, "✓ Dolby Atmos & Hardware Audio Effects attached successfully to session $audioSessionId")
+            Log.i(TAG, "✓ Sound Engines attached successfully to session $audioSessionId")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed initializing hardware audiofx: ${e.message}", e)
+            Log.e(TAG, "Failed initializing sound engine effects: ${e.message}", e)
         }
     }
 
@@ -218,7 +473,6 @@ class AudioEffectManager(
             presetReverb?.release()
             presetReverb = null
             currentSessionId = 0
-            Log.d(TAG, "Detached Audio Effects")
         } catch (e: Exception) {
             Log.w(TAG, "Error releasing audiofx: ${e.message}")
         }
@@ -237,261 +491,76 @@ class AudioEffectManager(
         }
     }
 
-    /**
-     * Activates a Dolby Atmos 3D Spatial Audio profile.
-     */
-    fun setDolbyMode(mode: DolbyAtmosMode) {
-        applyDolbyInternal(mode)
+    fun selectEngine(engine: SoundEngine) {
+        val defaultMode = SoundEngineRegistry.getModesForEngine(engine).firstOrNull() ?: SoundEngineRegistry.allModes.first()
+        setEngineMode(defaultMode)
+    }
+
+    fun setEngineMode(mode: EngineMode) {
+        applyEngineModeInternal(mode)
         scope.launch {
-            preferencesManager.saveDolbyAtmosMode(mode.name)
+            preferencesManager.saveSoundEngineId(mode.engine.id)
+            preferencesManager.saveEngineModeId(mode.id)
         }
     }
 
-    private fun applyDolbyInternal(mode: DolbyAtmosMode) {
-        if (mode == DolbyAtmosMode.OFF) {
-            _state.update { it.copy(dolbyMode = DolbyAtmosMode.OFF) }
-            applyPresetInternal(_state.value.activePreset)
-            return
-        }
+    fun setSoundEngine(engine: SoundEngine) {
+        selectEngine(engine)
+    }
 
+    fun setDolbyMode(engine: SoundEngine) {
+        selectEngine(engine)
+    }
+
+    private fun applyEngineModeInternal(mode: EngineMode) {
         val numBands = equalizer?.numberOfBands?.toInt() ?: _state.value.bands.size.takeIf { it > 0 } ?: 5
         val minLevel = equalizer?.bandLevelRange?.getOrNull(0) ?: -1500
         val maxLevel = equalizer?.bandLevelRange?.getOrNull(1) ?: 1500
 
-        val (bassStrength: Short, virtStrength: Short, loudnessGain: Int, reverb: Short, bandGains: List<Short>) = when (mode) {
-            DolbyAtmosMode.MUSIC -> {
-                // Wide 3D soundstage, clear vocal separation, tight punchy bass
-                val gains = listOf(500.toShort(), 200.toShort(), 0.toShort(), 350.toShort(), 450.toShort())
-                Tuple5(550.toShort(), 700.toShort(), 200, PresetReverb.PRESET_SMALLROOM, gains)
-            }
-            DolbyAtmosMode.CINEMA -> {
-                // Maximum 360° spatial immersion, deep sub-woofer resonance, concert decay
-                val gains = listOf(750.toShort(), 300.toShort(), (-50).toShort(), 400.toShort(), 600.toShort())
-                Tuple5(850.toShort(), 950.toShort(), 350, PresetReverb.PRESET_MEDIUMHALL, gains)
-            }
-            DolbyAtmosMode.STUDIO -> {
-                // Intimate acoustic room, elevated dialogue & vocal presence, zero echo
-                val gains = listOf(200.toShort(), 100.toShort(), 350.toShort(), 500.toShort(), 300.toShort())
-                Tuple5(300.toShort(), 450.toShort(), 150, PresetReverb.PRESET_SMALLROOM, gains)
-            }
-            DolbyAtmosMode.OFF -> {
-                val gains = listOf(0.toShort(), 0.toShort(), 0.toShort(), 0.toShort(), 0.toShort())
-                Tuple5(0.toShort(), 0.toShort(), 0, PresetReverb.PRESET_NONE, gains)
-            }
-        }
-
         try {
             equalizer?.let { eq ->
-                for (i in 0 until minOf(numBands, bandGains.size)) {
-                    val gain = bandGains[i].coerceIn(minLevel, maxLevel)
+                for (i in 0 until minOf(numBands, mode.bandGains.size)) {
+                    val gain = mode.bandGains[i].coerceIn(minLevel, maxLevel)
                     eq.setBandLevel(i.toShort(), gain)
                 }
             }
 
             bassBoost?.let { bb ->
                 if (bb.strengthSupported) {
-                    bb.setStrength(bassStrength)
+                    bb.setStrength(mode.bassStrength)
                 }
             }
 
             virtualizer?.let { v ->
                 if (v.strengthSupported) {
-                    v.setStrength(virtStrength)
+                    v.setStrength(mode.virtStrength)
                 }
             }
 
-            loudnessEnhancer?.setTargetGain(loudnessGain)
+            loudnessEnhancer?.setTargetGain(mode.loudnessGain)
 
             presetReverb?.let { pr ->
-                pr.preset = reverb
+                pr.preset = mode.reverbPreset
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Error applying Dolby mode $mode: ${e.message}")
+            Log.w(TAG, "Error applying engine mode ${mode.id}: ${e.message}")
         }
 
         _state.update { curr ->
             val updatedBands = curr.bands.mapIndexed { idx, band ->
-                val gain = bandGains.getOrNull(idx) ?: 0
-                band.copy(levelMb = gain.toShort())
+                val gain = mode.bandGains.getOrNull(idx) ?: 0
+                band.copy(levelMb = gain)
             }
             curr.copy(
-                dolbyMode = mode,
-                activePreset = "Dolby Atmos",
-                bassBoostStrength = bassStrength,
-                virtualizerStrength = virtStrength,
-                loudnessGainMb = loudnessGain,
-                reverbPreset = reverb,
+                currentEngine = mode.engine,
+                currentMode = mode,
+                activePreset = mode.title,
+                bassBoostStrength = mode.bassStrength,
+                virtualizerStrength = mode.virtStrength,
+                loudnessGainMb = mode.loudnessGain,
+                reverbPreset = mode.reverbPreset,
                 bands = if (updatedBands.isNotEmpty()) updatedBands else curr.bands
             )
         }
     }
-
-    fun setPreset(presetName: String) {
-        if (presetName == "Dolby Atmos") {
-            setDolbyMode(DolbyAtmosMode.MUSIC)
-            return
-        }
-        _state.update { it.copy(dolbyMode = DolbyAtmosMode.OFF) }
-        applyPresetInternal(presetName)
-        scope.launch {
-            preferencesManager.saveEqualizerPreset(presetName)
-            preferencesManager.saveDolbyAtmosMode(DolbyAtmosMode.OFF.name)
-        }
-    }
-
-    private fun applyPresetInternal(presetName: String) {
-        val numBands = equalizer?.numberOfBands?.toInt() ?: _state.value.bands.size.takeIf { it > 0 } ?: 5
-        val minLevel = equalizer?.bandLevelRange?.getOrNull(0) ?: -1500
-        val maxLevel = equalizer?.bandLevelRange?.getOrNull(1) ?: 1500
-
-        var bassStrength: Short = 0
-        var virtStrength: Short = 0
-        var loudnessGain = 0
-        var reverb: Short = PresetReverb.PRESET_NONE
-
-        // Calculated band levels in millibels (-1500mB to +1500mB)
-        val bandGains: List<Short> = when (presetName) {
-            "Bass Boost" -> {
-                bassStrength = 800
-                virtStrength = 200
-                loudnessGain = 250
-                listOf(700.toShort(), 400.toShort(), 0.toShort(), 100.toShort(), 200.toShort())
-            }
-            "Vocal Focus" -> {
-                bassStrength = 100
-                virtStrength = 300
-                loudnessGain = 200
-                listOf((-200).toShort(), 200.toShort(), 600.toShort(), 400.toShort(), (-100).toShort())
-            }
-            "Treble Boost" -> {
-                bassStrength = 100
-                virtStrength = 150
-                loudnessGain = 150
-                listOf(0.toShort(), 0.toShort(), 200.toShort(), 600.toShort(), 900.toShort())
-            }
-            "Rock" -> {
-                bassStrength = 650
-                virtStrength = 400
-                loudnessGain = 300
-                listOf(600.toShort(), 300.toShort(), (-100).toShort(), 400.toShort(), 700.toShort())
-            }
-            "Electronic" -> {
-                bassStrength = 750
-                virtStrength = 500
-                loudnessGain = 350
-                listOf(700.toShort(), 300.toShort(), 0.toShort(), 500.toShort(), 800.toShort())
-            }
-            "Dolby Atmos" -> {
-                bassStrength = 600
-                virtStrength = 750
-                loudnessGain = 250
-                reverb = PresetReverb.PRESET_SMALLROOM
-                listOf(500.toShort(), 200.toShort(), 0.toShort(), 350.toShort(), 450.toShort())
-            }
-            else -> { // "Flat" or default
-                bassStrength = 0
-                virtStrength = 0
-                loudnessGain = 0
-                listOf(0.toShort(), 0.toShort(), 0.toShort(), 0.toShort(), 0.toShort())
-            }
-        }
-
-        try {
-            equalizer?.let { eq ->
-                for (i in 0 until minOf(numBands, bandGains.size)) {
-                    val gain = bandGains[i].coerceIn(minLevel, maxLevel)
-                    eq.setBandLevel(i.toShort(), gain)
-                }
-            }
-
-            bassBoost?.let { bb ->
-                if (bb.strengthSupported) {
-                    bb.setStrength(bassStrength)
-                }
-            }
-
-            virtualizer?.let { v ->
-                if (v.strengthSupported) {
-                    v.setStrength(virtStrength)
-                }
-            }
-
-            loudnessEnhancer?.setTargetGain(loudnessGain)
-
-            presetReverb?.let { pr ->
-                pr.preset = reverb
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Error applying preset $presetName: ${e.message}")
-        }
-
-        _state.update { curr ->
-            val updatedBands = curr.bands.mapIndexed { idx, band ->
-                val gain = bandGains.getOrNull(idx) ?: 0
-                band.copy(levelMb = gain.toShort())
-            }
-            curr.copy(
-                activePreset = presetName,
-                bassBoostStrength = bassStrength,
-                virtualizerStrength = virtStrength,
-                loudnessGainMb = loudnessGain,
-                reverbPreset = reverb,
-                bands = if (updatedBands.isNotEmpty()) updatedBands else curr.bands
-            )
-        }
-    }
-
-    fun setBandLevel(bandIndex: Int, levelMb: Short) {
-        try {
-            val minLevel = equalizer?.bandLevelRange?.getOrNull(0) ?: -1500
-            val maxLevel = equalizer?.bandLevelRange?.getOrNull(1) ?: 1500
-            val clamped = levelMb.coerceIn(minLevel, maxLevel)
-            equalizer?.setBandLevel(bandIndex.toShort(), clamped)
-        } catch (e: Exception) {
-            Log.w(TAG, "Error setting band $bandIndex: ${e.message}")
-        }
-
-        _state.update { curr ->
-            val updated = curr.bands.map { band ->
-                if (band.index == bandIndex) band.copy(levelMb = levelMb) else band
-            }
-            curr.copy(bands = updated, activePreset = "Custom", dolbyMode = DolbyAtmosMode.OFF)
-        }
-    }
-
-    fun setBassBoost(strength: Short) {
-        val clamped = strength.coerceIn(0, 1000)
-        try {
-            bassBoost?.let {
-                if (it.strengthSupported) it.setStrength(clamped)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Error setting bass boost: ${e.message}")
-        }
-        _state.update { it.copy(bassBoostStrength = clamped, activePreset = "Custom", dolbyMode = DolbyAtmosMode.OFF) }
-    }
-
-    fun setVirtualizer(strength: Short) {
-        val clamped = strength.coerceIn(0, 1000)
-        try {
-            virtualizer?.let {
-                if (it.strengthSupported) it.setStrength(clamped)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Error setting virtualizer: ${e.message}")
-        }
-        _state.update { it.copy(virtualizerStrength = clamped, activePreset = "Custom", dolbyMode = DolbyAtmosMode.OFF) }
-    }
-
-    fun setLoudness(gainMb: Int) {
-        val clamped = gainMb.coerceIn(0, 1000)
-        try {
-            loudnessEnhancer?.setTargetGain(clamped)
-        } catch (e: Exception) {
-            Log.w(TAG, "Error setting loudness: ${e.message}")
-        }
-        _state.update { it.copy(loudnessGainMb = clamped, activePreset = "Custom", dolbyMode = DolbyAtmosMode.OFF) }
-    }
-
-    private data class Tuple5<A, B, C, D, E>(val a: A, val b: B, val c: C, val d: D, val e: E)
 }
