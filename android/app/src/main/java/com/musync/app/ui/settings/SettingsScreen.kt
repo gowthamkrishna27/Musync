@@ -623,58 +623,108 @@ fun SettingsScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(
-                                            text = mode.title,
-                                            color = TextWhite,
-                                            fontSize = 13.sp,
-                                            fontWeight = if (isModeSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                            modifier = Modifier.weight(1f)
-                                        )
-
-                                        if (mode.recommendationTag != null) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(if (isModeSelected) Color(0x33FFFFFF) else Color(0x14FFFFFF))
-                                                    .border(1.dp, Color(0x20FFFFFF), RoundedCornerShape(6.dp))
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        ) {
+                                            Text(
+                                                text = mode.title,
+                                                color = TextWhite,
+                                                fontSize = 13.sp,
+                                                fontWeight = if (isModeSelected) FontWeight.Bold else FontWeight.SemiBold
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            // 5-Band Acoustic Curve Preview
+                                            Row(
+                                                modifier = Modifier.height(12.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                                verticalAlignment = Alignment.Bottom
                                             ) {
-                                                Text(
-                                                    text = mode.recommendationTag,
-                                                    color = Color(0xDDFFFFFF),
-                                                    fontSize = 8.5.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    letterSpacing = 0.3.sp
-                                                )
+                                                mode.bandGains.take(5).forEach { gain ->
+                                                    val normalized = ((gain + 1000f) / 2000f).coerceIn(0.2f, 1.0f)
+                                                    val barHeight = (12 * normalized).dp.coerceAtLeast(2.dp)
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .width(2.dp)
+                                                            .height(barHeight)
+                                                            .clip(RoundedCornerShape(1.dp))
+                                                            .background(if (isModeSelected && eqState.isEnabled) Color.White else Color(0x44FFFFFF))
+                                                    )
+                                                }
                                             }
                                         }
 
-                                        if (isModeSelected && eqState.isEnabled) {
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(18.dp)
-                                                    .clip(CircleShape)
-                                                .background(Color.White),
-                                            contentAlignment = Alignment.Center
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            if (mode.recommendationTag != null) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(if (isModeSelected) Color(0x33FFFFFF) else Color(0x14FFFFFF))
+                                                        .border(1.dp, Color(0x20FFFFFF), RoundedCornerShape(6.dp))
+                                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                ) {
+                                                    Text(
+                                                        text = mode.recommendationTag,
+                                                        color = Color(0xDDFFFFFF),
+                                                        fontSize = 8.5.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        letterSpacing = 0.3.sp
+                                                    )
+                                                }
+                                            }
+
+                                            if (isModeSelected && eqState.isEnabled) {
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(16.dp)
+                                                        .clip(CircleShape)
+                                                        .background(Color.White),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Check,
+                                                        contentDescription = "Active",
+                                                        tint = Color.Black,
+                                                        modifier = Modifier.size(11.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(3.dp))
+                                    Text(
+                                        text = mode.description,
+                                        color = if (isModeSelected && eqState.isEnabled) Color(0xCCFFFFFF) else Color(0x80FFFFFF),
+                                        fontSize = 10.sp,
+                                        lineHeight = 14.sp
+                                    )
+
+                                    if (mode.traitChips.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = "Active",
-                                                tint = Color.Black,
-                                                modifier = Modifier.size(12.dp)
-                                            )
+                                            mode.traitChips.forEach { trait ->
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(4.dp))
+                                                        .background(if (isModeSelected) Color(0x1EFFFFFF) else Color(0x0EFFFFFF))
+                                                        .border(0.8.dp, Color(0x1EFFFFFF), RoundedCornerShape(4.dp))
+                                                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                                            ) {
+                                                Text(
+                                                    text = trait,
+                                                    color = if (isModeSelected) Color(0xEEFFFFFF) else Color(0x99FFFFFF),
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Medium
+                                                )
+                                            }
                                         }
                                     }
                                 }
-
-                                Spacer(modifier = Modifier.height(3.dp))
-                                Text(
-                                    text = mode.description,
-                                    color = if (isModeSelected && eqState.isEnabled) Color(0xCCFFFFFF) else Color(0x80FFFFFF),
-                                    fontSize = 10.sp,
-                                    lineHeight = 14.sp
-                                )
                             }
                         }
                     }
