@@ -361,17 +361,26 @@ fun SettingsScreen(
             onDismissRequest = { showEqDialog = false },
             title = {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(enabled = isLoggedIn) {
+                            audioEffectManager.setEnabled(!eqState.isEnabled)
+                        }
+                        .padding(vertical = 2.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0xFF14141A))
-                                .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(10.dp)),
+                                .background(Color(0x22FFFFFF))
+                                .border(1.dp, Color(0x35FFFFFF), RoundedCornerShape(10.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             com.musync.app.ui.components.SoundEngineSymbol(
@@ -411,13 +420,13 @@ fun SettingsScreen(
                         .verticalScroll(scrollState)
                 ) {
                     if (!isLoggedIn) {
-                        // Minimalist Dark Black Member Exclusive Lock Card
+                        // Translucent Dark Glass Member Exclusive Lock Card
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xFF14141A))
-                                .border(1.dp, Color(0x24FFFFFF), RoundedCornerShape(16.dp))
+                                .background(Color(0x18FFFFFF))
+                                .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(16.dp))
                                 .padding(18.dp)
                         ) {
                             Column(
@@ -428,7 +437,7 @@ fun SettingsScreen(
                                     modifier = Modifier
                                         .size(44.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFF22222A)),
+                                        .background(Color(0x28FFFFFF)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
@@ -470,7 +479,7 @@ fun SettingsScreen(
                             }
                         }
                     } else {
-                        // 1. Clean Dark Black Drop Box for Engine Selection
+                        // 1. Translucent Dark Glass Drop Box for Engine Selection
                         Text(
                             text = "SOUND ENGINE",
                             color = Color(0x88FFFFFF),
@@ -485,8 +494,8 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(Color(0xFF14141A))
-                                .border(1.dp, if (isEngineDropdownExpanded) Color(0x66FFFFFF) else Color(0x24FFFFFF), RoundedCornerShape(14.dp))
+                                .background(Color(0x18FFFFFF))
+                                .border(1.dp, if (isEngineDropdownExpanded) Color(0x66FFFFFF) else Color(0x28FFFFFF), RoundedCornerShape(14.dp))
                                 .clickable { isEngineDropdownExpanded = !isEngineDropdownExpanded }
                                 .padding(horizontal = 14.dp, vertical = 12.dp)
                         ) {
@@ -503,7 +512,7 @@ fun SettingsScreen(
                                         modifier = Modifier
                                             .size(30.dp)
                                             .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFF1F1F28)),
+                                            .background(Color(0x24FFFFFF)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         com.musync.app.ui.components.SoundEngineSymbol(
@@ -532,7 +541,7 @@ fun SettingsScreen(
                                     modifier = Modifier
                                         .size(26.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFF1E1E24)),
+                                        .background(Color(0x1EFFFFFF)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
@@ -545,15 +554,15 @@ fun SettingsScreen(
                             }
                         }
 
-                        // Expanded Dark Black Dropdown List
+                        // Expanded Translucent Dark Glass Dropdown List
                         if (isEngineDropdownExpanded) {
                             Spacer(modifier = Modifier.height(6.dp))
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(14.dp))
-                                    .background(Color(0xFF121218))
-                                    .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(14.dp))
+                                    .background(Color(0x24FFFFFF))
+                                    .border(1.dp, Color(0x38FFFFFF), RoundedCornerShape(14.dp))
                                     .padding(4.dp)
                             ) {
                                 com.musync.app.playback.SoundEngine.values().forEach { engine ->
@@ -562,7 +571,7 @@ fun SettingsScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(10.dp))
-                                            .background(if (isEngineSelected) Color(0xFF242430) else Color.Transparent)
+                                            .background(if (isEngineSelected) Color(0x38FFFFFF) else Color.Transparent)
                                             .clickable {
                                                 audioEffectManager.selectEngine(engine)
                                                 isEngineDropdownExpanded = false
@@ -574,7 +583,7 @@ fun SettingsScreen(
                                             modifier = Modifier
                                                 .size(26.dp)
                                                 .clip(RoundedCornerShape(7.dp))
-                                                .background(if (isEngineSelected) Color(0xFF323240) else Color(0xFF181820)),
+                                                .background(if (isEngineSelected) Color(0x40FFFFFF) else Color(0x18FFFFFF)),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             com.musync.app.ui.components.SoundEngineSymbol(
@@ -641,11 +650,11 @@ fun SettingsScreen(
                                         .size(52.dp)
                                         .clip(RoundedCornerShape(12.dp))
                                         .background(
-                                            if (isModeSelected && eqState.isEnabled) Color(0xFF262634) else Color(0xFF14141A)
+                                            if (isModeSelected && eqState.isEnabled) Color(0x38FFFFFF) else Color(0x14FFFFFF)
                                         )
                                         .border(
                                             if (isModeSelected && eqState.isEnabled) 1.5.dp else 1.dp,
-                                            if (isModeSelected && eqState.isEnabled) Color.White else Color(0x20FFFFFF),
+                                            if (isModeSelected && eqState.isEnabled) Color.White else Color(0x24FFFFFF),
                                             RoundedCornerShape(12.dp)
                                         )
                                         .clickable {
@@ -676,13 +685,13 @@ fun SettingsScreen(
 
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        // Active Mode Info Card (Clean Minimal Black Glass Pill)
+                        // Active Mode Info Card (Translucent Dark Glass Pill)
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF14141A))
-                                .border(1.dp, Color(0x18FFFFFF), RoundedCornerShape(12.dp))
+                                .background(Color(0x18FFFFFF))
+                                .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(12.dp))
                                 .padding(horizontal = 12.dp, vertical = 9.dp)
                         ) {
                             Row(
@@ -739,7 +748,7 @@ fun SettingsScreen(
                     Text("Done", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             },
-            containerColor = Color(0xFF0A0A0E),
+            containerColor = Color(0xF212131A),
             shape = RoundedCornerShape(20.dp)
         )
     }

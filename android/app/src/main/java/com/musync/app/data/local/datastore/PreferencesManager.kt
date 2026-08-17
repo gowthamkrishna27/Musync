@@ -79,6 +79,14 @@ class PreferencesManager(private val context: Context) {
         securePrefs.edit().putString("saved_engine_mode_id", modeId).apply()
     }
 
+    fun getSoundEngineEnabled(): Boolean {
+        return securePrefs.getBoolean("saved_engine_enabled", true)
+    }
+
+    suspend fun saveSoundEngineEnabled(enabled: Boolean) {
+        securePrefs.edit().putBoolean("saved_engine_enabled", enabled).apply()
+    }
+
     fun getSoundEngineMode(): String {
         return securePrefs.getString("saved_sound_engine_mode", "DOLBY_ATMOS") ?: "DOLBY_ATMOS"
     }

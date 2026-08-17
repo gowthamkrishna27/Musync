@@ -395,8 +395,10 @@ class AudioEffectManager(
         scope.launch {
             val savedEngineId = preferencesManager.getSoundEngineId()
             val savedModeId = preferencesManager.getEngineModeId()
+            val savedEnabled = preferencesManager.getSoundEngineEnabled()
             val engine = SoundEngine.values().find { it.id == savedEngineId } ?: SoundEngine.DOLBY_ATMOS
             val mode = SoundEngineRegistry.allModes.find { it.id == savedModeId } ?: SoundEngineRegistry.getModesForEngine(engine).firstOrNull() ?: SoundEngineRegistry.allModes.first()
+            _state.update { it.copy(isEnabled = savedEnabled) }
             applyEngineModeInternal(mode)
         }
     }
@@ -530,8 +532,14 @@ class AudioEffectManager(
             virtualizer?.enabled = enabled
             loudnessEnhancer?.enabled = enabled
             presetReverb?.enabled = enabled
+            if (enabled) {
+                applyEngineModeInternal(_state.value.currentMode)
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Error toggling audiofx: ${e.message}")
+        }
+        scope.launch {
+            preferencesManager.saveSoundEngineEnabled(enabled)
         }
     }
 

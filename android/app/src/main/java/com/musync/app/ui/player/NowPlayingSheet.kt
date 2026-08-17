@@ -595,24 +595,12 @@ fun NowPlayingSheet(
                 }
 
                 IconButton(onClick = { showEqualizerSheet = true }) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (eqState.isEnabled) Color(0xFF181822) else Color.Transparent)
-                            .border(
-                                1.dp,
-                                if (eqState.isEnabled) Color(0x33FFFFFF) else Color.Transparent,
-                                RoundedCornerShape(8.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        com.musync.app.ui.components.SoundEngineSymbol(
-                            engineId = eqState.currentEngine.id,
-                            tint = if (eqState.isEnabled) Color.White else IconGrey,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Tune,
+                        contentDescription = "Equalizer",
+                        tint = if (showEqualizerSheet) IconWhite else IconGrey,
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
 
                 IconButton(onClick = { showDeviceDialog = true }) {
@@ -650,7 +638,7 @@ fun NowPlayingSheet(
         ModalBottomSheet(
             onDismissRequest = { showEqualizerSheet = false },
             sheetState = eqSheetState,
-            containerColor = Color(0xFF0A0A0E),
+            containerColor = Color(0xF212131A),
             dragHandle = {
                 Box(
                     modifier = Modifier
@@ -658,7 +646,7 @@ fun NowPlayingSheet(
                         .width(38.dp)
                         .height(4.dp)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(Color(0x33FFFFFF))
+                        .background(Color(0x40FFFFFF))
                 )
             },
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
@@ -668,20 +656,31 @@ fun NowPlayingSheet(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .navigationBarsPadding()
             ) {
-                // Header + Master Toggle (Dark Black Glass, no accent colors)
+                // Header + Master Toggle (Translucent Dark Glass)
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable(enabled = isLoggedIn) {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            audioEffectManager.setEnabled(!eqState.isEnabled)
+                        }
+                        .padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(42.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF14141A))
-                                .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(12.dp)),
+                                .background(Color(0x22FFFFFF))
+                                .border(1.dp, Color(0x35FFFFFF), RoundedCornerShape(12.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             com.musync.app.ui.components.SoundEngineSymbol(
@@ -707,7 +706,10 @@ fun NowPlayingSheet(
                     if (isLoggedIn) {
                         Switch(
                             checked = eqState.isEnabled,
-                            onCheckedChange = { audioEffectManager.setEnabled(it) },
+                            onCheckedChange = {
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                audioEffectManager.setEnabled(it)
+                            },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.Black,
                                 checkedTrackColor = Color.White,
@@ -721,13 +723,13 @@ fun NowPlayingSheet(
                 Spacer(modifier = Modifier.height(18.dp))
 
                 if (!isLoggedIn) {
-                    // Minimalist Dark Frosted Lock Card
+                    // Translucent Dark Glass Lock Card
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(20.dp))
-                            .background(Color(0xFF14141A))
-                            .border(1.dp, Color(0x26FFFFFF), RoundedCornerShape(20.dp))
+                            .background(Color(0x18FFFFFF))
+                            .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(20.dp))
                             .padding(20.dp)
                     ) {
                         Column(
@@ -738,7 +740,7 @@ fun NowPlayingSheet(
                                 modifier = Modifier
                                     .size(48.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF22222A)),
+                                    .background(Color(0x28FFFFFF)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -779,7 +781,7 @@ fun NowPlayingSheet(
                         }
                     }
                 } else {
-                    // 1. Clean Dark Black Drop Box for Engine Selection
+                    // 1. Translucent Dark Glass Drop Box for Engine Selection
                     Text(
                         text = "SOUND ENGINE",
                         color = Color(0x88FFFFFF),
@@ -794,8 +796,8 @@ fun NowPlayingSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFF14141A))
-                            .border(1.dp, if (isEngineDropdownExpanded) Color(0x66FFFFFF) else Color(0x24FFFFFF), RoundedCornerShape(16.dp))
+                            .background(Color(0x18FFFFFF))
+                            .border(1.dp, if (isEngineDropdownExpanded) Color(0x66FFFFFF) else Color(0x28FFFFFF), RoundedCornerShape(16.dp))
                             .clickable { isEngineDropdownExpanded = !isEngineDropdownExpanded }
                             .padding(horizontal = 16.dp, vertical = 13.dp)
                     ) {
@@ -812,7 +814,7 @@ fun NowPlayingSheet(
                                     modifier = Modifier
                                         .size(34.dp)
                                         .clip(RoundedCornerShape(10.dp))
-                                        .background(Color(0xFF1F1F28)),
+                                        .background(Color(0x24FFFFFF)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     com.musync.app.ui.components.SoundEngineSymbol(
@@ -842,7 +844,7 @@ fun NowPlayingSheet(
                                 modifier = Modifier
                                     .size(28.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF1E1E24)),
+                                    .background(Color(0x1EFFFFFF)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -855,15 +857,15 @@ fun NowPlayingSheet(
                         }
                     }
 
-                    // Expanded Dark Black Dropdown List
+                    // Expanded Translucent Dark Glass Dropdown List
                     if (isEngineDropdownExpanded) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0xFF121218))
-                                .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(16.dp))
+                                .background(Color(0x24FFFFFF))
+                                .border(1.dp, Color(0x38FFFFFF), RoundedCornerShape(16.dp))
                                 .padding(6.dp)
                         ) {
                             com.musync.app.playback.SoundEngine.values().forEach { engine ->
@@ -872,7 +874,7 @@ fun NowPlayingSheet(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clip(RoundedCornerShape(12.dp))
-                                        .background(if (isEngineSelected) Color(0xFF242430) else Color.Transparent)
+                                        .background(if (isEngineSelected) Color(0x38FFFFFF) else Color.Transparent)
                                         .clickable {
                                             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                                             audioEffectManager.selectEngine(engine)
@@ -885,7 +887,7 @@ fun NowPlayingSheet(
                                         modifier = Modifier
                                             .size(28.dp)
                                             .clip(RoundedCornerShape(8.dp))
-                                            .background(if (isEngineSelected) Color(0xFF323240) else Color(0xFF181820)),
+                                            .background(if (isEngineSelected) Color(0x40FFFFFF) else Color(0x18FFFFFF)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         com.musync.app.ui.components.SoundEngineSymbol(
@@ -952,11 +954,11 @@ fun NowPlayingSheet(
                                     .size(56.dp)
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(
-                                        if (isModeSelected && eqState.isEnabled) Color(0xFF262634) else Color(0xFF14141A)
+                                        if (isModeSelected && eqState.isEnabled) Color(0x38FFFFFF) else Color(0x14FFFFFF)
                                     )
                                     .border(
                                         if (isModeSelected && eqState.isEnabled) 1.5.dp else 1.dp,
-                                        if (isModeSelected && eqState.isEnabled) Color.White else Color(0x20FFFFFF),
+                                        if (isModeSelected && eqState.isEnabled) Color.White else Color(0x24FFFFFF),
                                         RoundedCornerShape(14.dp)
                                     )
                                     .clickable {
@@ -988,13 +990,13 @@ fun NowPlayingSheet(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Active Mode Info Card (Clean Minimal Black Glass Pill)
+                    // Active Mode Info Card (Translucent Dark Glass Pill)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFF14141A))
-                            .border(1.dp, Color(0x18FFFFFF), RoundedCornerShape(14.dp))
+                            .background(Color(0x18FFFFFF))
+                            .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(14.dp))
                             .padding(horizontal = 14.dp, vertical = 10.dp)
                     ) {
                         Row(
@@ -1038,18 +1040,21 @@ fun NowPlayingSheet(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
+                // High-contrast, always visible glossy Done Button
                 Button(
                     onClick = { showEqualizerSheet = false },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp),
+                        .height(50.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
                     shape = RoundedCornerShape(14.dp)
                 ) {
                     Text("Done", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
+
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
@@ -1182,13 +1187,9 @@ fun NowPlayingSheet(
                         .padding(vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    com.musync.app.ui.components.SoundEngineSymbol(
-                        engineId = eqState.currentEngine.id,
-                        tint = IconWhite,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Icon(Icons.Default.Speaker, null, tint = IconWhite, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(14.dp))
-                    Text("${eqState.currentEngine.title} (${eqState.currentMode.title})", color = TextWhite)
+                    Text("Sound Profile & EQ", color = TextWhite)
                 }
             }
         }
