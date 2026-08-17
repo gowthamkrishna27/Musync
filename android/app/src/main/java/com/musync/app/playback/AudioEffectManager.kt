@@ -48,7 +48,7 @@ data class EngineMode(
 
 object SoundEngineRegistry {
     val allModes: List<EngineMode> = listOf(
-        // 1. Dolby Atmos Modes
+        // 1. Dolby Atmos Modes (Clean, non-clipping studio spatial profile)
         EngineMode(
             id = "dolby_music",
             engine = SoundEngine.DOLBY_ATMOS,
@@ -56,11 +56,11 @@ object SoundEngineRegistry {
             subtitle = "3D soundstage & crystal vocals",
             recommendationTag = "★ Daily",
             iconType = "music",
-            bassStrength = 650,
-            virtStrength = 750,
-            loudnessGain = 220,
+            bassStrength = 450,
+            virtStrength = 650,
+            loudnessGain = 80,
             reverbPreset = PresetReverb.PRESET_SMALLROOM,
-            bandGains = listOf(500, 200, 0, 350, 450)
+            bandGains = listOf(350, 150, 0, 250, 350)
         ),
         EngineMode(
             id = "dolby_cinema",
@@ -69,11 +69,11 @@ object SoundEngineRegistry {
             subtitle = "360° surround & deep sub-bass",
             recommendationTag = "★ Cinema",
             iconType = "cinema",
-            bassStrength = 850,
-            virtStrength = 950,
-            loudnessGain = 320,
-            reverbPreset = PresetReverb.PRESET_MEDIUMHALL,
-            bandGains = listOf(750, 350, -50, 450, 650)
+            bassStrength = 650,
+            virtStrength = 850,
+            loudnessGain = 120,
+            reverbPreset = PresetReverb.PRESET_MEDIUMROOM,
+            bandGains = listOf(550, 250, -50, 350, 450)
         ),
         EngineMode(
             id = "dolby_studio",
@@ -82,11 +82,11 @@ object SoundEngineRegistry {
             subtitle = "Acoustic room & dialogue focus",
             recommendationTag = "★ Vocals",
             iconType = "studio",
-            bassStrength = 300,
-            virtStrength = 500,
-            loudnessGain = 150,
+            bassStrength = 200,
+            virtStrength = 400,
+            loudnessGain = 60,
             reverbPreset = PresetReverb.PRESET_SMALLROOM,
-            bandGains = listOf(200, 100, 350, 500, 300)
+            bandGains = listOf(150, 80, 300, 350, 200)
         ),
         EngineMode(
             id = "dolby_bass",
@@ -95,11 +95,11 @@ object SoundEngineRegistry {
             subtitle = "Sub-harmonic punch & zero echo",
             recommendationTag = "★ Bass",
             iconType = "bolt",
-            bassStrength = 950,
-            virtStrength = 400,
-            loudnessGain = 300,
+            bassStrength = 750,
+            virtStrength = 300,
+            loudnessGain = 100,
             reverbPreset = PresetReverb.PRESET_NONE,
-            bandGains = listOf(850, 450, 0, 200, 300)
+            bandGains = listOf(650, 300, 0, 150, 200)
         ),
 
         // 2. Sony 360 Reality Audio Modes
@@ -110,11 +110,11 @@ object SoundEngineRegistry {
             subtitle = "Spherical 3D coordinate audio",
             recommendationTag = "★ 360°",
             iconType = "spatial",
-            bassStrength = 450,
-            virtStrength = 950,
-            loudnessGain = 200,
+            bassStrength = 350,
+            virtStrength = 850,
+            loudnessGain = 80,
             reverbPreset = PresetReverb.PRESET_MEDIUMROOM,
-            bandGains = listOf(300, 200, 400, 550, 650)
+            bandGains = listOf(200, 150, 250, 400, 500)
         ),
         EngineMode(
             id = "sony_arena",
@@ -123,11 +123,11 @@ object SoundEngineRegistry {
             subtitle = "Stadium echo & concert stage",
             recommendationTag = "★ Concert",
             iconType = "music",
-            bassStrength = 600,
-            virtStrength = 900,
-            loudnessGain = 250,
-            reverbPreset = PresetReverb.PRESET_LARGEHALL,
-            bandGains = listOf(450, 250, 300, 400, 500)
+            bassStrength = 450,
+            virtStrength = 750,
+            loudnessGain = 100,
+            reverbPreset = PresetReverb.PRESET_MEDIUMROOM,
+            bandGains = listOf(350, 200, 200, 300, 400)
         ),
         EngineMode(
             id = "sony_vocal",
@@ -136,11 +136,11 @@ object SoundEngineRegistry {
             subtitle = "Center vocal isolation & air",
             recommendationTag = "★ Acoustic",
             iconType = "vocal",
-            bassStrength = 200,
-            virtStrength = 700,
-            loudnessGain = 180,
+            bassStrength = 150,
+            virtStrength = 550,
+            loudnessGain = 60,
             reverbPreset = PresetReverb.PRESET_SMALLROOM,
-            bandGains = listOf(0, 150, 600, 500, 400)
+            bandGains = listOf(0, 100, 450, 350, 300)
         ),
 
         // 3. DTS:X Ultra Modes
@@ -151,11 +151,11 @@ object SoundEngineRegistry {
             subtitle = "Multi-channel cinema dynamics",
             recommendationTag = "★ Surround",
             iconType = "cinema",
-            bassStrength = 850,
-            virtStrength = 950,
-            loudnessGain = 350,
-            reverbPreset = PresetReverb.PRESET_MEDIUMHALL,
-            bandGains = listOf(700, 350, 0, 450, 600)
+            bassStrength = 650,
+            virtStrength = 800,
+            loudnessGain = 120,
+            reverbPreset = PresetReverb.PRESET_MEDIUMROOM,
+            bandGains = listOf(500, 250, 0, 300, 450)
         ),
         EngineMode(
             id = "dts_impact",
@@ -164,11 +164,11 @@ object SoundEngineRegistry {
             subtitle = "Max limiter punch for EDM & Rock",
             recommendationTag = "★ EDM",
             iconType = "bolt",
-            bassStrength = 950,
-            virtStrength = 850,
-            loudnessGain = 400,
+            bassStrength = 750,
+            virtStrength = 650,
+            loudnessGain = 140,
             reverbPreset = PresetReverb.PRESET_NONE,
-            bandGains = listOf(850, 400, -100, 500, 700)
+            bandGains = listOf(600, 300, -50, 350, 500)
         ),
         EngineMode(
             id = "dts_music",
@@ -177,11 +177,11 @@ object SoundEngineRegistry {
             subtitle = "Balanced fidelity & crisp treble",
             recommendationTag = "★ Studio",
             iconType = "studio",
-            bassStrength = 650,
-            virtStrength = 800,
-            loudnessGain = 250,
+            bassStrength = 450,
+            virtStrength = 600,
+            loudnessGain = 80,
             reverbPreset = PresetReverb.PRESET_SMALLROOM,
-            bandGains = listOf(600, 300, 150, 400, 500)
+            bandGains = listOf(400, 200, 100, 250, 350)
         ),
 
         // 4. Bose ActiveEQ Modes
@@ -192,11 +192,11 @@ object SoundEngineRegistry {
             subtitle = "Velvety smooth low-end",
             recommendationTag = "★ Balanced",
             iconType = "warm",
-            bassStrength = 700,
-            virtStrength = 450,
-            loudnessGain = 220,
+            bassStrength = 550,
+            virtStrength = 350,
+            loudnessGain = 80,
             reverbPreset = PresetReverb.PRESET_NONE,
-            bandGains = listOf(600, 350, 200, 150, 200)
+            bandGains = listOf(450, 250, 150, 100, 150)
         ),
         EngineMode(
             id = "bose_deep",
@@ -205,11 +205,11 @@ object SoundEngineRegistry {
             subtitle = "Dynamic active sub-bass contour",
             recommendationTag = "★ Deep",
             iconType = "bolt",
-            bassStrength = 900,
-            virtStrength = 300,
-            loudnessGain = 300,
+            bassStrength = 700,
+            virtStrength = 200,
+            loudnessGain = 100,
             reverbPreset = PresetReverb.PRESET_NONE,
-            bandGains = listOf(800, 450, 100, 200, 250)
+            bandGains = listOf(600, 350, 50, 150, 200)
         ),
         EngineMode(
             id = "bose_acoustic",
@@ -218,11 +218,11 @@ object SoundEngineRegistry {
             subtitle = "String separation & vocal lift",
             recommendationTag = "★ Clarity",
             iconType = "vocal",
-            bassStrength = 350,
-            virtStrength = 500,
-            loudnessGain = 180,
+            bassStrength = 250,
+            virtStrength = 400,
+            loudnessGain = 60,
             reverbPreset = PresetReverb.PRESET_SMALLROOM,
-            bandGains = listOf(200, 150, 450, 550, 450)
+            bandGains = listOf(150, 100, 350, 400, 350)
         ),
 
         // 5. Sennheiser AMBEO 3D Modes
@@ -233,11 +233,11 @@ object SoundEngineRegistry {
             subtitle = "Holographic depth & micro-reverb",
             recommendationTag = "★ 3D",
             iconType = "spatial",
-            bassStrength = 500,
-            virtStrength = 900,
-            loudnessGain = 250,
-            reverbPreset = PresetReverb.PRESET_MEDIUMROOM,
-            bandGains = listOf(350, 200, 400, 600, 600)
+            bassStrength = 400,
+            virtStrength = 750,
+            loudnessGain = 90,
+            reverbPreset = PresetReverb.PRESET_SMALLROOM,
+            bandGains = listOf(250, 150, 250, 400, 450)
         ),
         EngineMode(
             id = "ambeo_natural",
@@ -246,11 +246,11 @@ object SoundEngineRegistry {
             subtitle = "Natural acoustic room decay",
             recommendationTag = "★ Natural",
             iconType = "studio",
-            bassStrength = 350,
-            virtStrength = 600,
-            loudnessGain = 120,
+            bassStrength = 250,
+            virtStrength = 450,
+            loudnessGain = 50,
             reverbPreset = PresetReverb.PRESET_SMALLROOM,
-            bandGains = listOf(150, 100, 300, 450, 400)
+            bandGains = listOf(100, 80, 200, 300, 250)
         ),
         EngineMode(
             id = "ambeo_concert",
@@ -259,11 +259,11 @@ object SoundEngineRegistry {
             subtitle = "Concert hall acoustic resonance",
             recommendationTag = "★ Stage",
             iconType = "cinema",
-            bassStrength = 650,
-            virtStrength = 950,
-            loudnessGain = 280,
-            reverbPreset = PresetReverb.PRESET_LARGEHALL,
-            bandGains = listOf(500, 300, 200, 450, 550)
+            bassStrength = 500,
+            virtStrength = 800,
+            loudnessGain = 100,
+            reverbPreset = PresetReverb.PRESET_MEDIUMROOM,
+            bandGains = listOf(400, 200, 150, 300, 400)
         ),
 
         // 6. Viper Dynamic Master Modes
@@ -274,11 +274,11 @@ object SoundEngineRegistry {
             subtitle = "Analog vacuum tube harmonics",
             recommendationTag = "★ Vintage",
             iconType = "warm",
-            bassStrength = 750,
-            virtStrength = 600,
-            loudnessGain = 300,
+            bassStrength = 550,
+            virtStrength = 450,
+            loudnessGain = 100,
             reverbPreset = PresetReverb.PRESET_NONE,
-            bandGains = listOf(650, 350, 250, 400, 550)
+            bandGains = listOf(450, 250, 180, 280, 380)
         ),
         EngineMode(
             id = "viper_exciter",
@@ -287,11 +287,11 @@ object SoundEngineRegistry {
             subtitle = "Heavy club subwoofer slam",
             recommendationTag = "★ Basshead",
             iconType = "bolt",
-            bassStrength = 1000,
-            virtStrength = 700,
-            loudnessGain = 400,
+            bassStrength = 750,
+            virtStrength = 500,
+            loudnessGain = 120,
             reverbPreset = PresetReverb.PRESET_NONE,
-            bandGains = listOf(950, 500, 100, 450, 650)
+            bandGains = listOf(700, 380, 80, 300, 450)
         ),
         EngineMode(
             id = "viper_air",
@@ -300,11 +300,11 @@ object SoundEngineRegistry {
             subtitle = "Upper treble air & wide imaging",
             recommendationTag = "★ Air",
             iconType = "spatial",
-            bassStrength = 400,
-            virtStrength = 750,
-            loudnessGain = 220,
+            bassStrength = 300,
+            virtStrength = 600,
+            loudnessGain = 80,
             reverbPreset = PresetReverb.PRESET_NONE,
-            bandGains = listOf(200, 100, 300, 700, 900)
+            bandGains = listOf(150, 80, 200, 500, 650)
         ),
 
         // 7. Hi-Res Direct Modes
@@ -349,16 +349,16 @@ data class EqualizerState(
     val currentEngine: SoundEngine = SoundEngine.DOLBY_ATMOS,
     val currentMode: EngineMode = SoundEngineRegistry.allModes.first(),
     val activePreset: String = "Dolby Music",
-    val bassBoostStrength: Short = 650,
-    val virtualizerStrength: Short = 750,
-    val loudnessGainMb: Int = 220,
+    val bassBoostStrength: Short = 450,
+    val virtualizerStrength: Short = 650,
+    val loudnessGainMb: Int = 80,
     val reverbPreset: Short = PresetReverb.PRESET_SMALLROOM,
     val bands: List<EqualizerBand> = listOf(
-        EqualizerBand(0, 60, 500, -1500, 1500),
-        EqualizerBand(1, 230, 200, -1500, 1500),
+        EqualizerBand(0, 60, 350, -1500, 1500),
+        EqualizerBand(1, 230, 150, -1500, 1500),
         EqualizerBand(2, 910, 0, -1500, 1500),
-        EqualizerBand(3, 3600, 350, -1500, 1500),
-        EqualizerBand(4, 14000, 450, -1500, 1500)
+        EqualizerBand(3, 3600, 250, -1500, 1500),
+        EqualizerBand(4, 14000, 350, -1500, 1500)
     )
 ) {
     val soundEngine: SoundEngine

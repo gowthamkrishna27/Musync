@@ -368,17 +368,16 @@ fun SettingsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(38.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0x18FFFFFF))
+                                .background(Color(0xFF14141A))
                                 .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(10.dp)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.GraphicEq,
-                                contentDescription = null,
+                            com.musync.app.ui.components.SoundEngineSymbol(
+                                engineId = eqState.currentEngine.id,
                                 tint = if (isLoggedIn && eqState.isEnabled) Color.White else IconGrey,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(10.dp))
@@ -412,12 +411,12 @@ fun SettingsScreen(
                         .verticalScroll(scrollState)
                 ) {
                     if (!isLoggedIn) {
-                        // Glassmorphic Member Exclusive Lock Card
+                        // Minimalist Dark Black Member Exclusive Lock Card
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0x14FFFFFF))
+                                .background(Color(0xFF14141A))
                                 .border(1.dp, Color(0x24FFFFFF), RoundedCornerShape(16.dp))
                                 .padding(18.dp)
                         ) {
@@ -429,7 +428,7 @@ fun SettingsScreen(
                                     modifier = Modifier
                                         .size(44.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0x22FFFFFF)),
+                                        .background(Color(0xFF22222A)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
@@ -471,7 +470,7 @@ fun SettingsScreen(
                             }
                         }
                     } else {
-                        // 1. Clean Dark Glass Drop Box for Engine Selection
+                        // 1. Clean Dark Black Drop Box for Engine Selection
                         Text(
                             text = "SOUND ENGINE",
                             color = Color(0x88FFFFFF),
@@ -486,7 +485,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(Color(0x14FFFFFF))
+                                .background(Color(0xFF14141A))
                                 .border(1.dp, if (isEngineDropdownExpanded) Color(0x66FFFFFF) else Color(0x24FFFFFF), RoundedCornerShape(14.dp))
                                 .clickable { isEngineDropdownExpanded = !isEngineDropdownExpanded }
                                 .padding(horizontal = 14.dp, vertical = 12.dp)
@@ -496,26 +495,44 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = eqState.currentEngine.title,
-                                        color = TextWhite,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = eqState.currentEngine.recommendation,
-                                        color = Color(0x99FFFFFF),
-                                        fontSize = 10.sp
-                                    )
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(30.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFF1F1F28)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        com.musync.app.ui.components.SoundEngineSymbol(
+                                            engineId = eqState.currentEngine.id,
+                                            tint = TextWhite,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = eqState.currentEngine.title,
+                                            color = TextWhite,
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = eqState.currentEngine.recommendation,
+                                            color = Color(0x99FFFFFF),
+                                            fontSize = 10.sp
+                                        )
+                                    }
                                 }
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Box(
                                     modifier = Modifier
                                         .size(26.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0x14FFFFFF)),
+                                        .background(Color(0xFF1E1E24)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
@@ -528,15 +545,15 @@ fun SettingsScreen(
                             }
                         }
 
-                        // Expanded Dark Glass Dropdown List
+                        // Expanded Dark Black Dropdown List
                         if (isEngineDropdownExpanded) {
                             Spacer(modifier = Modifier.height(6.dp))
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(14.dp))
-                                    .background(Color(0x1CFFFFFF))
-                                    .border(1.dp, Color(0x30FFFFFF), RoundedCornerShape(14.dp))
+                                    .background(Color(0xFF121218))
+                                    .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(14.dp))
                                     .padding(4.dp)
                             ) {
                                 com.musync.app.playback.SoundEngine.values().forEach { engine ->
@@ -545,26 +562,39 @@ fun SettingsScreen(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(10.dp))
-                                            .background(if (isEngineSelected) Color(0x2EFFFFFF) else Color.Transparent)
+                                            .background(if (isEngineSelected) Color(0xFF242430) else Color.Transparent)
                                             .clickable {
                                                 audioEffectManager.selectEngine(engine)
                                                 isEngineDropdownExpanded = false
                                             }
-                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                            .padding(horizontal = 10.dp, vertical = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(26.dp)
+                                                .clip(RoundedCornerShape(7.dp))
+                                                .background(if (isEngineSelected) Color(0xFF323240) else Color(0xFF181820)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            com.musync.app.ui.components.SoundEngineSymbol(
+                                                engineId = engine.id,
+                                                tint = if (isEngineSelected) Color.White else Color(0x88FFFFFF),
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
                                                 text = engine.title,
                                                 color = TextWhite,
-                                                fontSize = 13.sp,
+                                                fontSize = 12.5.sp,
                                                 fontWeight = if (isEngineSelected) FontWeight.Bold else FontWeight.Medium
                                             )
-                                            Spacer(modifier = Modifier.height(1.dp))
                                             Text(
                                                 text = engine.recommendation,
                                                 color = Color(0x88FFFFFF),
-                                                fontSize = 10.sp
+                                                fontSize = 9.5.sp
                                             )
                                         }
                                         if (isEngineSelected) {
@@ -573,7 +603,7 @@ fun SettingsScreen(
                                                 imageVector = Icons.Default.Check,
                                                 contentDescription = "Selected",
                                                 tint = Color.White,
-                                                modifier = Modifier.size(15.dp)
+                                                modifier = Modifier.size(14.dp)
                                             )
                                         }
                                     }
@@ -583,7 +613,7 @@ fun SettingsScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // 2. Simple Engine Mode Cards with Recommendations
+                        // 2. Square Symboled Mode Buttons
                         Text(
                             text = "${eqState.currentEngine.title.uppercase()} MODES",
                             color = Color(0x88FFFFFF),
@@ -592,117 +622,104 @@ fun SettingsScreen(
                             letterSpacing = 1.sp
                         )
 
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
                         val engineModes = com.musync.app.playback.SoundEngineRegistry.getModesForEngine(eqState.currentEngine)
 
-                        engineModes.forEach { mode ->
-                            val isModeSelected = eqState.currentMode.id == mode.id
+                        // Square Mode Buttons Row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            engineModes.forEach { mode ->
+                                val isModeSelected = eqState.currentMode.id == mode.id
 
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 2.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        if (isModeSelected && eqState.isEnabled) Color(0x28FFFFFF) else Color(0x0EFFFFFF)
-                                    )
-                                    .border(
-                                        1.dp,
-                                        if (isModeSelected && eqState.isEnabled) Color(0x66FFFFFF) else Color(0x14FFFFFF),
-                                        RoundedCornerShape(12.dp)
-                                    )
-                                    .clickable {
-                                        audioEffectManager.setEngineMode(mode)
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 8.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                Box(
+                                    modifier = Modifier
+                                        .size(52.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(
+                                            if (isModeSelected && eqState.isEnabled) Color(0xFF262634) else Color(0xFF14141A)
+                                        )
+                                        .border(
+                                            if (isModeSelected && eqState.isEnabled) 1.5.dp else 1.dp,
+                                            if (isModeSelected && eqState.isEnabled) Color.White else Color(0x20FFFFFF),
+                                            RoundedCornerShape(12.dp)
+                                        )
+                                        .clickable {
+                                            audioEffectManager.setEngineMode(mode)
+                                        },
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.weight(1f)
-                                    ) {
+                                    com.musync.app.ui.components.SoundModeSymbol(
+                                        iconType = mode.iconType,
+                                        modeId = mode.id,
+                                        tint = if (isModeSelected && eqState.isEnabled) Color.White else Color(0x77FFFFFF),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+
+                                    if (isModeSelected && eqState.isEnabled) {
                                         Box(
                                             modifier = Modifier
-                                                .size(26.dp)
-                                                .clip(RoundedCornerShape(7.dp))
-                                                .background(if (isModeSelected && eqState.isEnabled) Color(0x33FFFFFF) else Color(0x14FFFFFF)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = when (mode.iconType) {
-                                                    "music" -> Icons.Default.MusicNote
-                                                    "cinema" -> Icons.Default.Videocam
-                                                    "studio" -> Icons.Default.Tune
-                                                    "bolt" -> Icons.Default.Speaker
-                                                    "spatial" -> Icons.Default.GraphicEq
-                                                    "warm" -> Icons.Default.Tune
-                                                    "direct" -> Icons.Default.Headphones
-                                                    else -> Icons.Default.GraphicEq
-                                                },
-                                                contentDescription = mode.title,
-                                                tint = if (isModeSelected && eqState.isEnabled) Color.White else Color(0x99FFFFFF),
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
-
-                                        Spacer(modifier = Modifier.width(8.dp))
-
-                                        Column {
-                                            Text(
-                                                text = mode.title,
-                                                color = TextWhite,
-                                                fontSize = 12.5.sp,
-                                                fontWeight = if (isModeSelected) FontWeight.Bold else FontWeight.SemiBold
-                                            )
-                                            Text(
-                                                text = mode.subtitle,
-                                                color = if (isModeSelected && eqState.isEnabled) Color(0xBBFFFFFF) else Color(0x77FFFFFF),
-                                                fontSize = 10.sp
-                                            )
-                                        }
+                                                .align(Alignment.BottomCenter)
+                                                .padding(bottom = 3.dp)
+                                                .size(3.5.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.White)
+                                        )
                                     }
+                                }
+                            }
+                        }
 
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (mode.recommendationTag != null) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(5.dp))
-                                                    .background(if (isModeSelected) Color(0x33FFFFFF) else Color(0x14FFFFFF))
-                                                    .border(0.8.dp, Color(0x22FFFFFF), RoundedCornerShape(5.dp))
-                                                    .padding(horizontal = 5.dp, vertical = 2.dp)
-                                            ) {
-                                                Text(
-                                                    text = mode.recommendationTag,
-                                                    color = Color(0xDDFFFFFF),
-                                                    fontSize = 8.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    letterSpacing = 0.3.sp
-                                                )
-                                            }
-                                        }
+                        Spacer(modifier = Modifier.height(10.dp))
 
-                                        if (isModeSelected && eqState.isEnabled) {
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(15.dp)
-                                                    .clip(CircleShape)
-                                                    .background(Color.White),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Check,
-                                                    contentDescription = "Active",
-                                                    tint = Color.Black,
-                                                    modifier = Modifier.size(9.dp)
-                                                )
-                                            }
-                                        }
+                        // Active Mode Info Card (Clean Minimal Black Glass Pill)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF14141A))
+                                .border(1.dp, Color(0x18FFFFFF), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 12.dp, vertical = 9.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = eqState.currentMode.title,
+                                        color = TextWhite,
+                                        fontSize = 12.5.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = eqState.currentMode.subtitle,
+                                        color = Color(0x99FFFFFF),
+                                        fontSize = 10.sp
+                                    )
+                                }
+
+                                val modeTag = eqState.currentMode.recommendationTag
+                                if (modeTag != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(5.dp))
+                                            .background(Color(0x22FFFFFF))
+                                            .border(0.8.dp, Color(0x33FFFFFF), RoundedCornerShape(5.dp))
+                                            .padding(horizontal = 7.dp, vertical = 2.5.dp)
+                                    ) {
+                                        Text(
+                                            text = modeTag,
+                                            color = Color.White,
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            letterSpacing = 0.3.sp
+                                        )
                                     }
                                 }
                             }
@@ -722,7 +739,7 @@ fun SettingsScreen(
                     Text("Done", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             },
-            containerColor = Color(0xF20F0F14),
+            containerColor = Color(0xFF0A0A0E),
             shape = RoundedCornerShape(20.dp)
         )
     }
