@@ -34,12 +34,13 @@ object ImageQualityHelper {
                     .replace(Regex("=s\\d+[^=]*"), "=s800-c-k-c0x00ffffff-no-rj")
             }
 
-            // 2. YouTube Vi Thumbnails (upgrade mqdefault/default 320x180 -> hq720 1280x720 / maxresdefault)
+            // 2. YouTube Vi Thumbnails (upgrade mqdefault/default 320x180 / hqdefault -> hq720 1280x720)
             rawUrl.contains("i.ytimg.com") -> {
                 rawUrl
                     .replace("/mqdefault.jpg", "/hq720.jpg")
                     .replace("/default.jpg", "/hq720.jpg")
                     .replace("/sddefault.jpg", "/hq720.jpg")
+                    .replace("/hqdefault.jpg", "/hq720.jpg")
             }
 
             // 3. Fallback for ID-based URLs

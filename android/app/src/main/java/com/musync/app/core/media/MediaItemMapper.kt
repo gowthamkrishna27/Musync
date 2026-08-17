@@ -30,7 +30,8 @@ object MediaItemMapper {
         }
 
         val streamUri = Uri.parse(targetStreamUrl)
-        val artworkUri = track.artworkUrl?.takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
+        val hqArtworkUrl = com.musync.app.core.image.ImageQualityHelper.getHighQualityArtworkUrl(track.artworkUrl, track.id)
+        val artworkUri = hqArtworkUrl.takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
 
         val extras = Bundle().apply {
             putString(EXTRA_TRACK_ID, track.id)

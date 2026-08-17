@@ -43,17 +43,10 @@ fun AuthBottomSheet(
     val authError by authManager.authError.collectAsState()
 
     // Resolve the web client ID at composition time with a safe fallback.
-    // The google-services Gradle plugin auto-generates default_web_client_id from the
-    // type-3 (Web) OAuth client in google-services.json. We also keep a hardcoded
-    // fallback so sign-in always receives a valid client ID.
     val webClientId = remember {
-        val resId = context.resources.getIdentifier(
-            "default_web_client_id", "string", context.packageName
-        )
-        if (resId != 0) {
-            context.getString(resId)
-        } else {
-            // Fallback: type-3 web client ID from google-services.json
+        try {
+            context.getString(com.musync.app.R.string.default_web_client_id)
+        } catch (_: Exception) {
             "989198851105-m97comku8uiv00cvilvvaen55m745o48.apps.googleusercontent.com"
         }
     }
@@ -211,11 +204,10 @@ fun AuthBottomSheet(
                             .requestProfile()
                             .build()
                         val googleSignInClient = GoogleSignIn.getClient(context, gso)
-                        // Sign out first to force account-picker every time.
-                        // Without this, a cached (stale) account may be used silently.
-                        googleSignInClient.signOut().addOnCompleteListener {
-                            googleSignInLauncher.launch(googleSignInClient.signInIntent)
-                        }
+                        try {
+                            googleSignInClient.signOut()
+                        } catch (_: Exception) {}
+                        googleSignInLauncher.launch(googleSignInClient.signInIntent)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -304,7 +296,12 @@ fun AuthBottomSheet(
 
                 // Guest / Skip Option
                 TextButton(
-                    onClick = onDismiss,
+                    onClick = {
+                        coroutineScope.launch {
+                            authManager.signInAnonymously()
+                            onDismiss()
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(

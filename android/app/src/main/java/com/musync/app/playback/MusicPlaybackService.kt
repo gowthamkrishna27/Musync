@@ -1,4 +1,4 @@
-﻿package com.musync.app.playback
+package com.musync.app.playback
 
 import android.app.PendingIntent
 import android.content.Intent
@@ -262,8 +262,17 @@ class MusicPlaybackService : MediaLibraryService() {
 
         this.player = exoPlayer
 
+        val musyncBitmapLoader = MusyncBitmapLoader(this, serviceScope)
+
+        val notificationProvider = androidx.media3.session.DefaultMediaNotificationProvider.Builder(this)
+            .setNotificationId(1001)
+            .setChannelName(com.musync.app.R.string.notification_channel_name)
+            .build()
+        setMediaNotificationProvider(notificationProvider)
+
         mediaLibrarySession = MediaLibrarySession.Builder(this, exoPlayer, CustomLibraryCallback())
             .setSessionActivity(sessionActivityPendingIntent)
+            .setBitmapLoader(musyncBitmapLoader)
             .build()
     }
 

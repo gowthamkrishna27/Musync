@@ -594,8 +594,43 @@ class YouTubeMusicProvider(
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed fetching recommendations for $cleanId: ${e.message}")
+            Log.w(TAG, "Primary recommendations endpoint unavailable for $cleanId: ${e.message}")
         }
+
+        // Resilient Fallback: If /recommendations is not available on active cloud backend,
+        // intelligently fetch related recommendations via artist/track search or trending.
+        try {
+            val trackInfo = getTrack(cleanId)
+            val searchQueries = mutableListOf<String>()
+            if (trackInfo != null) {
+                val artistName = trackInfo.artist.name.trim()
+                if (artistName.isNotBlank() && !artistName.equals("YouTube Artist", ignoreCase = true) && !artistName.equals("YouTube Music", ignoreCase = true)) {
+                    searchQueries.add(artistName)
+                }
+                val title = trackInfo.title.trim()
+                if (title.isNotBlank() && !title.equals("YouTube Track", ignoreCase = true) && !title.equals("YouTube Music Track", ignoreCase = true)) {
+                    searchQueries.add(title)
+                }
+            }
+
+            for (query in searchQueries) {
+                val results = search(query)
+                val filtered = results.filter { it.id != "yt_$cleanId" && it.id != cleanId }
+                if (filtered.isNotEmpty()) {
+                    return@withContext filtered.take(limit)
+                }
+            }
+
+            // Ultimate fallback: trending songs
+            val trending = getTrending()
+            val filteredTrending = trending.filter { it.id != "yt_$cleanId" && it.id != cleanId }
+            if (filteredTrending.isNotEmpty()) {
+                return@withContext filteredTrending.take(limit)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Fallback recommendations failed for $cleanId: ${e.message}")
+        }
+
         emptyList()
     }
 }

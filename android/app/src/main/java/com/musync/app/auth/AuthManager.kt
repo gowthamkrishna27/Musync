@@ -145,33 +145,43 @@ class AuthManager(
             scopes = listOf("read:user", "user:email")
         }.build()
 
-        // Check for a pending result first — this handles the case where the
-        // Activity was killed during the Chrome Custom Tab redirect and Firebase
-        // preserved the in-flight auth result.
+        // Check for a pending result first (in case of activity recreation)
         val pendingResultTask = auth.pendingAuthResult
         if (pendingResultTask != null) {
-            Log.d(TAG, "AUTH: GitHub — pending result found, resuming...")
+            Log.d(TAG, "AUTH: GitHub — pending result found, checking...")
             pendingResultTask
                 .addOnSuccessListener { authResult ->
-                    Log.d(TAG, "AUTH: GitHub — pending result success")
-                    handleGitHubAuthResult(authResult.user, onComplete)
+                    if (authResult?.user != null) {
+                        Log.d(TAG, "AUTH: GitHub — pending result success")
+                        handleGitHubAuthResult(authResult.user, onComplete)
+                    } else {
+                        launchFreshGitHubFlow(activity, provider, onComplete)
+                    }
                 }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "AUTH: GitHub — pending result failure", e)
-                    handleGitHubAuthFailure(e, onComplete)
+                .addOnFailureListener {
+                    Log.d(TAG, "AUTH: GitHub — pending result had error, starting fresh OAuth flow")
+                    launchFreshGitHubFlow(activity, provider, onComplete)
                 }
         } else {
-            Log.d(TAG, "AUTH: GitHub — no pending result, starting fresh OAuth flow")
-            auth.startActivityForSignInWithProvider(activity, provider)
-                .addOnSuccessListener { authResult ->
-                    Log.d(TAG, "AUTH: GitHub — OAuth flow success")
-                    handleGitHubAuthResult(authResult.user, onComplete)
-                }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "AUTH: GitHub — OAuth flow failure", e)
-                    handleGitHubAuthFailure(e, onComplete)
-                }
+            launchFreshGitHubFlow(activity, provider, onComplete)
         }
+    }
+
+    private fun launchFreshGitHubFlow(
+        activity: Activity,
+        provider: OAuthProvider,
+        onComplete: (Result<MusyncUser>) -> Unit
+    ) {
+        Log.d(TAG, "AUTH: GitHub — starting fresh OAuth flow")
+        auth.startActivityForSignInWithProvider(activity, provider)
+            .addOnSuccessListener { authResult ->
+                Log.d(TAG, "AUTH: GitHub — OAuth flow success")
+                handleGitHubAuthResult(authResult.user, onComplete)
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "AUTH: GitHub — OAuth flow failure", e)
+                handleGitHubAuthFailure(e, onComplete)
+            }
     }
 
     private fun handleGitHubAuthResult(
@@ -243,6 +253,27 @@ class AuthManager(
             "ERROR_API_NOT_AVAILABLE"                    -> "Firebase Auth API is unavailable."
             "ERROR_INTERNAL_ERROR"                       -> "Internal Firebase error. Check Logcat for details."
             else                                         -> "$context failed (code: $errorCode). Please try again."
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    //  GUEST / ANONYMOUS SIGN-IN
+    // ──────────────────────────────────────────────────────────────
+
+    suspend fun signInAnonymously(): Result<MusyncUser> {
+        _authLoading.value = true
+        _authError.value = null
+        return try {
+            val result = auth.signInAnonymously().await()
+            val user = result.user?.toMusyncUser()
+                ?: throw IllegalStateException("Firebase User is null after anonymous sign-in")
+            _currentUser.value = user
+            _authLoading.value = false
+            Result.success(user)
+        } catch (e: Exception) {
+            _authLoading.value = false
+            _authError.value = e.localizedMessage ?: "Guest sign-in failed"
+            Result.failure(e)
         }
     }
 
