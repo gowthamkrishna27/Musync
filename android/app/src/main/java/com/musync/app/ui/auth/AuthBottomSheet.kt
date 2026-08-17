@@ -140,7 +140,7 @@ fun AuthBottomSheet(
                     val basicClient = GoogleSignIn.getClient(context, basicGso)
                     googleFallbackLauncher.launch(basicClient.signInIntent)
                 } catch (fallbackEx: Exception) {
-                    authManager.setAuthError("Google Sign-In error (code $statusCode). You can also sign in with Email or GitHub.")
+                    authManager.setAuthError("Google Sign-In error (code $statusCode). You can also sign in with Email.")
                 }
             }
         } catch (e: Exception) {
@@ -301,56 +301,9 @@ fun AuthBottomSheet(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // 2. GitHub Sign-In / Sign-Up Button
-                Button(
-                    onClick = {
-                        val activity = findActivity(context)
-                        if (activity != null) {
-                            authManager.clearAuthError()
-                            authManager.signInWithGitHub(activity) { result ->
-                                if (result.isSuccess) {
-                                    onDismiss()
-                                }
-                            }
-                        } else {
-                            authManager.setAuthError("GitHub Sign-In is unavailable in this context.")
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(14.dp)),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF24292E),
-                        contentColor = Color.White
-                    )
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            painter = androidx.compose.ui.res.painterResource(id = com.musync.app.R.drawable.ic_github_logo),
-                            contentDescription = "GitHub",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = if (isSignUpMode) "Sign up with GitHub" else "Sign in with GitHub",
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // 3. Email Authentication Toggle / Form
+                // 2. Email Authentication Toggle / Form
                 if (!showEmailForm) {
                     OutlinedButton(
                         onClick = { showEmailForm = true },

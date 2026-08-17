@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -376,6 +377,89 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .verticalScroll(scrollState)
                 ) {
+                    // Dolby Atmos 3D Spatial Audio Card
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                if (eqState.isDolbyActive) {
+                                    androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                        listOf(Color(0xFF0F172A), Color(0xFF1E1B4B))
+                                    )
+                                } else {
+                                    androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                        listOf(CardElevated, CardElevated)
+                                    )
+                                }
+                            )
+                            .border(
+                                1.dp,
+                                if (eqState.isDolbyActive) Color(0xFF6366F1) else BorderStroke,
+                                RoundedCornerShape(16.dp)
+                            )
+                            .padding(12.dp)
+                    ) {
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.GraphicEq,
+                                        contentDescription = "Dolby Atmos",
+                                        tint = if (eqState.isDolbyActive) Color(0xFFA5B4FC) else IconGrey,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Dolby Atmos 3D Sound",
+                                        color = TextWhite,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                if (eqState.isDolbyActive) {
+                                    Text("ACTIVE", color = Color(0xFFA5B4FC), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                com.musync.app.playback.DolbyAtmosMode.values().forEach { mode ->
+                                    val isSelected = eqState.dolbyMode == mode
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isSelected) Color(0xFF4F46E5) else Color(0x22FFFFFF))
+                                            .border(0.5.dp, if (isSelected) Color(0xFF818CF8) else Color(0x11FFFFFF), RoundedCornerShape(8.dp))
+                                            .clickable {
+                                                audioEffectManager.setDolbyMode(mode)
+                                            }
+                                            .padding(vertical = 6.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = mode.label,
+                                            color = if (isSelected) Color.White else TextGreySecondary,
+                                            fontSize = 10.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
                     // 1. Presets Selector
                     Text("PRESETS", color = TextGreyMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))

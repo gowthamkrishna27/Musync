@@ -1,9 +1,10 @@
-﻿package com.musync.app.playback
+package com.musync.app.playback
 
 import android.content.Context
 import android.media.audiofx.BassBoost
 import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
+import android.media.audiofx.PresetReverb
 import android.media.audiofx.Virtualizer
 import android.util.Log
 import com.musync.app.data.local.datastore.PreferencesManager
@@ -15,6 +16,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+enum class DolbyAtmosMode(val label: String, val shortDesc: String) {
+    OFF("Off", "Stereo bypass"),
+    MUSIC("Music", "3D soundstage & crystal vocal presence"),
+    CINEMA("Cinema", "360° surround & deep sub-bass rumble"),
+    STUDIO("Studio", "Intimate room acoustics & dialogue clarity")
+}
+
 data class EqualizerBand(
     val index: Int,
     val centerFreqHz: Int,
@@ -25,10 +33,12 @@ data class EqualizerBand(
 
 data class EqualizerState(
     val isEnabled: Boolean = true,
+    val dolbyMode: DolbyAtmosMode = DolbyAtmosMode.OFF,
     val activePreset: String = "Bass Boost",
     val bassBoostStrength: Short = 750, // 0 to 1000
     val virtualizerStrength: Short = 300, // 0 to 1000
     val loudnessGainMb: Int = 200, // 0 to 1000 mB
+    val reverbPreset: Short = PresetReverb.PRESET_NONE,
     val bands: List<EqualizerBand> = listOf(
         EqualizerBand(0, 60, 700, -1500, 1500),
         EqualizerBand(1, 230, 400, -1500, 1500),
@@ -36,8 +46,11 @@ data class EqualizerState(
         EqualizerBand(3, 3600, 100, -1500, 1500),
         EqualizerBand(4, 14000, 200, -1500, 1500)
     ),
-    val availablePresets: List<String> = listOf("Flat", "Bass Boost", "Vocal Focus", "Treble Boost", "Rock", "Electronic", "Custom")
-)
+    val availablePresets: List<String> = listOf("Flat", "Bass Boost", "Vocal Focus", "Treble Boost", "Rock", "Electronic", "Dolby Atmos", "Custom")
+) {
+    val isDolbyActive: Boolean
+        get() = isEnabled && dolbyMode != DolbyAtmosMode.OFF
+}
 
 class AudioEffectManager(
     private val context: Context,
@@ -45,7 +58,6 @@ class AudioEffectManager(
 ) {
     companion object {
         private const val TAG = "AudioEffectManager"
-        private const val PRIORITY = 0
     }
 
     private var currentSessionId: Int = 0
@@ -53,6 +65,7 @@ class AudioEffectManager(
     private var bassBoost: BassBoost? = null
     private var virtualizer: Virtualizer? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
+    private var presetReverb: PresetReverb? = null
 
     private val _state = MutableStateFlow(EqualizerState())
     val state: StateFlow<EqualizerState> = _state.asStateFlow()
@@ -60,10 +73,20 @@ class AudioEffectManager(
     private val scope = CoroutineScope(Dispatchers.IO)
 
     init {
-        // Load initial state
+        // Load initial state and saved presets
         scope.launch {
-            preferencesManager.getEqualizerPreset().let { preset ->
-                applyPresetInternal(preset)
+            val savedPreset = preferencesManager.getEqualizerPreset()
+            val savedDolby = preferencesManager.getDolbyAtmosMode()
+            val dolbyEnum = try {
+                DolbyAtmosMode.valueOf(savedDolby)
+            } catch (_: Exception) {
+                DolbyAtmosMode.OFF
+            }
+
+            if (dolbyEnum != DolbyAtmosMode.OFF) {
+                applyDolbyInternal(dolbyEnum)
+            } else {
+                applyPresetInternal(savedPreset)
             }
         }
     }
@@ -75,7 +98,7 @@ class AudioEffectManager(
 
         detach()
         currentSessionId = audioSessionId
-        Log.i(TAG, "Attaching Audio Effects to ExoPlayer active audioSessionId: $audioSessionId")
+        Log.i(TAG, "Attaching Audio Effects & Dolby Atmos Engine to audioSessionId: $audioSessionId")
 
         try {
             // 1. Hardware Equalizer
@@ -119,7 +142,7 @@ class AudioEffectManager(
                 Log.w(TAG, "BassBoost not supported: ${e.message}")
             }
 
-            // 3. Virtualizer (Spatial Surround)
+            // 3. Virtualizer (Spatial 3D Sound)
             try {
                 virtualizer = Virtualizer(0, audioSessionId).apply {
                     if (strengthSupported) {
@@ -141,12 +164,26 @@ class AudioEffectManager(
                 Log.w(TAG, "LoudnessEnhancer not supported: ${e.message}")
             }
 
+            // 5. Preset Reverb (Acoustic Soundstage)
+            try {
+                presetReverb = PresetReverb(0, audioSessionId).apply {
+                    preset = _state.value.reverbPreset
+                    enabled = _state.value.isEnabled
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "PresetReverb not supported: ${e.message}")
+            }
+
             if (bandsList.isNotEmpty()) {
                 _state.update { it.copy(bands = bandsList) }
             }
 
-            // Re-apply active preset parameters directly to the newly attached hardware session
-            applyPresetInternal(_state.value.activePreset)
+            // Re-apply active state to newly attached hardware session
+            if (_state.value.dolbyMode != DolbyAtmosMode.OFF) {
+                applyDolbyInternal(_state.value.dolbyMode)
+            } else {
+                applyPresetInternal(_state.value.activePreset)
+            }
 
             val intent = android.content.Intent(android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION).apply {
                 putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, audioSessionId)
@@ -154,7 +191,7 @@ class AudioEffectManager(
             }
             context.sendBroadcast(intent)
 
-            Log.i(TAG, "✓ Hardware Audio Effects attached successfully to session $audioSessionId with $numBands bands")
+            Log.i(TAG, "✓ Dolby Atmos & Hardware Audio Effects attached successfully to session $audioSessionId")
         } catch (e: Exception) {
             Log.e(TAG, "Failed initializing hardware audiofx: ${e.message}", e)
         }
@@ -178,6 +215,8 @@ class AudioEffectManager(
             virtualizer = null
             loudnessEnhancer?.release()
             loudnessEnhancer = null
+            presetReverb?.release()
+            presetReverb = null
             currentSessionId = 0
             Log.d(TAG, "Detached Audio Effects")
         } catch (e: Exception) {
@@ -192,15 +231,111 @@ class AudioEffectManager(
             bassBoost?.enabled = enabled
             virtualizer?.enabled = enabled
             loudnessEnhancer?.enabled = enabled
+            presetReverb?.enabled = enabled
         } catch (e: Exception) {
             Log.w(TAG, "Error toggling audiofx: ${e.message}")
         }
     }
 
+    /**
+     * Activates a Dolby Atmos 3D Spatial Audio profile.
+     */
+    fun setDolbyMode(mode: DolbyAtmosMode) {
+        applyDolbyInternal(mode)
+        scope.launch {
+            preferencesManager.saveDolbyAtmosMode(mode.name)
+        }
+    }
+
+    private fun applyDolbyInternal(mode: DolbyAtmosMode) {
+        if (mode == DolbyAtmosMode.OFF) {
+            _state.update { it.copy(dolbyMode = DolbyAtmosMode.OFF) }
+            applyPresetInternal(_state.value.activePreset)
+            return
+        }
+
+        val numBands = equalizer?.numberOfBands?.toInt() ?: _state.value.bands.size.takeIf { it > 0 } ?: 5
+        val minLevel = equalizer?.bandLevelRange?.getOrNull(0) ?: -1500
+        val maxLevel = equalizer?.bandLevelRange?.getOrNull(1) ?: 1500
+
+        val (bassStrength: Short, virtStrength: Short, loudnessGain: Int, reverb: Short, bandGains: List<Short>) = when (mode) {
+            DolbyAtmosMode.MUSIC -> {
+                // Wide 3D soundstage, clear vocal separation, tight punchy bass
+                val gains = listOf(500.toShort(), 200.toShort(), 0.toShort(), 350.toShort(), 450.toShort())
+                Tuple5(550.toShort(), 700.toShort(), 200, PresetReverb.PRESET_SMALLROOM, gains)
+            }
+            DolbyAtmosMode.CINEMA -> {
+                // Maximum 360° spatial immersion, deep sub-woofer resonance, concert decay
+                val gains = listOf(750.toShort(), 300.toShort(), (-50).toShort(), 400.toShort(), 600.toShort())
+                Tuple5(850.toShort(), 950.toShort(), 350, PresetReverb.PRESET_MEDIUMHALL, gains)
+            }
+            DolbyAtmosMode.STUDIO -> {
+                // Intimate acoustic room, elevated dialogue & vocal presence, zero echo
+                val gains = listOf(200.toShort(), 100.toShort(), 350.toShort(), 500.toShort(), 300.toShort())
+                Tuple5(300.toShort(), 450.toShort(), 150, PresetReverb.PRESET_SMALLROOM, gains)
+            }
+            DolbyAtmosMode.OFF -> {
+                val gains = listOf(0.toShort(), 0.toShort(), 0.toShort(), 0.toShort(), 0.toShort())
+                Tuple5(0.toShort(), 0.toShort(), 0, PresetReverb.PRESET_NONE, gains)
+            }
+        }
+
+        try {
+            equalizer?.let { eq ->
+                for (i in 0 until minOf(numBands, bandGains.size)) {
+                    val gain = bandGains[i].coerceIn(minLevel, maxLevel)
+                    eq.setBandLevel(i.toShort(), gain)
+                }
+            }
+
+            bassBoost?.let { bb ->
+                if (bb.strengthSupported) {
+                    bb.setStrength(bassStrength)
+                }
+            }
+
+            virtualizer?.let { v ->
+                if (v.strengthSupported) {
+                    v.setStrength(virtStrength)
+                }
+            }
+
+            loudnessEnhancer?.setTargetGain(loudnessGain)
+
+            presetReverb?.let { pr ->
+                pr.preset = reverb
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error applying Dolby mode $mode: ${e.message}")
+        }
+
+        _state.update { curr ->
+            val updatedBands = curr.bands.mapIndexed { idx, band ->
+                val gain = bandGains.getOrNull(idx) ?: 0
+                band.copy(levelMb = gain.toShort())
+            }
+            curr.copy(
+                dolbyMode = mode,
+                activePreset = "Dolby Atmos",
+                bassBoostStrength = bassStrength,
+                virtualizerStrength = virtStrength,
+                loudnessGainMb = loudnessGain,
+                reverbPreset = reverb,
+                bands = if (updatedBands.isNotEmpty()) updatedBands else curr.bands
+            )
+        }
+    }
+
     fun setPreset(presetName: String) {
+        if (presetName == "Dolby Atmos") {
+            setDolbyMode(DolbyAtmosMode.MUSIC)
+            return
+        }
+        _state.update { it.copy(dolbyMode = DolbyAtmosMode.OFF) }
         applyPresetInternal(presetName)
         scope.launch {
             preferencesManager.saveEqualizerPreset(presetName)
+            preferencesManager.saveDolbyAtmosMode(DolbyAtmosMode.OFF.name)
         }
     }
 
@@ -212,6 +347,7 @@ class AudioEffectManager(
         var bassStrength: Short = 0
         var virtStrength: Short = 0
         var loudnessGain = 0
+        var reverb: Short = PresetReverb.PRESET_NONE
 
         // Calculated band levels in millibels (-1500mB to +1500mB)
         val bandGains: List<Short> = when (presetName) {
@@ -245,6 +381,13 @@ class AudioEffectManager(
                 loudnessGain = 350
                 listOf(700.toShort(), 300.toShort(), 0.toShort(), 500.toShort(), 800.toShort())
             }
+            "Dolby Atmos" -> {
+                bassStrength = 600
+                virtStrength = 750
+                loudnessGain = 250
+                reverb = PresetReverb.PRESET_SMALLROOM
+                listOf(500.toShort(), 200.toShort(), 0.toShort(), 350.toShort(), 450.toShort())
+            }
             else -> { // "Flat" or default
                 bassStrength = 0
                 virtStrength = 0
@@ -274,6 +417,10 @@ class AudioEffectManager(
             }
 
             loudnessEnhancer?.setTargetGain(loudnessGain)
+
+            presetReverb?.let { pr ->
+                pr.preset = reverb
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Error applying preset $presetName: ${e.message}")
         }
@@ -288,6 +435,7 @@ class AudioEffectManager(
                 bassBoostStrength = bassStrength,
                 virtualizerStrength = virtStrength,
                 loudnessGainMb = loudnessGain,
+                reverbPreset = reverb,
                 bands = if (updatedBands.isNotEmpty()) updatedBands else curr.bands
             )
         }
@@ -307,7 +455,7 @@ class AudioEffectManager(
             val updated = curr.bands.map { band ->
                 if (band.index == bandIndex) band.copy(levelMb = levelMb) else band
             }
-            curr.copy(bands = updated, activePreset = "Custom")
+            curr.copy(bands = updated, activePreset = "Custom", dolbyMode = DolbyAtmosMode.OFF)
         }
     }
 
@@ -320,7 +468,7 @@ class AudioEffectManager(
         } catch (e: Exception) {
             Log.w(TAG, "Error setting bass boost: ${e.message}")
         }
-        _state.update { it.copy(bassBoostStrength = clamped, activePreset = "Custom") }
+        _state.update { it.copy(bassBoostStrength = clamped, activePreset = "Custom", dolbyMode = DolbyAtmosMode.OFF) }
     }
 
     fun setVirtualizer(strength: Short) {
@@ -332,7 +480,7 @@ class AudioEffectManager(
         } catch (e: Exception) {
             Log.w(TAG, "Error setting virtualizer: ${e.message}")
         }
-        _state.update { it.copy(virtualizerStrength = clamped, activePreset = "Custom") }
+        _state.update { it.copy(virtualizerStrength = clamped, activePreset = "Custom", dolbyMode = DolbyAtmosMode.OFF) }
     }
 
     fun setLoudness(gainMb: Int) {
@@ -342,7 +490,8 @@ class AudioEffectManager(
         } catch (e: Exception) {
             Log.w(TAG, "Error setting loudness: ${e.message}")
         }
-        _state.update { it.copy(loudnessGainMb = clamped, activePreset = "Custom") }
+        _state.update { it.copy(loudnessGainMb = clamped, activePreset = "Custom", dolbyMode = DolbyAtmosMode.OFF) }
     }
-}
 
+    private data class Tuple5<A, B, C, D, E>(val a: A, val b: B, val c: C, val d: D, val e: E)
+}

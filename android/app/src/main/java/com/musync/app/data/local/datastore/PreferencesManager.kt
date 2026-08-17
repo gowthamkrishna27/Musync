@@ -1,4 +1,4 @@
-﻿package com.musync.app.data.local.datastore
+package com.musync.app.data.local.datastore
 
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -44,6 +44,7 @@ class PreferencesManager(private val context: Context) {
         val KEY_SHUFFLE = booleanPreferencesKey("shuffle_enabled")
         val KEY_REPEAT_MODE = stringPreferencesKey("repeat_mode")
         val KEY_EQUALIZER_PRESET = stringPreferencesKey("equalizer_preset")
+        val KEY_DOLBY_ATMOS_MODE = stringPreferencesKey("dolby_atmos_mode")
         private const val SECURE_KEY_API_KEY = "secure_api_key"
     }
 
@@ -59,6 +60,17 @@ class PreferencesManager(private val context: Context) {
         securePrefs.edit().putString("saved_eq_preset", preset).apply()
         context.dataStore.edit { prefs ->
             prefs[KEY_EQUALIZER_PRESET] = preset
+        }
+    }
+
+    fun getDolbyAtmosMode(): String {
+        return securePrefs.getString("saved_dolby_mode", "OFF") ?: "OFF"
+    }
+
+    suspend fun saveDolbyAtmosMode(mode: String) {
+        securePrefs.edit().putString("saved_dolby_mode", mode).apply()
+        context.dataStore.edit { prefs ->
+            prefs[KEY_DOLBY_ATMOS_MODE] = mode
         }
     }
 

@@ -7,7 +7,6 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
-import com.google.firebase.auth.OAuthProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,7 +18,7 @@ import kotlinx.coroutines.tasks.await
 
 enum class AuthProviderType {
     GOOGLE,
-    GITHUB,
+    EMAIL,
     GUEST
 }
 
@@ -114,7 +113,7 @@ class AuthManager(
                     displayName = email.substringBefore("@"),
                     email = email.trim(),
                     photoUrl = null,
-                    provider = AuthProviderType.GOOGLE,
+                    provider = AuthProviderType.EMAIL,
                     isAnonymous = false
                 )
                 setDirectUser(localUser)
@@ -132,7 +131,7 @@ class AuthManager(
                     displayName = email.substringBefore("@"),
                     email = email.trim(),
                     photoUrl = null,
-                    provider = AuthProviderType.GOOGLE,
+                    provider = AuthProviderType.EMAIL,
                     isAnonymous = false
                 )
                 setDirectUser(localUser)
@@ -176,7 +175,7 @@ class AuthManager(
                     displayName = displayName.ifBlank { email.substringBefore("@") },
                     email = email.trim(),
                     photoUrl = null,
-                    provider = AuthProviderType.GOOGLE,
+                    provider = AuthProviderType.EMAIL,
                     isAnonymous = false
                 )
                 setDirectUser(localUser)
@@ -194,7 +193,7 @@ class AuthManager(
                     displayName = displayName.ifBlank { email.substringBefore("@") },
                     email = email.trim(),
                     photoUrl = null,
-                    provider = AuthProviderType.GOOGLE,
+                    provider = AuthProviderType.EMAIL,
                     isAnonymous = false
                 )
                 setDirectUser(localUser)
@@ -239,115 +238,11 @@ class AuthManager(
     }
 
     // ──────────────────────────────────────────────────────────────
-    //  GITHUB SIGN-IN
+    //  SESSION MANAGEMENT & USER HELPERS
     // ──────────────────────────────────────────────────────────────
 
     /**
-     * Initiates GitHub OAuth sign-in via Firebase OAuthProvider.
-     *
-     * Firebase uses a Chrome Custom Tab to open GitHub's OAuth page and redirects
-     * the result through `com.google.firebase.auth.internal.GenericIdpActivity`
-     * (declared in the firebase-auth AAR manifest — no manual manifest entry needed).
-     *
-     * The [activity] MUST be the current foreground Activity, not a ContextWrapper.
-     * Use [findActivity] in the UI layer to safely unwrap Compose's LocalContext.
-     *
-     * Pending result: If the activity was killed during the OAuth redirect, Firebase
-     * holds a pending result. We check [FirebaseAuth.pendingAuthResult] first to
-     * complete that in-flight auth before starting a new flow.
-     */
-    fun signInWithGitHub(activity: Activity, onComplete: (Result<MusyncUser>) -> Unit) {
-        _authLoading.value = true
-        _authError.value = null
-
-        Log.d(TAG, "AUTH: GitHub — sign-in initiated")
-
-        val provider = OAuthProvider.newBuilder("github.com").apply {
-            // Request enough scopes to get display name, email, and avatar URL.
-            scopes = listOf("read:user", "user:email")
-        }.build()
-
-        // Check for a pending result first (in case of activity recreation)
-        val pendingResultTask = auth.pendingAuthResult
-        if (pendingResultTask != null) {
-            Log.d(TAG, "AUTH: GitHub — pending result found, checking...")
-            pendingResultTask
-                .addOnSuccessListener { authResult ->
-                    if (authResult?.user != null) {
-                        Log.d(TAG, "AUTH: GitHub — pending result success")
-                        handleGitHubAuthResult(authResult.user, onComplete)
-                    } else {
-                        launchFreshGitHubFlow(activity, provider, onComplete)
-                    }
-                }
-                .addOnFailureListener {
-                    Log.d(TAG, "AUTH: GitHub — pending result had error, starting fresh OAuth flow")
-                    launchFreshGitHubFlow(activity, provider, onComplete)
-                }
-        } else {
-            launchFreshGitHubFlow(activity, provider, onComplete)
-        }
-    }
-
-    private fun launchFreshGitHubFlow(
-        activity: Activity,
-        provider: OAuthProvider,
-        onComplete: (Result<MusyncUser>) -> Unit
-    ) {
-        Log.d(TAG, "AUTH: GitHub — starting fresh OAuth flow")
-        auth.startActivityForSignInWithProvider(activity, provider)
-            .addOnSuccessListener { authResult ->
-                Log.d(TAG, "AUTH: GitHub — OAuth flow success")
-                handleGitHubAuthResult(authResult.user, onComplete)
-            }
-            .addOnFailureListener { e ->
-                Log.e(TAG, "AUTH: GitHub — OAuth flow failure", e)
-                handleGitHubAuthFailure(e, onComplete)
-            }
-    }
-
-    private fun handleGitHubAuthResult(
-        firebaseUser: FirebaseUser?,
-        onComplete: (Result<MusyncUser>) -> Unit
-    ) {
-        _authLoading.value = false
-        val user = firebaseUser?.toMusyncUser()
-        if (user != null) {
-            _currentUser.value = user
-            Log.d(TAG, "AUTH: GitHub — success. uid=${user.uid}, provider=${user.provider}")
-            onComplete(Result.success(user))
-        } else {
-            val msg = "GitHub sign-in returned no Firebase user"
-            Log.e(TAG, "AUTH: GitHub — $msg")
-            _authError.value = "Sign-in failed: no user was returned. Please try again."
-            onComplete(Result.failure(IllegalStateException(msg)))
-        }
-    }
-
-    private fun handleGitHubAuthFailure(
-        e: Exception,
-        onComplete: (Result<MusyncUser>) -> Unit
-    ) {
-        _authLoading.value = false
-        val errorMessage = when (e) {
-            is FirebaseAuthException -> {
-                val code = e.errorCode
-                val msg = e.message ?: ""
-                Log.e(TAG, "AUTH: GitHub — FirebaseAuthException errorCode=$code message=$msg")
-                decodeFirebaseAuthError(code, msg, "GitHub Sign-In")
-            }
-            else -> {
-                Log.e(TAG, "AUTH: GitHub — exception: ${e.javaClass.simpleName}: ${e.message}")
-                e.localizedMessage ?: "GitHub Sign-In failed"
-            }
-        }
-        _authError.value = errorMessage
-        onComplete(Result.failure(e))
-    }
-
-    /**
-     * Maps Firebase Auth error codes to user-friendly messages.
-     * Logs the raw code for diagnostics; presents a safe message to the user.
+     * Directly persists a user session (e.g. for fallback flows or guest accounts).
      */
     fun setDirectUser(user: MusyncUser) {
         _currentUser.value = user
@@ -450,12 +345,12 @@ class AuthManager(
         val providerId = providerData.firstOrNull { it.providerId != "firebase" }?.providerId
         val providerType = when (providerId) {
             "google.com" -> AuthProviderType.GOOGLE
-            "github.com" -> AuthProviderType.GITHUB
-            else -> if (isAnonymous) AuthProviderType.GUEST else AuthProviderType.GOOGLE
+            "password" -> AuthProviderType.EMAIL
+            else -> if (isAnonymous) AuthProviderType.GUEST else AuthProviderType.EMAIL
         }
         return MusyncUser(
             uid = uid,
-            displayName = displayName ?: if (providerType == AuthProviderType.GITHUB) "GitHub User" else "Musync Listener",
+            displayName = displayName ?: email?.substringBefore("@") ?: "Musync Listener",
             email = email,
             photoUrl = photoUrl?.toString(),
             provider = providerType,

@@ -106,7 +106,6 @@ fun AccountProfileCard(
                             ) {
                                 Icon(
                                     imageVector = when (user.provider) {
-                                        AuthProviderType.GITHUB -> Icons.Default.Code
                                         AuthProviderType.GOOGLE -> Icons.Default.Person
                                         else -> Icons.Default.AccountCircle
                                     },
@@ -141,8 +140,8 @@ fun AccountProfileCard(
 
                             // Provider Badge
                             val (badgeBg, badgeText, badgeColor) = when (user.provider) {
-                                AuthProviderType.GITHUB -> Triple(Color(0xFF24292E), "GitHub", Color.White)
                                 AuthProviderType.GOOGLE -> Triple(Color(0xFF1E2638), "Google", Color(0xFF93C5FD))
+                                AuthProviderType.EMAIL -> Triple(Color(0xFF1E222A), "Email", Color(0xFFE2E8F0))
                                 else -> Triple(Color(0xFF1E222A), "Account", Color(0xFFE2E8F0))
                             }
 

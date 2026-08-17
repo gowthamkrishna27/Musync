@@ -678,6 +678,115 @@ fun NowPlayingSheet(
                     )
                 }
 
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Dolby Atmos 3D Spatial Soundstage Card
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(
+                            if (eqState.isDolbyActive) {
+                                androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                    listOf(Color(0xFF0F172A), Color(0xFF1E1B4B))
+                                )
+                            } else {
+                                androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                    listOf(Color(0xFF141414), Color(0xFF111111))
+                                )
+                            }
+                        )
+                        .border(
+                            1.dp,
+                            if (eqState.isDolbyActive) Color(0xFF6366F1) else BorderStroke,
+                            RoundedCornerShape(18.dp)
+                        )
+                        .padding(14.dp)
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(if (eqState.isDolbyActive) Color(0xFF4F46E5) else Color(0xFF222222)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.GraphicEq,
+                                        contentDescription = "Dolby Atmos",
+                                        tint = if (eqState.isDolbyActive) Color.White else IconGrey,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = "Dolby Atmos 3D Audio",
+                                        color = TextWhite,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = eqState.dolbyMode.shortDesc,
+                                        color = if (eqState.isDolbyActive) Color(0xFFA5B4FC) else TextGreyMuted,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+
+                            if (eqState.isDolbyActive) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color(0x336366F1))
+                                        .border(0.5.dp, Color(0xFF818CF8), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text("3D ACTIVE", color = Color(0xFFA5B4FC), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Mode Selector Pills
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            com.musync.app.playback.DolbyAtmosMode.values().forEach { mode ->
+                                val isSelected = eqState.dolbyMode == mode
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (isSelected) Color(0xFF4F46E5) else Color(0xFF1E1E1E))
+                                        .border(0.5.dp, if (isSelected) Color(0xFF818CF8) else Color(0xFF2A2A2A), RoundedCornerShape(10.dp))
+                                        .clickable {
+                                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                            audioEffectManager.setDolbyMode(mode)
+                                        }
+                                        .padding(vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = mode.label,
+                                        color = if (isSelected) Color.White else TextGreySecondary,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(18.dp))
 
                 // Presets Horizontal Scroll
