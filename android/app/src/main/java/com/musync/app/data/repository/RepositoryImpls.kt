@@ -98,6 +98,30 @@ class MusicRepositoryImpl(
         }
         tracks
     }
+
+    override suspend fun getDiscoverTrending(region: String, language: String): Result<List<Track>> = runCatching {
+        if (provider is com.musync.app.data.remote.UniversalMusicProvider) {
+            (provider as com.musync.app.data.remote.UniversalMusicProvider).getDiscoverTrending(region, language)
+        } else {
+            provider.getTrending()
+        }
+    }
+
+    override suspend fun getDiscoverNew(language: String): Result<List<Track>> = runCatching {
+        if (provider is com.musync.app.data.remote.UniversalMusicProvider) {
+            (provider as com.musync.app.data.remote.UniversalMusicProvider).getDiscoverNew(language)
+        } else {
+            provider.search("Latest New $language Songs")
+        }
+    }
+
+    override suspend fun getDiscoverRising(): Result<List<Track>> = runCatching {
+        if (provider is com.musync.app.data.remote.UniversalMusicProvider) {
+            (provider as com.musync.app.data.remote.UniversalMusicProvider).getDiscoverRising()
+        } else {
+            provider.search("Breakout Viral Hits 2026")
+        }
+    }
 }
 
 class FavoritesRepositoryImpl(

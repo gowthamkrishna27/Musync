@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.home
+package com.musync.app.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -75,17 +75,7 @@ class HomeViewModel(
     private fun loadSpecificLanguageTracks(language: String) {
         viewModelScope.launch {
             try {
-                val query = when (language) {
-                    "Telugu" -> "Latest Telugu Songs 2026"
-                    "Tamil" -> "Latest Tamil Songs 2026"
-                    "Hindi" -> "Latest Bollywood Hindi Songs 2026"
-                    "English" -> "Global Top Hits Billboard 2026"
-                    "Malayalam" -> "Latest Malayalam Hit Songs 2026"
-                    "Kannada" -> "Latest Kannada Hit Songs 2026"
-                    "Punjabi" -> "Latest Punjabi Hit Songs 2026"
-                    else -> "Trending $language Songs 2026"
-                }
-                val results = musicRepository.search(query).getOrDefault(emptyList())
+                val results = musicRepository.getDiscoverTrending(language = language).getOrDefault(emptyList())
                 if (results.isNotEmpty()) {
                     _uiState.update { current ->
                         when (language) {
@@ -104,40 +94,58 @@ class HomeViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             try {
-                // Fetch trending/Telugu as base
-                val trendingResult = musicRepository.getTrending()
+                // Fetch live trending songs
+                val trendingResult = musicRepository.getDiscoverTrending("global", "All")
                 val trending = trendingResult.getOrDefault(emptyList())
 
                 if (trending.isEmpty()) {
-                    loadOfflineLocalTracks()
-                    return@launch
+                    val fallback = musicRepository.getTrending().getOrDefault(emptyList())
+                    if (fallback.isEmpty()) {
+                        loadOfflineLocalTracks()
+                        return@launch
+                    }
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isOffline = false,
+                            trendingTracks = fallback,
+                            teluguTracks = fallback,
+                            errorMessage = null
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isOffline = false,
+                            trendingTracks = trending,
+                            teluguTracks = trending,
+                            errorMessage = null
+                        )
+                    }
                 }
 
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        isOffline = false,
-                        trendingTracks = trending,
-                        teluguTracks = trending,
-                        errorMessage = null
-                    )
-                }
-
-                // Parallel fetch for Tamil, Hindi, and Global song catalogs
+                // Parallel live discovery fetch for regional catalogs
                 launch {
-                    val tamil = musicRepository.search("Latest Tamil Songs 2026").getOrDefault(emptyList())
+                    val telugu = musicRepository.getDiscoverTrending("india", "Telugu").getOrDefault(emptyList())
+                    if (telugu.isNotEmpty()) {
+                        _uiState.update { it.copy(teluguTracks = telugu) }
+                    }
+                }
+                launch {
+                    val tamil = musicRepository.getDiscoverTrending("india", "Tamil").getOrDefault(emptyList())
                     if (tamil.isNotEmpty()) {
                         _uiState.update { it.copy(tamilTracks = tamil) }
                     }
                 }
                 launch {
-                    val hindi = musicRepository.search("Latest Bollywood Hindi Songs 2026").getOrDefault(emptyList())
+                    val hindi = musicRepository.getDiscoverTrending("india", "Hindi").getOrDefault(emptyList())
                     if (hindi.isNotEmpty()) {
                         _uiState.update { it.copy(hindiTracks = hindi) }
                     }
                 }
                 launch {
-                    val global = musicRepository.search("Global Top Hits Billboard 2026").getOrDefault(emptyList())
+                    val global = musicRepository.getDiscoverNew("All").getOrDefault(emptyList())
                     if (global.isNotEmpty()) {
                         _uiState.update { it.copy(globalTracks = global) }
                     }

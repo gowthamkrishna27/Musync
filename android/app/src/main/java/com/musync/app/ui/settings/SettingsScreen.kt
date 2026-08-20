@@ -1,9 +1,14 @@
 package com.musync.app.ui.settings
 
 import android.content.Context
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,36 +26,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Headphones
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.Vibration
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.DeleteOutline
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,28 +47,42 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.musync.app.playback.EngineMode
+import androidx.compose.ui.window.Dialog
+import com.musync.app.BuildConfig
+import com.musync.app.MusyncApplication
 import com.musync.app.playback.HapticIntensity
-import com.musync.app.playback.SoundEngineRegistry
+import com.musync.app.ui.theme.AppleMusicPink
+import com.musync.app.ui.theme.AppleMusicRed
 import com.musync.app.ui.theme.BackgroundBlack
-import com.musync.app.ui.theme.BorderStroke
-import com.musync.app.ui.theme.CardElevated
-import com.musync.app.ui.theme.IconGrey
-import com.musync.app.ui.theme.StatusGreen
-import com.musync.app.ui.theme.SurfaceBlack
+import com.musync.app.ui.theme.DeleteRed
 import com.musync.app.ui.theme.TextGreyMuted
 import com.musync.app.ui.theme.TextGreySecondary
 import com.musync.app.ui.theme.TextWhite
-import kotlinx.coroutines.Dispatchers
+import com.musync.app.update.UpdateDownloadState
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
+
+enum class SettingsSection(val title: String) {
+    GENERAL("General"),
+    ACCOUNT("Account"),
+    PLAYBACK("Playback"),
+    AUDIO("Audio"),
+    MUSIC_DISCOVERY("Music & Discovery"),
+    LIBRARY("Library"),
+    NOTIFICATIONS("Notifications"),
+    APPEARANCE("Appearance"),
+    PRIVACY_SECURITY("Privacy & Security"),
+    STORAGE_DATA("Storage & Data"),
+    APP_UPDATES("App Updates"),
+    ABOUT("About Musync")
+}
 
 @Composable
 fun SettingsScreen(
@@ -90,948 +91,975 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val app = context.applicationContext as com.musync.app.MusyncApplication
-    val audioEffectManager = app.container.audioEffectManager
-    val eqState by audioEffectManager.state.collectAsState()
+    val app = context.applicationContext as MusyncApplication
     val appUpdateManager = app.container.appUpdateManager
     val updateState by appUpdateManager.updateState.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
+    val currentUser by viewModel.authManager.currentUser.collectAsState()
     val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
 
-    var autoplayEnabled by remember { mutableStateOf(true) }
-    var showQualityDialog by remember { mutableStateOf(false) }
-    var showCrossfadeDialog by remember { mutableStateOf(false) }
-    var selectedCrossfade by remember { mutableStateOf("5 sec") }
-    var showEqDialog by remember { mutableStateOf(false) }
-    var showHapticsDialog by remember { mutableStateOf(false) }
-    var showClearCacheDialog by remember { mutableStateOf(false) }
-    var cacheClearedMessage by remember { mutableStateOf(false) }
-    var showUpdateDialog by remember { mutableStateOf(false) }
-    var showTermsDialog by remember { mutableStateOf(false) }
-    var showPrivacyDialog by remember { mutableStateOf(false) }
+    var selectedSection by remember { mutableStateOf<SettingsSection?>(null) }
+    var showAuthDialog by remember { mutableStateOf(false) }
 
-    Column(
+    LaunchedEffect(Unit) {
+        viewModel.computeCacheSize(context)
+    }
+
+    BackHandler(enabled = selectedSection != null) {
+        selectedSection = null
+    }
+
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(BackgroundBlack)
             .statusBarsPadding()
-            .padding(top = 8.dp)
     ) {
-        // 1. Navigation Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onNavigateBack,
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF222227))
-                    .border(1.dp, Color(0x33FFFFFF), CircleShape)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
+        AnimatedContent(
+            targetState = selectedSection,
+            transitionSpec = {
+                if (targetState != null) {
+                    (slideInHorizontally { it / 2 } + fadeIn()) togetherWith (slideOutHorizontally { -it / 2 } + fadeOut())
+                } else {
+                    (slideInHorizontally { -it / 2 } + fadeIn()) togetherWith (slideOutHorizontally { it / 2 } + fadeOut())
+                }
+            },
+            label = "settings_transition"
+        ) { currentSection ->
+            if (currentSection == null) {
+                // ─────────────────────────────────────────────────────────────
+                // ROOT SETTINGS MENU (Peak Minimalism — Typography Driven)
+                // ─────────────────────────────────────────────────────────────
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 20.dp)
+                ) {
+                    // Header Back Navigation & Title
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 24.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Back",
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Normal
+                                ),
+                                color = AppleMusicPink,
+                                modifier = Modifier
+                                    .clickable {
+                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                        onNavigateBack()
+                                    }
+                                    .padding(vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    // Profile / Account Header
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    if (currentUser == null) {
+                                        showAuthDialog = true
+                                    } else {
+                                        selectedSection = SettingsSection.ACCOUNT
+                                    }
+                                }
+                                .padding(bottom = 32.dp)
+                        ) {
+                            Text(
+                                text = currentUser?.displayName ?: "Gowtham Krishna",
+                                style = MaterialTheme.typography.headlineMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 28.sp,
+                                    letterSpacing = (-0.5).sp
+                                ),
+                                color = TextWhite
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = currentUser?.email ?: "email@example.com",
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontSize = 15.sp,
+                                    color = TextGreySecondary
+                                )
+                            )
+                        }
+                    }
+
+                    // Subtle Divider
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(Color(0x1FFFFFFF))
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    // The 12 Sections (Pure text navigation, no icons)
+                    items(SettingsSection.values().size) { index ->
+                        val section = SettingsSection.values()[index]
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                    selectedSection = section
+                                }
+                                .padding(vertical = 14.dp)
+                        ) {
+                            Text(
+                                text = section.title,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontSize = 19.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = (-0.2).sp
+                                ),
+                                color = TextWhite
+                            )
+                        }
+                    }
+
+                    // Version & Build Footer
+                    item {
+                        Spacer(modifier = Modifier.height(48.dp))
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "Musync",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    letterSpacing = 1.sp
+                                ),
+                                color = TextGreyMuted
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Version ${BuildConfig.VERSION_NAME} · Build ${BuildConfig.VERSION_CODE}",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                color = TextGreyMuted.copy(alpha = 0.8f)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(40.dp))
+                    }
+                }
+            } else {
+                // ─────────────────────────────────────────────────────────────
+                // DETAIL SETTINGS SECTION VIEW
+                // ─────────────────────────────────────────────────────────────
+                SettingsDetailView(
+                    section = currentSection,
+                    viewModel = viewModel,
+                    appUpdateManager = appUpdateManager,
+                    updateState = updateState,
+                    uiState = uiState,
+                    onBack = { selectedSection = null },
+                    onOpenAuth = { showAuthDialog = true }
                 )
             }
+        }
 
-            Spacer(modifier = Modifier.width(14.dp))
+        // Minimal Email & Password Auth Dialog
+        if (showAuthDialog) {
+            MinimalAuthDialog(
+                viewModel = viewModel,
+                onDismiss = { showAuthDialog = false }
+            )
+        }
+    }
+}
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DETAIL SECTION VIEWS
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun SettingsDetailView(
+    section: SettingsSection,
+    viewModel: SettingsViewModel,
+    appUpdateManager: com.musync.app.update.AppUpdateManager,
+    updateState: UpdateDownloadState,
+    uiState: SettingsUiState,
+    onBack: () -> Unit,
+    onOpenAuth: () -> Unit
+) {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val currentUser by viewModel.authManager.currentUser.collectAsState()
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 20.dp)
+    ) {
+        // Back Header
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Back",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp),
+                    color = AppleMusicPink,
+                    modifier = Modifier
+                        .clickable {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            onBack()
+                        }
+                        .padding(vertical = 4.dp)
+                )
+            }
+        }
+
+        // Large Section Title
+        item {
             Text(
-                text = "Settings",
-                style = MaterialTheme.typography.headlineMedium.copy(
+                text = section.title,
+                style = MaterialTheme.typography.headlineLarge.copy(
                     fontWeight = FontWeight.Bold,
-                    fontSize = 24.sp
+                    fontSize = 32.sp,
+                    letterSpacing = (-0.5).sp
                 ),
-                color = TextWhite
+                color = TextWhite,
+                modifier = Modifier.padding(bottom = 28.dp)
             )
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        // Section Content Router
+        when (section) {
+            SettingsSection.GENERAL -> {
+                item {
+                    SettingsGroupHeader(title = "Profile")
+                    SettingsRow(title = "Name", value = currentUser?.displayName ?: "Gowtham Krishna")
+                    SettingsRow(title = "Email", value = currentUser?.email ?: "email@example.com")
+                    SettingsRow(title = "Language", value = "English")
+                    SettingsRow(title = "Region", value = "India")
+                    SettingsRow(title = "Preferred Music Languages", value = "Telugu, Hindi, English")
+                }
+            }
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 48.dp)
-        ) {
-            // Group 0: Minimal Apple Music Profile Card
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    Color(0xFF2A2A32),
-                                    Color(0xFF19191E)
-                                )
-                            )
-                        )
-                        .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(20.dp))
-                        .padding(20.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(
-                                            Color(0xFFFF2D55),
-                                            Color(0xFFFF375F),
-                                            Color(0xFFFF9F0A)
-                                        )
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = "Profile",
-                                tint = Color.White,
-                                modifier = Modifier.size(28.dp)
-                            )
+            SettingsSection.ACCOUNT -> {
+                item {
+                    SettingsGroupHeader(title = "Personal Information")
+                    SettingsRow(title = "Name", value = currentUser?.displayName ?: "Gowtham Krishna")
+                    SettingsRow(title = "Email", value = currentUser?.email ?: "email@example.com")
+                    SettingsActionRow(title = "Change Password", onClick = {
+                        currentUser?.email?.let { email ->
+                            scope.launch { viewModel.authManager.sendPasswordReset(email) }
                         }
+                    })
+                    SettingsRow(title = "Active Sessions", value = "1 Device Active")
 
-                        Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
+                    SettingsGroupHeader(title = "Account Actions")
+                    if (currentUser != null) {
+                        SettingsActionRow(
+                            title = "Sign Out",
+                            textColor = AppleMusicRed,
+                            onClick = { viewModel.authManager.signOut() }
+                        )
+                        SettingsActionRow(
+                            title = "Delete Account",
+                            textColor = DeleteRed,
+                            onClick = { scope.launch { viewModel.authManager.deleteAccount() } }
+                        )
+                    } else {
+                        SettingsActionRow(
+                            title = "Sign In",
+                            textColor = AppleMusicPink,
+                            onClick = onOpenAuth
+                        )
+                    }
+                }
+            }
 
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Musync Music",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 17.sp
-                                ),
-                                color = TextWhite
-                            )
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(7.dp)
-                                        .clip(CircleShape)
-                                        .background(StatusGreen)
+            SettingsSection.PLAYBACK -> {
+                item {
+                    SettingsGroupHeader(title = "Playback Controls")
+                    SettingsToggleRow(
+                        title = "Autoplay",
+                        subtitle = "Keep music playing when queue finishes",
+                        checked = uiState.autoplay,
+                        onCheckedChange = { viewModel.onAutoplayToggle(it) }
+                    )
+                    SettingsToggleRow(
+                        title = "Intelligent Shuffle",
+                        subtitle = "Session-aware probabilistic queue ordering",
+                        checked = uiState.intelligentShuffle,
+                        onCheckedChange = { viewModel.onIntelligentShuffleToggle(it) }
+                    )
+                    SettingsToggleRow(
+                        title = "Gapless Playback",
+                        subtitle = "Eliminate pauses between consecutive tracks",
+                        checked = uiState.gaplessPlayback,
+                        onCheckedChange = { viewModel.onGaplessPlaybackToggle(it) }
+                    )
+                    SettingsRow(title = "Crossfade", value = if (uiState.crossfadeSeconds > 0) "${uiState.crossfadeSeconds}s" else "Off")
+                    SettingsToggleRow(
+                        title = "Continue Playing",
+                        subtitle = "Remember last played track position across sessions",
+                        checked = uiState.continuePlaying,
+                        onCheckedChange = {}
+                    )
+                }
+            }
+
+            SettingsSection.AUDIO -> {
+                item {
+                    SettingsGroupHeader(title = "Audio Quality")
+                    SettingsOptionSelector(
+                        title = "Streaming Quality",
+                        options = listOf("low", "medium", "high", "lossless"),
+                        selected = uiState.audioQuality,
+                        onSelect = { viewModel.onAudioQualityChange(it) }
+                    )
+                    SettingsOptionSelector(
+                        title = "Download Quality",
+                        options = listOf("standard", "high", "lossless"),
+                        selected = uiState.downloadQuality,
+                        onSelect = { viewModel.onDownloadQualityChange(it) }
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+                    SettingsGroupHeader(title = "Sound Enhancements")
+                    SettingsRow(title = "Equalizer", value = "Bass Boost")
+                    SettingsRow(title = "Dolby Atmos", value = "Spatial Audio (Dolby Atmos)")
+                    SettingsToggleRow(
+                        title = "Audio Normalization",
+                        subtitle = "Maintain consistent volume levels across songs",
+                        checked = uiState.audioNormalization,
+                        onCheckedChange = {}
+                    )
+                    SettingsRow(title = "Audio Effects", value = "Dolby Music Dynamic")
+                }
+            }
+
+            SettingsSection.MUSIC_DISCOVERY -> {
+                item {
+                    SettingsGroupHeader(title = "Recommendation Engine")
+                    SettingsToggleRow(
+                        title = "Personalized Recommendations",
+                        subtitle = "Use your listening session signals for suggestions",
+                        checked = uiState.personalizedRecommendations,
+                        onCheckedChange = { viewModel.onPersonalizedRecommendationsToggle(it) }
+                    )
+                    SettingsOptionSelector(
+                        title = "Trending Region",
+                        options = listOf("India", "Global"),
+                        selected = uiState.trendingRegion,
+                        onSelect = { viewModel.onTrendingRegionChange(it) }
+                    )
+                    SettingsOptionSelector(
+                        title = "New Release Preferences",
+                        options = listOf("Preferred Languages", "All Languages"),
+                        selected = uiState.newReleaseLanguage,
+                        onSelect = { viewModel.onNewReleaseLanguageChange(it) }
+                    )
+                    SettingsOptionSelector(
+                        title = "Recommendation Personalization",
+                        options = listOf("High", "Balanced", "Low", "Off"),
+                        selected = uiState.personalizationLevel,
+                        onSelect = { viewModel.onPersonalizationLevelChange(it) }
+                    )
+                }
+            }
+
+            SettingsSection.LIBRARY -> {
+                item {
+                    SettingsGroupHeader(title = "Library Categories")
+                    SettingsRow(title = "Liked Songs", value = "Synced with Cloud")
+                    SettingsRow(title = "Playlists", value = "Custom Playlists")
+                    SettingsRow(title = "Albums", value = "Saved Albums")
+                    SettingsRow(title = "Artists", value = "Followed Artists")
+                    SettingsRow(title = "Recently Played", value = "History Enabled")
+                    SettingsRow(title = "Downloads", value = "Device Storage")
+                }
+            }
+
+            SettingsSection.NOTIFICATIONS -> {
+                item {
+                    SettingsGroupHeader(title = "Music Alerts")
+                    SettingsToggleRow(
+                        title = "New Releases",
+                        subtitle = "Get notified when favorite artists drop new tracks",
+                        checked = uiState.newReleaseNotifications,
+                        onCheckedChange = { viewModel.onNewReleaseNotificationsToggle(it) }
+                    )
+                    SettingsToggleRow(
+                        title = "Trending Music",
+                        subtitle = "Weekly updates on breakout songs",
+                        checked = uiState.trendingNotifications,
+                        onCheckedChange = { viewModel.onTrendingNotificationsToggle(it) }
+                    )
+                    SettingsToggleRow(
+                        title = "Recommendations",
+                        subtitle = "Personalized playlist highlights",
+                        checked = uiState.recommendationNotifications,
+                        onCheckedChange = { viewModel.onRecommendationNotificationsToggle(it) }
+                    )
+                    SettingsToggleRow(
+                        title = "System Updates",
+                        subtitle = "App improvement and release alerts",
+                        checked = true,
+                        onCheckedChange = {}
+                    )
+                }
+            }
+
+            SettingsSection.APPEARANCE -> {
+                item {
+                    SettingsGroupHeader(title = "Theme")
+                    SettingsOptionSelector(
+                        title = "Appearance Theme",
+                        options = listOf("Dark", "System", "Light"),
+                        selected = uiState.themeMode,
+                        onSelect = { viewModel.onThemeModeChange(it) }
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    SettingsGroupHeader(title = "Motion & Visuals")
+                    SettingsToggleRow(
+                        title = "Reduce Motion",
+                        subtitle = "Minimize carousel animations and transitions",
+                        checked = uiState.reduceMotion,
+                        onCheckedChange = { viewModel.onReduceMotionToggle(it) }
+                    )
+                    SettingsRow(title = "Interface Effects", value = "Subtle Frosted Glass")
+                }
+            }
+
+            SettingsSection.PRIVACY_SECURITY -> {
+                item {
+                    SettingsGroupHeader(title = "Data & Privacy")
+                    SettingsRow(title = "Listening History", value = "Stored Privately On-Device")
+                    SettingsRow(title = "Personalized Recommendations", value = "Encrypted Session Profile")
+                    SettingsRow(title = "Data Usage", value = "Streaming Audio Only")
+                    SettingsRow(title = "Active Sessions", value = "1 Active Session")
+                    Spacer(modifier = Modifier.height(20.dp))
+                    SettingsActionRow(
+                        title = "Sign Out Everywhere",
+                        textColor = AppleMusicRed,
+                        onClick = { viewModel.authManager.signOut() }
+                    )
+                }
+            }
+
+            SettingsSection.STORAGE_DATA -> {
+                item {
+                    SettingsGroupHeader(title = "Storage Overview")
+                    val cacheMb = (uiState.cacheSizeBytes / (1024 * 1024)).coerceAtLeast(0)
+                    SettingsRow(title = "Cache Size", value = "$cacheMb MB")
+                    SettingsRow(title = "Downloaded Music", value = "0 MB")
+                    SettingsRow(title = "Offline Data", value = "Catalog & Session DB")
+                    SettingsRow(title = "Network Usage", value = "Wi-Fi & Mobile Data")
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                    if (uiState.isClearingCache) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = AppleMusicPink,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        SettingsActionRow(
+                            title = "Clear Cache",
+                            textColor = AppleMusicPink,
+                            onClick = { viewModel.clearCache(context) }
+                        )
+                    }
+                }
+            }
+
+            SettingsSection.APP_UPDATES -> {
+                item {
+                    SettingsGroupHeader(title = "Current Version")
+                    SettingsRow(title = "Musync", value = "Version ${BuildConfig.VERSION_NAME}")
+                    SettingsRow(title = "Build", value = "${BuildConfig.VERSION_CODE}")
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                    SettingsGroupHeader(title = "Check for Updates")
+
+                    when (val state = updateState) {
+                        is UpdateDownloadState.Checking -> {
+                            Row(
+                                modifier = Modifier.padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    color = AppleMusicPink,
+                                    strokeWidth = 2.dp
                                 )
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
                                 Text(
-                                    text = "High-Fidelity Audio Active",
-                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                                    color = Color(0xCCFFFFFF)
+                                    text = "Checking for updates...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = TextGreySecondary
+                                )
+                            }
+                        }
+
+                        is UpdateDownloadState.Available -> {
+                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                Text(
+                                    text = "New Update Available: Musync ${state.info.latestVersion}",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = AppleMusicPink
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = state.info.changelog,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextGreySecondary
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    text = "Download & Install",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    color = AppleMusicPink,
+                                    modifier = Modifier
+                                        .clickable {
+                                            scope.launch { appUpdateManager.downloadAndInstallUpdate(state.info.downloadUrl, state.info.fileName) }
+                                        }
+                                        .padding(vertical = 6.dp)
+                                )
+                            }
+                        }
+
+                        is UpdateDownloadState.Downloading -> {
+                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                Text(
+                                    text = "Downloading Update: ${state.progressPercent}%",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = TextWhite
+                                )
+                            }
+                        }
+
+                        is UpdateDownloadState.ReadyToInstall -> {
+                            Text(
+                                text = "Install Update",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = AppleMusicPink,
+                                modifier = Modifier
+                                    .clickable { appUpdateManager.launchPackageInstaller(state.apkFile) }
+                                    .padding(vertical = 8.dp)
+                            )
+                        }
+
+                        else -> {
+                            Column {
+                                Text(
+                                    text = "You're up to date",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = TextGreySecondary
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                SettingsActionRow(
+                                    title = "Check for Updates",
+                                    textColor = AppleMusicPink,
+                                    onClick = { scope.launch { appUpdateManager.checkForUpdates(false) } }
                                 )
                             }
                         }
                     }
-                }
-                Spacer(modifier = Modifier.height(24.dp))
-            }
 
-            // Group 1: Audio & Playback
-            item {
-                SettingsSectionTitle("Audio & Playback")
-                SettingsCardContainer {
-                    SettingsRow(
-                        title = "Audio Quality",
-                        value = when (uiState.audioQuality) {
-                            "low", "saver" -> "Data Saver (64 kbps)"
-                            "standard" -> "Standard (128 kbps)"
-                            else -> "High Quality (320 kbps)"
-                        },
-                        onClick = { showQualityDialog = true }
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        title = "Equalizer & Sound Presets",
-                        value = if (eqState.isEnabled) eqState.currentMode.title else "Balanced (Off)",
-                        valueColor = if (eqState.isEnabled) StatusGreen else TextGreySecondary,
-                        onClick = { showEqDialog = true }
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        title = "Crossfade Transition",
-                        value = selectedCrossfade,
-                        onClick = { showCrossfadeDialog = true }
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        title = "Haptic Sound Feedback",
-                        value = uiState.hapticIntensity.description,
-                        valueColor = if (uiState.hapticIntensity == HapticIntensity.OFF) TextGreySecondary else StatusGreen,
-                        onClick = { showHapticsDialog = true }
-                    )
-                    SettingsDivider()
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 18.dp, vertical = 13.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Continuous Playback",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-                                color = TextWhite
-                            )
-                            Text(
-                                text = "Keep playing recommended music when queue ends",
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                color = TextGreySecondary
-                            )
-                        }
-                        Switch(
-                            checked = autoplayEnabled,
-                            onCheckedChange = { autoplayEnabled = it },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.Black,
-                                checkedTrackColor = Color.White,
-                                uncheckedThumbColor = TextGreySecondary,
-                                uncheckedTrackColor = Color(0x33FFFFFF)
-                            )
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-
-            // Group 2: Storage & Cache
-            item {
-                SettingsSectionTitle("Storage & Data")
-                SettingsCardContainer {
-                    SettingsRow(
-                        title = "Clear Music Cache",
-                        value = if (cacheClearedMessage) "Cache Cleared ✓" else "Clean Temporary Files",
-                        valueColor = if (cacheClearedMessage) StatusGreen else TextGreySecondary,
-                        onClick = { showClearCacheDialog = true }
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        title = "Download Format",
-                        value = "Lossless Audio",
-                        valueColor = TextGreySecondary,
-                        onClick = {}
+                    Spacer(modifier = Modifier.height(28.dp))
+                    SettingsGroupHeader(title = "What's New in v${BuildConfig.VERSION_NAME}")
+                    Text(
+                        text = "• Real-Time Song Suggestion Engine & Intelligent Shuffle\n• Live New Releases & Trending Music Discovery Engine\n• Premium Horizontal Playlist Carousel with Motion Physics\n• Ultra-Minimalist Typography-Driven Settings & Account System\n• High-Res 1080p Artwork Pipeline & SWR Caching",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 13.sp,
+                            lineHeight = 22.sp
+                        ),
+                        color = TextGreySecondary
                     )
                 }
-                Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // Group 3: About
-            item {
-                SettingsSectionTitle("About Musync")
-                SettingsCardContainer {
-                    SettingsRow(
-                        title = "Musync Version",
-                        value = "${com.musync.app.BuildConfig.VERSION_NAME} · Check Update",
-                        valueColor = StatusGreen,
-                        onClick = {
-                            showUpdateDialog = true
-                            scope.launch {
-                                appUpdateManager.checkForUpdates(silent = false)
-                            }
-                        }
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        title = "Terms of Service",
-                        value = "",
-                        onClick = { showTermsDialog = true }
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        title = "Privacy Policy",
-                        value = "",
-                        onClick = { showPrivacyDialog = true }
-                    )
+            SettingsSection.ABOUT -> {
+                item {
+                    SettingsGroupHeader(title = "About Musync")
+                    SettingsRow(title = "Musync", value = "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                    SettingsActionRow(title = "Terms of Service", onClick = {})
+                    SettingsActionRow(title = "Privacy Policy", onClick = {})
+                    SettingsActionRow(title = "Open Source Licenses", onClick = {})
+                    SettingsRow(title = "Credits", value = "Built with Google DeepMind Antigravity")
                 }
             }
         }
-    }
 
-    // Streaming Quality Dialog
-    if (showQualityDialog) {
-        AlertDialog(
-            onDismissRequest = { showQualityDialog = false },
-            title = {
-                Text(
-                    text = "Streaming Audio Quality",
-                    color = TextWhite,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    val qualities = listOf(
-                        Triple("high", "High Quality (320 kbps)", "Best studio sound clarity and dynamic range"),
-                        Triple("standard", "Standard (128 kbps)", "Balanced sound with reduced data usage"),
-                        Triple("saver", "Data Saver (64 kbps)", "Minimal data consumption for mobile networks")
-                    )
-
-                    qualities.forEach { (key, title, subtitle) ->
-                        val isSelected = uiState.audioQuality == key || (key == "saver" && uiState.audioQuality == "low")
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSelected) Color(0x28FFFFFF) else Color(0x15FFFFFF))
-                                .border(1.dp, if (isSelected) Color.White else Color(0x22FFFFFF), RoundedCornerShape(12.dp))
-                                .clickable {
-                                    viewModel.onAudioQualityChange(key)
-                                    showQualityDialog = false
-                                }
-                                .padding(14.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = title,
-                                        color = TextWhite,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 14.sp
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = subtitle,
-                                        color = TextGreySecondary,
-                                        fontSize = 11.sp
-                                    )
-                                }
-                                if (isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Check,
-                                        contentDescription = null,
-                                        tint = StatusGreen,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showQualityDialog = false }) {
-                    Text("Done", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            },
-            containerColor = SurfaceBlack,
-            shape = RoundedCornerShape(18.dp)
-        )
-    }
-
-    // Equalizer Presets Modal
-    if (showEqDialog) {
-        val scrollState = rememberScrollState()
-
-        AlertDialog(
-            onDismissRequest = { showEqDialog = false },
-            title = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Sound Equalizer",
-                        color = TextWhite,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    )
-                    Switch(
-                        checked = eqState.isEnabled,
-                        onCheckedChange = { audioEffectManager.setEnabled(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.Black,
-                            checkedTrackColor = Color.White,
-                            uncheckedThumbColor = TextGreySecondary,
-                            uncheckedTrackColor = Color(0x33FFFFFF)
-                        )
-                    )
-                }
-            },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(scrollState),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "PRESETS",
-                        color = Color(0x88FFFFFF),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
-
-                    SoundEngineRegistry.signatureEngines.forEach { mode ->
-                        val isSelected = eqState.currentMode.id == mode.id && eqState.isEnabled
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSelected) Color(0x28FFFFFF) else Color(0x15FFFFFF))
-                                .border(1.dp, if (isSelected) Color.White else Color(0x22FFFFFF), RoundedCornerShape(12.dp))
-                                .clickable {
-                                    if (!eqState.isEnabled) audioEffectManager.setEnabled(true)
-                                    audioEffectManager.setEngineMode(mode)
-                                }
-                                .padding(12.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = mode.title,
-                                        color = TextWhite,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 14.sp
-                                    )
-                                    Text(
-                                        text = mode.subtitle,
-                                        color = TextGreySecondary,
-                                        fontSize = 11.sp
-                                    )
-                                }
-                                if (isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Check,
-                                        contentDescription = null,
-                                        tint = StatusGreen,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showEqDialog = false }) {
-                    Text("Done", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            },
-            containerColor = SurfaceBlack,
-            shape = RoundedCornerShape(18.dp)
-        )
-    }
-
-    // Crossfade Dialog
-    if (showCrossfadeDialog) {
-        AlertDialog(
-            onDismissRequest = { showCrossfadeDialog = false },
-            title = {
-                Text(
-                    text = "Crossfade Transition",
-                    color = TextWhite,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val options = listOf("Off", "3 sec", "5 sec", "8 sec", "12 sec")
-                    options.forEach { opt ->
-                        val isSelected = selectedCrossfade == opt
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSelected) Color(0x28FFFFFF) else Color(0x15FFFFFF))
-                                .clickable {
-                                    selectedCrossfade = opt
-                                    showCrossfadeDialog = false
-                                }
-                                .padding(horizontal = 14.dp, vertical = 12.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(opt, color = TextWhite, fontSize = 14.sp)
-                                if (isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Check,
-                                        contentDescription = null,
-                                        tint = StatusGreen,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showCrossfadeDialog = false }) {
-                    Text("Close", color = Color.White)
-                }
-            },
-            containerColor = SurfaceBlack,
-            shape = RoundedCornerShape(18.dp)
-        )
-    }
-
-    // Haptics Dialog
-    if (showHapticsDialog) {
-        AlertDialog(
-            onDismissRequest = { showHapticsDialog = false },
-            title = {
-                Text(
-                    text = "Haptic Sound Feedback",
-                    color = TextWhite,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HapticIntensity.entries.forEach { intensity ->
-                        val isSelected = uiState.hapticIntensity == intensity
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSelected) Color(0x28FFFFFF) else Color(0x15FFFFFF))
-                                .clickable {
-                                    viewModel.onHapticIntensityChange(intensity)
-                                    showHapticsDialog = false
-                                }
-                                .padding(horizontal = 14.dp, vertical = 12.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = intensity.description,
-                                        color = TextWhite,
-                                        fontWeight = FontWeight.Medium,
-                                        fontSize = 14.sp
-                                    )
-                                }
-                                if (isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Check,
-                                        contentDescription = null,
-                                        tint = StatusGreen,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showHapticsDialog = false }) {
-                    Text("Close", color = Color.White)
-                }
-            },
-            containerColor = SurfaceBlack,
-            shape = RoundedCornerShape(18.dp)
-        )
-    }
-
-    // Clear Cache Confirmation Dialog
-    if (showClearCacheDialog) {
-        AlertDialog(
-            onDismissRequest = { showClearCacheDialog = false },
-            title = {
-                Text(
-                    text = "Clear Music Cache?",
-                    color = TextWhite,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-            },
-            text = {
-                Text(
-                    text = "This will free up disk space by clearing temporarily cached audio and album artwork.",
-                    color = TextGreySecondary,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        scope.launch {
-                            withContext(Dispatchers.IO) {
-                                try {
-                                    context.cacheDir.deleteRecursively()
-                                } catch (_: Exception) {}
-                            }
-                            cacheClearedMessage = true
-                            showClearCacheDialog = false
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3B30)),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text("Clear Cache", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showClearCacheDialog = false }) {
-                    Text("Cancel", color = TextGreySecondary)
-                }
-            },
-            containerColor = SurfaceBlack,
-            shape = RoundedCornerShape(18.dp)
-        )
-    }
-
-    // Terms of Service Dialog
-    if (showTermsDialog) {
-        AlertDialog(
-            onDismissRequest = { showTermsDialog = false },
-            title = { Text("Terms of Service", color = TextWhite, fontWeight = FontWeight.Bold) },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    Text(
-                        text = "Musync is a modern music player designed for personal entertainment and high-fidelity audio playback.\n\nAll music streams and media metadata are indexed from public open sources. By using Musync, you agree to use the service for personal, non-commercial purposes only.",
-                        color = TextGreySecondary,
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showTermsDialog = false }) {
-                    Text("Close", color = Color.White)
-                }
-            },
-            containerColor = SurfaceBlack,
-            shape = RoundedCornerShape(18.dp)
-        )
-    }
-
-    // Privacy Policy Dialog
-    if (showPrivacyDialog) {
-        AlertDialog(
-            onDismissRequest = { showPrivacyDialog = false },
-            title = { Text("Privacy Policy", color = TextWhite, fontWeight = FontWeight.Bold) },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    Text(
-                        text = "Musync values your privacy.\n\n• Zero Personal Data Collection: We do not collect or track your personal identity or browsing habits.\n• Local Storage: Playlists, favorites, and player preferences are stored locally on your device.\n• Secure Connections: All streaming requests use encrypted connections.",
-                        color = TextGreySecondary,
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showPrivacyDialog = false }) {
-                    Text("Close", color = Color.White)
-                }
-            },
-            containerColor = SurfaceBlack,
-            shape = RoundedCornerShape(18.dp)
-        )
-    }
-
-    // App Update Dialog
-    if (showUpdateDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                if (updateState !is com.musync.app.update.UpdateDownloadState.Downloading) {
-                    showUpdateDialog = false
-                    appUpdateManager.resetState()
-                }
-            },
-            title = {
-                Text(
-                    text = "Musync Update",
-                    color = TextWhite,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-            },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    when (val state = updateState) {
-                        is com.musync.app.update.UpdateDownloadState.Checking -> {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(vertical = 12.dp)
-                            ) {
-                                CircularProgressIndicator(
-                                    color = StatusGreen,
-                                    strokeWidth = 2.dp,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.width(14.dp))
-                                Text("Checking for new releases...", color = TextGreySecondary, fontSize = 13.sp)
-                            }
-                        }
-                        is com.musync.app.update.UpdateDownloadState.UpToDate -> {
-                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                Text(
-                                    text = "Musync ${com.musync.app.BuildConfig.VERSION_NAME} is up to date.",
-                                    color = TextWhite,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 14.sp
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "You are running the newest release with all audio features and performance optimizations.",
-                                    color = TextGreySecondary,
-                                    fontSize = 12.sp,
-                                    lineHeight = 16.sp
-                                )
-                            }
-                        }
-                        is com.musync.app.update.UpdateDownloadState.Available -> {
-                            val info = state.info
-                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("Installed: v${info.currentVersion}", color = TextGreyMuted, fontSize = 12.sp)
-                                    Text("New: v${info.latestVersion}", color = StatusGreen, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                }
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text("What's New:", color = TextWhite, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(Color(0x18FFFFFF))
-                                        .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(10.dp))
-                                        .padding(10.dp)
-                                ) {
-                                    Text(
-                                        text = info.changelog.ifBlank { "Performance improvements and newest features." },
-                                        color = TextGreySecondary,
-                                        fontSize = 11.sp,
-                                        lineHeight = 15.sp,
-                                        maxLines = 6,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                        }
-                        is com.musync.app.update.UpdateDownloadState.Downloading -> {
-                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("Downloading Update...", color = TextWhite, fontSize = 13.sp)
-                                    Text("${state.progressPercent}%", color = StatusGreen, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                LinearProgressIndicator(
-                                    progress = { state.progressPercent / 100f },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(3.dp)),
-                                    color = StatusGreen,
-                                    trackColor = Color(0x22FFFFFF)
-                                )
-                            }
-                        }
-                        is com.musync.app.update.UpdateDownloadState.ReadyToInstall -> {
-                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                Text(
-                                    text = "Update downloaded successfully!",
-                                    color = StatusGreen,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "Tap 'Install Now' to complete the installation.",
-                                    color = TextGreySecondary,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
-                        is com.musync.app.update.UpdateDownloadState.Error -> {
-                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                Text(
-                                    text = state.message,
-                                    color = Color(0xFFFF5252),
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
-                        else -> {}
-                    }
-                }
-            },
-            confirmButton = {
-                when (val state = updateState) {
-                    is com.musync.app.update.UpdateDownloadState.Available -> {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    appUpdateManager.downloadAndInstallUpdate(state.info.downloadUrl, state.info.fileName)
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = StatusGreen),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text("Download & Update", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
-                    }
-                    is com.musync.app.update.UpdateDownloadState.ReadyToInstall -> {
-                        Button(
-                            onClick = {
-                                appUpdateManager.launchPackageInstaller(state.apkFile)
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = StatusGreen),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text("Install Now", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
-                    }
-                    is com.musync.app.update.UpdateDownloadState.Error -> {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    appUpdateManager.checkForUpdates(silent = false)
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x33FFFFFF)),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text("Retry", color = TextWhite, fontSize = 12.sp)
-                        }
-                    }
-                    else -> {
-                        if (updateState is com.musync.app.update.UpdateDownloadState.UpToDate) {
-                            TextButton(onClick = {
-                                showUpdateDialog = false
-                                appUpdateManager.resetState()
-                            }) {
-                                Text("Done", color = Color.White, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            },
-            dismissButton = {
-                if (updateState !is com.musync.app.update.UpdateDownloadState.Downloading && updateState !is com.musync.app.update.UpdateDownloadState.UpToDate) {
-                    TextButton(onClick = {
-                        showUpdateDialog = false
-                        appUpdateManager.resetState()
-                    }) {
-                        Text("Close", color = TextGreySecondary, fontSize = 12.sp)
-                    }
-                }
-            },
-            containerColor = SurfaceBlack,
-            shape = RoundedCornerShape(18.dp)
-        )
+        item {
+            Spacer(modifier = Modifier.height(60.dp))
+        }
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MINIMAL REUSABLE TYPOGRAPHY ROWS (No icons, high contrast, generous whitespace)
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
-private fun SettingsSectionTitle(title: String) {
+private fun SettingsGroupHeader(title: String) {
     Text(
         text = title,
-        style = MaterialTheme.typography.titleMedium.copy(
-            fontWeight = FontWeight.Bold,
-            fontSize = 14.sp
+        style = MaterialTheme.typography.labelMedium.copy(
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.5.sp
         ),
-        color = Color(0x99FFFFFF),
-        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+        color = TextGreyMuted,
+        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
     )
-}
-
-@Composable
-private fun SettingsCardContainer(
-    content: @Composable () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF1B1B20))
-            .border(1.dp, Color(0x1FFFFFFF), RoundedCornerShape(16.dp))
-    ) {
-        content()
-    }
 }
 
 @Composable
 private fun SettingsRow(
     title: String,
-    value: String,
-    valueColor: Color = TextGreySecondary,
-    onClick: () -> Unit
+    value: String
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(vertical = 12.dp)
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-            color = TextWhite
-        )
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (value.isNotEmpty()) {
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                    color = valueColor
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = Color(0x55FFFFFF),
-                modifier = Modifier.size(16.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, fontWeight = FontWeight.Normal),
+                color = TextWhite
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                color = TextGreySecondary,
+                textAlign = TextAlign.End
             )
         }
+        Spacer(modifier = Modifier.height(10.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(0.5.dp)
+                .background(Color(0x14FFFFFF))
+        )
     }
 }
 
 @Composable
-private fun SettingsDivider() {
-    Box(
+private fun SettingsActionRow(
+    title: String,
+    textColor: Color = TextWhite,
+    onClick: () -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(1.dp)
-            .background(Color(0x14FFFFFF))
-    )
+            .clickable {
+                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                onClick()
+            }
+            .padding(vertical = 12.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Normal
+            ),
+            color = textColor
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(0.5.dp)
+                .background(Color(0x14FFFFFF))
+        )
+    }
+}
+
+@Composable
+private fun SettingsToggleRow(
+    title: String,
+    subtitle: String? = null,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, fontWeight = FontWeight.Normal),
+                    color = TextWhite
+                )
+                if (!subtitle.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        color = TextGreySecondary
+                    )
+                }
+            }
+            Switch(
+                checked = checked,
+                onCheckedChange = {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    onCheckedChange(it)
+                },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = AppleMusicPink,
+                    uncheckedThumbColor = TextGreyMuted,
+                    uncheckedTrackColor = Color(0xFF222226)
+                )
+            )
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(0.5.dp)
+                .background(Color(0x14FFFFFF))
+        )
+    }
+}
+
+@Composable
+private fun SettingsOptionSelector(
+    title: String,
+    options: List<String>,
+    selected: String,
+    onSelect: (String) -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp)
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp, fontWeight = FontWeight.Normal),
+            color = TextWhite
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            options.forEach { opt ->
+                val isSel = opt.equals(selected, ignoreCase = true)
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (isSel) Color(0x30FFFFFF) else Color(0x12FFFFFF))
+                        .clickable {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            onSelect(opt)
+                        }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = opt.replaceFirstChar { it.uppercase() },
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 12.sp,
+                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
+                        ),
+                        color = if (isSel) AppleMusicPink else TextGreySecondary
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(0.5.dp)
+                .background(Color(0x14FFFFFF))
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MINIMAL EMAIL + PASSWORD AUTH MODAL
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun MinimalAuthDialog(
+    viewModel: SettingsViewModel,
+    onDismiss: () -> Unit
+) {
+    var isSignUp by remember { mutableStateOf(false) }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var displayName by remember { mutableStateOf("") }
+    val authLoading by viewModel.authManager.authLoading.collectAsState()
+    val authError by viewModel.authManager.authError.collectAsState()
+    val scope = rememberCoroutineScope()
+
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xF518181B))
+                .border(1.dp, Color(0x30FFFFFF), RoundedCornerShape(24.dp))
+                .padding(24.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = if (isSignUp) "Create Account" else "Sign In",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 22.sp
+                    ),
+                    color = TextWhite
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+
+                if (isSignUp) {
+                    TextField(
+                        value = displayName,
+                        onValueChange = { displayName = it },
+                        placeholder = { Text("Name", color = TextGreyMuted) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0x18FFFFFF)),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite
+                        ),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
+                TextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    placeholder = { Text("Email", color = TextGreyMuted) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0x18FFFFFF)),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite
+                    ),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                TextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    placeholder = { Text("Password", color = TextGreyMuted) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0x18FFFFFF)),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite
+                    ),
+                    singleLine = true
+                )
+
+                if (!authError.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = authError ?: "",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        color = DeleteRed,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                if (authLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(28.dp),
+                        color = AppleMusicPink,
+                        strokeWidth = 2.5.dp
+                    )
+                } else {
+                    Text(
+                        text = if (isSignUp) "Create Account" else "Sign In",
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        ),
+                        color = AppleMusicPink,
+                        modifier = Modifier
+                            .clickable {
+                                scope.launch {
+                                    if (isSignUp) {
+                                        val res = viewModel.authManager.signUpWithEmail(email, password, displayName)
+                                        if (res.isSuccess) onDismiss()
+                                    } else {
+                                        val res = viewModel.authManager.signInWithEmail(email, password)
+                                        if (res.isSuccess) onDismiss()
+                                    }
+                                }
+                            }
+                            .padding(vertical = 8.dp, horizontal = 16.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                TextButton(onClick = { isSignUp = !isSignUp }) {
+                    Text(
+                        text = if (isSignUp) "Already have an account? Sign In" else "New to Musync? Create Account",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                        color = TextGreySecondary
+                    )
+                }
+            }
+        }
+    }
 }

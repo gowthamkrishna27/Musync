@@ -33,7 +33,11 @@ sealed class Screen(
     }
 
     companion object {
-        // 5 Floating Bottom Nav Items inspired by Apple Music (Home, New, Radio, Library, Search)
+        // 4 Primary tabs inside the left floating capsule dock
+        val primaryDockItems: List<Screen>
+            get() = listOf(Home, New, Radio, Library)
+
+        // All 5 bottom nav items including the detached search circle button
         val bottomNavItems: List<Screen>
             get() = listOf(Home, New, Radio, Library, Search)
     }

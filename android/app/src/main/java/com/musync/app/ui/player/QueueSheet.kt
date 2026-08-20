@@ -58,7 +58,11 @@ fun QueueSheet(
     val context = LocalContext.current
     val app = context.applicationContext as com.musync.app.MusyncApplication
     val recommendationViewModel: RecommendationViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
-        factory = RecommendationViewModel.Factory(app.container.playbackManager, app.container.musicRepository)
+        factory = RecommendationViewModel.Factory(
+            app.container.playbackManager,
+            app.container.musicRepository,
+            app.container.realTimeRecommendationEngine
+        )
     )
     val recUiState by recommendationViewModel.uiState.collectAsState()
 

@@ -497,9 +497,25 @@ class YouTubeMusicProvider(
                 val videoId = obj.get("videoId")?.asString ?: obj.get("id")?.asString ?: continue
                 val title = obj.get("title")?.asString ?: "Unknown Title"
                 val artists = obj.getAsJsonArray("artists")
-                val artistName = artists?.firstOrNull()?.asJsonObject?.get("name")?.asString ?: obj.get("artist")?.asString ?: "YouTube Artist"
-                val thumbnails = obj.getAsJsonArray("thumbnails")
-                val artUrl = thumbnails?.lastOrNull()?.asJsonObject?.get("url")?.asString ?: "https://i.ytimg.com/vi/$videoId/mqdefault.jpg"
+                val artistElem = obj.get("artist")
+                val artistName = when {
+                    artistElem != null && artistElem.isJsonObject -> artistElem.asJsonObject.get("name")?.asString ?: "YouTube Artist"
+                    artistElem != null && artistElem.isJsonPrimitive -> artistElem.asString
+                    artists != null && artists.size() > 0 -> artists.firstOrNull()?.asJsonObject?.get("name")?.asString ?: "YouTube Artist"
+                    else -> "YouTube Artist"
+                }
+
+                val artworkElem = obj.get("artwork")
+                val artUrl = when {
+                    artworkElem != null && artworkElem.isJsonObject ->
+                        artworkElem.asJsonObject.get("large")?.asString ?: artworkElem.asJsonObject.get("medium")?.asString ?: "https://i.ytimg.com/vi/$videoId/hq720.jpg"
+                    obj.has("image_url") -> obj.get("image_url")?.asString ?: "https://i.ytimg.com/vi/$videoId/hq720.jpg"
+                    obj.has("image") -> obj.get("image")?.asString ?: "https://i.ytimg.com/vi/$videoId/hq720.jpg"
+                    else -> {
+                        val thumbnails = obj.getAsJsonArray("thumbnails")
+                        thumbnails?.lastOrNull()?.asJsonObject?.get("url")?.asString ?: "https://i.ytimg.com/vi/$videoId/hq720.jpg"
+                    }
+                }
 
                 val artistObj = Artist(id = "yt_artist_${artistName.hashCode()}", name = artistName, imageUrl = artUrl)
                 val albumObj = Album(id = "yt_album_${videoId.hashCode()}", name = title, artist = artistObj, artworkUrl = artUrl)
@@ -512,16 +528,56 @@ class YouTubeMusicProvider(
                         title = title,
                         artist = artistObj,
                         album = albumObj,
-                        durationMs = (obj.get("duration_seconds")?.asLong ?: 180L) * 1000L,
+                        durationMs = (obj.get("duration_seconds")?.asLong ?: obj.get("duration")?.asLong ?: 180L) * 1000L,
                         streamUrl = streamUrl,
                         artworkUrl = artUrl,
-                        genre = "Music",
+                        genre = obj.get("language")?.asString ?: obj.get("genre")?.asString ?: "Music",
                         playCount = 0L
                     )
                 )
             }
         }
         return tracks
+    }
+
+    suspend fun getDiscoverTrending(region: String = "global", language: String = "All"): List<Track> = withContext(Dispatchers.IO) {
+        val targetRenderUrl = getActiveBaseUrl()
+        try {
+            val encodedLang = URLEncoder.encode(language, "UTF-8")
+            val url = "$targetRenderUrl/api/discover/trending?region=$region&language=$encodedLang"
+            val tracks = fetchCustomYtMusic(url, customApiKey, targetRenderUrl)
+            if (tracks.isNotEmpty()) return@withContext tracks
+        } catch (e: Exception) {
+            Log.w(TAG, "Discover trending failed for $language: ${e.message}")
+        }
+        val query = if (language != "All") "Trending $language Songs" else "Trending Global Songs"
+        search(query)
+    }
+
+    suspend fun getDiscoverNew(language: String = "All"): List<Track> = withContext(Dispatchers.IO) {
+        val targetRenderUrl = getActiveBaseUrl()
+        try {
+            val encodedLang = URLEncoder.encode(language, "UTF-8")
+            val url = "$targetRenderUrl/api/discover/new?language=$encodedLang"
+            val tracks = fetchCustomYtMusic(url, customApiKey, targetRenderUrl)
+            if (tracks.isNotEmpty()) return@withContext tracks
+        } catch (e: Exception) {
+            Log.w(TAG, "Discover new failed for $language: ${e.message}")
+        }
+        val query = if (language != "All") "Latest New $language Songs" else "Latest New Release Songs"
+        search(query)
+    }
+
+    suspend fun getDiscoverRising(): List<Track> = withContext(Dispatchers.IO) {
+        val targetRenderUrl = getActiveBaseUrl()
+        try {
+            val url = "$targetRenderUrl/api/discover/rising"
+            val tracks = fetchCustomYtMusic(url, customApiKey, targetRenderUrl)
+            if (tracks.isNotEmpty()) return@withContext tracks
+        } catch (e: Exception) {
+            Log.w(TAG, "Discover rising failed: ${e.message}")
+        }
+        search("Breakout Viral Hits 2026")
     }
 
     override suspend fun getRecommendations(trackId: String, limit: Int): List<Track> = withContext(Dispatchers.IO) {

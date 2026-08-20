@@ -5,8 +5,10 @@ import {
   RecommendationScorer,
   TrackMetadata,
   CandidateTrack,
-  ScoredCandidate
+  ScoredCandidate,
+  RecommendationReason
 } from "./recommendationScorer";
+import { SessionProfile } from "./sessionService";
 
 export interface FormattedRecommendation {
   videoId: string;
@@ -25,6 +27,7 @@ export interface FormattedRecommendation {
   media_url: string;
   stream_url: string;
   score?: number;
+  reason?: RecommendationReason;
 }
 
 export interface RecommendationResponse {
@@ -49,7 +52,7 @@ export class RecommendationEngine {
   /**
    * Helper to format a raw or metadata item into standard Musync track schema
    */
-  private formatTrack(item: any, reqHost: string, score?: number): FormattedRecommendation {
+  private formatTrack(item: any, reqHost: string, score?: number, reason?: RecommendationReason): FormattedRecommendation {
     const videoId = item.videoId || item.id || "";
     const title = item.name || item.title || "Unknown Title";
     const artistName =
@@ -96,7 +99,8 @@ export class RecommendationEngine {
       url: streamUrl,
       media_url: streamUrl,
       stream_url: streamUrl,
-      score
+      score,
+      reason
     };
   }
 
@@ -287,7 +291,7 @@ export class RecommendationEngine {
 
         // D. Format results
         const formattedList: FormattedRecommendation[] = scoredCandidates.map((sc) =>
-          this.formatTrack(sc.track, reqHost, sc.score)
+          this.formatTrack(sc.track, reqHost, sc.score, sc.reason)
         );
 
         const latencyMs = Date.now() - startMs;
@@ -328,5 +332,130 @@ export class RecommendationEngine {
         };
       }
     });
+  }
+
+  /**
+   * Session-aware recommendation generation. Same as getRecommendations but
+   * incorporates real-time session profile for personalised scoring.
+   */
+  public async getRecommendationsWithSession(
+    videoId: string,
+    limit: number = 5,
+    reqHost: string,
+    sessionProfile?: SessionProfile
+  ): Promise<RecommendationResponse> {
+    if (!sessionProfile) {
+      return this.getRecommendations(videoId, limit, reqHost);
+    }
+
+    // Skip cache for session-aware calls (highly personalised, cache would leak between users)
+    const cleanId = videoId.trim();
+    const clampedLimit = Math.min(10, Math.max(1, limit));
+    const startMs = Date.now();
+
+    try {
+      const currentMeta = await this.getTrackMetadata(cleanId);
+      const candidates: CandidateTrack[] = [];
+
+      const artistQuery = currentMeta.artistName.replace(/ - Topic|VEVO/gi, "").trim();
+      const titleQuery = currentMeta.title.replace(/(\(.*\)|\[.*\])/g, "").trim();
+
+      const [artistSongsRes, relatedSearchRes, titleSearchRes] = await Promise.allSettled([
+        artistQuery && artistQuery !== "YouTube Artist"
+          ? this.ytmusic.searchSongs(artistQuery)
+          : Promise.resolve([]),
+        artistQuery && artistQuery !== "YouTube Artist"
+          ? this.ytmusic.searchSongs(`${artistQuery} mix`)
+          : Promise.resolve([]),
+        titleQuery && titleQuery !== "Unknown Track"
+          ? this.ytmusic.searchSongs(`${titleQuery} ${artistQuery}`)
+          : Promise.resolve([])
+      ]);
+
+      const ingestResults = (res: PromiseSettledResult<any[]>, source: any, pop: number) => {
+        if (res.status === "fulfilled" && Array.isArray(res.value)) {
+          for (const raw of res.value) {
+            const item = raw as any;
+            const vId = item.videoId || item.id;
+            if (!vId) continue;
+            candidates.push({
+              track: {
+                videoId: vId,
+                title: item.name || item.title || "",
+                artistName: item.artist?.name || (Array.isArray(item.artists) ? item.artists[0]?.name : "Artist"),
+                albumName: item.album?.name,
+                duration: item.duration,
+                thumbnails: item.thumbnails
+              },
+              source,
+              popularityScore: pop
+            });
+          }
+        }
+      };
+
+      ingestResults(artistSongsRes, "same_artist", 0.8);
+      ingestResults(relatedSearchRes, "related_artist", 0.7);
+      ingestResults(titleSearchRes, "search_sim", 0.6);
+
+      const scoredCandidates = RecommendationScorer.rankAndFilter(
+        currentMeta,
+        candidates,
+        clampedLimit,
+        sessionProfile
+      );
+
+      const formattedList: FormattedRecommendation[] = scoredCandidates.map((sc) =>
+        this.formatTrack(sc.track, reqHost, sc.score, sc.reason)
+      );
+
+      return {
+        trackId: cleanId,
+        sourceTrack: { title: currentMeta.title, artist: currentMeta.artistName },
+        recommendations: formattedList,
+        cached: false,
+        latencyMs: Date.now() - startMs
+      };
+    } catch (err: any) {
+      console.error(`[RecommendationEngine] Session-aware error for ${cleanId}:`, err.message);
+      return this.getRecommendations(videoId, limit, reqHost);
+    }
+  }
+
+  /**
+   * Generate an intelligently shuffled queue from a list of raw formatted tracks.
+   * Uses softmax-weighted probabilistic selection (see RecommendationScorer).
+   */
+  public async generateShuffledQueue(
+    tracks: FormattedRecommendation[],
+    currentTrackId: string | null,
+    sessionProfile?: SessionProfile,
+    temperature: number = 0.7
+  ): Promise<FormattedRecommendation[]> {
+    if (tracks.length === 0) return [];
+
+    // Convert to TrackMetadata for scoring
+    const metas: TrackMetadata[] = tracks.map((t) => ({
+      videoId: t.videoId,
+      title: t.title,
+      artistName: t.artist,
+      genre: undefined,
+      duration: t.duration_seconds
+    }));
+
+    const currentMeta = currentTrackId
+      ? metas.find((m) => m.videoId === currentTrackId) ?? null
+      : null;
+
+    const shuffled = RecommendationScorer.generateIntelligentShuffle(
+      metas,
+      currentMeta,
+      sessionProfile,
+      temperature
+    );
+
+    // Re-map back to FormattedRecommendation order
+    const trackMap = new Map(tracks.map((t) => [t.videoId, t]));
+    return shuffled.map((m) => trackMap.get(m.videoId)!).filter(Boolean);
   }
 }

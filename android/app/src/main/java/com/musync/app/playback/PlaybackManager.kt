@@ -1,4 +1,4 @@
-﻿package com.musync.app.playback
+package com.musync.app.playback
 
 import android.content.ComponentName
 import android.content.Context
@@ -14,6 +14,8 @@ import com.musync.app.core.network.NetworkQualityHelper
 import com.musync.app.domain.model.PlaybackState
 import com.musync.app.domain.model.RepeatMode
 import com.musync.app.domain.model.Track
+import com.musync.app.playback.recommendation.ListeningSessionTracker
+import com.musync.app.playback.recommendation.IntelligentShuffleEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -40,9 +42,21 @@ class PlaybackManager(private val context: Context) {
 
     fun getPlayer(): Player? = mediaController
 
+    // -----------------------------------------------------------------------
+    // Real-time listening tracker (session profile + milestone events)
+    // -----------------------------------------------------------------------
+    val sessionTracker = ListeningSessionTracker(scope)
+
+    // Lazily initialised shuffle engine that reads current sessionProfile
+    private val shuffleEngine: IntelligentShuffleEngine
+        get() = IntelligentShuffleEngine(sessionTracker.sessionProfile)
+
     private val currentQueue = mutableListOf<Track>()
     private var retryCount = 0
     private val maxRetries = 3
+
+    // 75% pre-generation: track whether we already triggered pre-gen for this track
+    private var preGenTriggeredForTrackId: String? = null
 
     init {
         initializeController()
@@ -95,6 +109,13 @@ class PlaybackManager(private val context: Context) {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 retryCount = 0
                 updateCurrentTrackFromController()
+
+                // Signal the session tracker about the new track
+                val track = mediaItem?.let { MediaItemMapper.fromMediaItem(it) }
+                if (track != null) {
+                    sessionTracker.onTrackStarted(track)
+                    preGenTriggeredForTrackId = null
+                }
             }
 
             override fun onRepeatModeChanged(repeatModeInt: Int) {
@@ -208,6 +229,27 @@ class PlaybackManager(private val context: Context) {
                                 bufferedPositionMs = buf,
                                 durationMs = dur
                             )
+                        }
+
+                        // Feed progress to the real-time session tracker
+                        val currentTrack = _playbackState.value.currentTrack
+                        if (currentTrack != null && dur > 0) {
+                            sessionTracker.onProgressUpdate(currentTrack.id, pos, dur)
+
+                            // Trigger next-song pre-generation at 75% without blocking audio
+                            if (preGenTriggeredForTrackId != currentTrack.id) {
+                                val pct = pos.toFloat() / dur.toFloat() * 100f
+                                if (pct >= 75f) {
+                                    preGenTriggeredForTrackId = currentTrack.id
+                                    android.util.Log.d("PlaybackManager", "⚡ 75% reached for '${currentTrack.title}' — recommendation pre-generation triggered")
+                                }
+                            }
+
+                            // Track completion: if position >= 95% of duration, emit completion
+                            val pct = pos.toFloat() / dur.toFloat() * 100f
+                            if (pct >= 95f) {
+                                sessionTracker.onTrackCompleted(currentTrack.id)
+                            }
                         }
                     }
                 }
@@ -379,14 +421,46 @@ class PlaybackManager(private val context: Context) {
     fun toggleRepeatMode() = toggleRepeat()
 
     fun toggleShuffle() {
-        withController { controller ->
-            controller.shuffleModeEnabled = !controller.shuffleModeEnabled
+        val isCurrentlyShuffling = _playbackState.value.isShuffle
+        val newShuffleState = !isCurrentlyShuffling
+
+        if (newShuffleState && currentQueue.size > 1) {
+            // Apply intelligent shuffle ordering when enabling shuffle
+            val currentTrack = _playbackState.value.currentTrack
+            val currentIndex = _playbackState.value.queueIndex
+
+            // Reorder everything except current track
+            val otherTracks = currentQueue.filterIndexed { idx, _ -> idx != currentIndex }
+            val shuffled = shuffleEngine.shuffle(otherTracks, currentTrack)
+            val newQueue = mutableListOf<Track>()
+            if (currentTrack != null) newQueue.add(currentTrack)
+            newQueue.addAll(shuffled)
+
+            currentQueue.clear()
+            currentQueue.addAll(newQueue)
+
+            val networkQuality = NetworkQualityHelper.getRecommendedQuality(context)
+            val mediaItems = newQueue.map { MediaItemMapper.toMediaItem(it, quality = networkQuality) }
+            withController { controller ->
+                controller.setMediaItems(mediaItems, 0, controller.currentPosition.coerceAtLeast(0L))
+                controller.shuffleModeEnabled = true
+            }
+            _playbackState.update { it.copy(queue = currentQueue.toList(), queueIndex = 0, isShuffle = true) }
+            android.util.Log.i("PlaybackManager", "🔀 Intelligent shuffle applied: ${shuffled.size} songs reordered")
+        } else {
+            withController { controller ->
+                controller.shuffleModeEnabled = newShuffleState
+            }
         }
     }
 
     fun setShuffle(enabled: Boolean) {
-        withController { controller ->
-            controller.shuffleModeEnabled = enabled
+        if (enabled && !_playbackState.value.isShuffle) {
+            toggleShuffle()
+        } else if (!enabled) {
+            withController { controller ->
+                controller.shuffleModeEnabled = false
+            }
         }
     }
 

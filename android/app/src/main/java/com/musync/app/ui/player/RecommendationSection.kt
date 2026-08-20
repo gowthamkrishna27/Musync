@@ -52,7 +52,7 @@ fun RecommendationSection(
     onTrackClick: (Track) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    if (!uiState.isLoading && uiState.recommendations.isEmpty()) {
+    if (!uiState.isLoading && uiState.recommendationsWithReasons.isEmpty()) {
         return
     }
 
@@ -112,12 +112,17 @@ fun RecommendationSection(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                uiState.recommendations.forEach { track ->
+                // Prefer recommendationsWithReasons if available, fall back to plain list
+                val items = uiState.recommendationsWithReasons.ifEmpty {
+                    uiState.recommendations.map { RecommendedTrackWithReason(it) }
+                }
+                items.forEach { item ->
                     RecommendationTrackItem(
-                        track = track,
+                        track = item.track,
+                        reason = item.reason,
                         onClick = {
                             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                            onTrackClick(track)
+                            onTrackClick(item.track)
                         }
                     )
                 }
@@ -129,6 +134,7 @@ fun RecommendationSection(
 @Composable
 private fun RecommendationTrackItem(
     track: Track,
+    reason: String? = null,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -165,7 +171,7 @@ private fun RecommendationTrackItem(
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        // Title and Artist
+        // Title, Artist, and optional reason label
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = track.title,
@@ -185,9 +191,29 @@ private fun RecommendationTrackItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            // Show recommendation reason label if available
+            if (!reason.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = StatusGreen.copy(alpha = 0.7f),
+                        modifier = Modifier.size(9.dp)
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = reason,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                        color = StatusGreen.copy(alpha = 0.8f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
 
-        // Duration / Quick Play Indicator
+        // Duration
         val durationText = formatDuration(track.durationMs ?: 180000L)
         Text(
             text = durationText,

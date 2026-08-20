@@ -12,6 +12,8 @@ import { cacheService } from "./cache/cacheService";
 import { metricsService } from "./metrics/metricsService";
 import { StreamManager } from "./streaming/streamManager";
 import { RecommendationEngine } from "./recommendations/recommendationEngine";
+import { sessionService } from "./recommendations/sessionService";
+import { DiscoveryWorker } from "./discovery/discoveryWorker";
 
 dotenv.config();
 
@@ -601,11 +603,189 @@ app.get(["/recommendations", "/api/recommendations"], apiLimiter, async (req: Re
   }
 });
 
+// 15. Real-Time Listening Event Ingest
+// Receives playback events from Android client to update session profiles.
+app.post("/api/listening-events", apiLimiter, async (req: Request, res: Response) => {
+  try {
+    const { userId, trackId, artistName, genre, eventType, durationMs, positionMs } = req.body;
+
+    if (!userId || !trackId || !eventType) {
+      return res.status(400).json({ error: "Missing required fields: userId, trackId, eventType" });
+    }
+
+    const updatedProfile = await sessionService.processEvent({
+      userId,
+      trackId,
+      artistName,
+      genre,
+      eventType,
+      durationMs,
+      positionMs,
+      timestampMs: Date.now()
+    });
+
+    res.json({
+      success: true,
+      totalEvents: updatedProfile.totalEvents,
+      artistAffinity: updatedProfile.artistAffinities,
+      genreAffinity: updatedProfile.genreAffinities
+    });
+  } catch (error: any) {
+    console.error("[listening-events] Error:", error.message);
+    res.status(500).json({ error: error.message || "Failed to process event" });
+  }
+});
+
+// 16. Session-Aware Next Track Recommendations
+// Returns personalised recommendations incorporating real-time session profile.
+app.get("/api/recommendations/next", apiLimiter, async (req: Request, res: Response) => {
+  const trackId = (req.query.trackId || req.query.id) as string;
+  const userId = (req.query.userId || "anonymous") as string;
+  const limitParam = parseInt((req.query.limit as string) || "6", 10);
+  const limit = isNaN(limitParam) ? 6 : Math.min(10, Math.max(1, limitParam));
+
+  if (!trackId || typeof trackId !== "string" || trackId.trim().length === 0) {
+    return res.status(400).json({
+      error: "Missing required parameter 'trackId'",
+      recommendations: []
+    });
+  }
+
+  const reqHost = `${req.protocol}://${req.get("host")}`;
+
+  try {
+    const sessionProfile = await sessionService.getSession(userId);
+    const result = await recommendationEngine.getRecommendationsWithSession(
+      trackId.trim(),
+      limit,
+      reqHost,
+      sessionProfile
+    );
+    res.json(result);
+  } catch (error: any) {
+    console.error(`[recommendations/next] Error for ${trackId}:`, error);
+    res.status(500).json({
+      error: error.message || "Failed to generate session-aware recommendations",
+      trackId,
+      recommendations: []
+    });
+  }
+});
+
+// 17. Intelligent Shuffle Queue Generator
+// Takes a list of tracks and returns an intelligently shuffled ordering.
+app.post("/api/shuffle/generate", apiLimiter, async (req: Request, res: Response) => {
+  try {
+    const { tracks, currentTrackId, userId, temperature } = req.body;
+
+    if (!Array.isArray(tracks) || tracks.length === 0) {
+      return res.status(400).json({ error: "Missing or empty 'tracks' array" });
+    }
+
+    const sessionProfile = userId
+      ? await sessionService.getSession(userId as string)
+      : undefined;
+
+    const shuffled = await recommendationEngine.generateShuffledQueue(
+      tracks,
+      currentTrackId || null,
+      sessionProfile,
+      typeof temperature === "number" ? temperature : 0.7
+    );
+
+    res.json({ shuffled, count: shuffled.length });
+  } catch (error: any) {
+    console.error("[shuffle/generate] Error:", error.message);
+    res.status(500).json({ error: error.message || "Failed to generate shuffle" });
+  }
+});
+
+
+const discoveryWorker = new DiscoveryWorker(ytmusic);
+
+// 18. Live Discovery Home API
+// Returns multi-section discovery payload (Trending Now, New Releases, Rising Fast, Regional)
+app.get("/api/discover/home", apiLimiter, async (req: Request, res: Response) => {
+  const language = (req.query.language as string) || "All";
+  const reqHost = `${req.protocol}://${req.get("host")}`;
+
+  try {
+    const result = await discoveryWorker.getHomeDiscovery(language, reqHost);
+    res.json(result);
+  } catch (error: any) {
+    console.error("[discover/home] Error:", error.message);
+    res.status(500).json({ error: error.message || "Failed to fetch discovery home" });
+  }
+});
+
+// 19. Live Trending Music API
+app.get("/api/discover/trending", apiLimiter, async (req: Request, res: Response) => {
+  const region = (req.query.region as string) || "global";
+  const language = (req.query.language as string) || "All";
+  const force = req.query.force === "true";
+  const reqHost = `${req.protocol}://${req.get("host")}`;
+
+  try {
+    const tracks = await discoveryWorker.getTrending(region, language, force);
+    const withStreams = tracks.map((t) => ({
+      ...t,
+      streamUrl: t.videoId ? `${reqHost}/stream?id=${t.videoId}` : undefined,
+      mediaUrl: t.videoId ? `${reqHost}/stream?id=${t.videoId}` : undefined
+    }));
+    res.json(withStreams);
+  } catch (error: any) {
+    console.error("[discover/trending] Error:", error.message);
+    res.status(500).json({ error: error.message || "Failed to fetch trending music" });
+  }
+});
+
+// 20. Live New Releases API
+app.get("/api/discover/new", apiLimiter, async (req: Request, res: Response) => {
+  const language = (req.query.language as string) || "All";
+  const force = req.query.force === "true";
+  const reqHost = `${req.protocol}://${req.get("host")}`;
+
+  try {
+    const tracks = await discoveryWorker.getNewReleases(language, force);
+    const withStreams = tracks.map((t) => ({
+      ...t,
+      streamUrl: t.videoId ? `${reqHost}/stream?id=${t.videoId}` : undefined,
+      mediaUrl: t.videoId ? `${reqHost}/stream?id=${t.videoId}` : undefined
+    }));
+    res.json(withStreams);
+  } catch (error: any) {
+    console.error("[discover/new] Error:", error.message);
+    res.status(500).json({ error: error.message || "Failed to fetch new releases" });
+  }
+});
+
+// 21. Live Rising Breakout Hits API
+app.get("/api/discover/rising", apiLimiter, async (req: Request, res: Response) => {
+  const force = req.query.force === "true";
+  const reqHost = `${req.protocol}://${req.get("host")}`;
+
+  try {
+    const tracks = await discoveryWorker.getRising(force);
+    const withStreams = tracks.map((t) => ({
+      ...t,
+      streamUrl: t.videoId ? `${reqHost}/stream?id=${t.videoId}` : undefined,
+      mediaUrl: t.videoId ? `${reqHost}/stream?id=${t.videoId}` : undefined
+    }));
+    res.json(withStreams);
+  } catch (error: any) {
+    console.error("[discover/rising] Error:", error.message);
+    res.status(500).json({ error: error.message || "Failed to fetch rising hits" });
+  }
+});
+
 
 // Start server and handle graceful shutdown
 let server: http.Server | null = null;
 
 initYTMusic().then(() => {
+  // Start the background discovery worker
+  discoveryWorker.start();
+
   // Pre-warm top 15 popular tracks into L1 cache 5s after startup (non-blocking)
   setTimeout(() => StreamManager.preWarmPopularTracks(15), 5000);
 

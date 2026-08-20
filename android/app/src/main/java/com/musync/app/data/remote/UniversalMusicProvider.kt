@@ -113,5 +113,17 @@ class UniversalMusicProvider(
     override suspend fun getRecommendations(trackId: String, limit: Int): List<Track> = withContext(Dispatchers.IO) {
         ytMusicProvider.getRecommendations(trackId, limit)
     }
+
+    suspend fun getDiscoverTrending(region: String = "global", language: String = "All"): List<Track> = withContext(Dispatchers.IO) {
+        ytMusicProvider.getDiscoverTrending(region, language)
+    }
+
+    suspend fun getDiscoverNew(language: String = "All"): List<Track> = withContext(Dispatchers.IO) {
+        ytMusicProvider.getDiscoverNew(language)
+    }
+
+    suspend fun getDiscoverRising(): List<Track> = withContext(Dispatchers.IO) {
+        ytMusicProvider.getDiscoverRising()
+    }
 }
 

@@ -1,5 +1,6 @@
-﻿package com.musync.app.ui.settings
+package com.musync.app.ui.settings
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -8,11 +9,14 @@ import com.musync.app.data.local.datastore.PreferencesManager
 import com.musync.app.domain.repository.MusicRepository
 import com.musync.app.playback.BeatHapticManager
 import com.musync.app.playback.HapticIntensity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 enum class ConnectionStatus {
     IDLE, TESTING, SUCCESS, ERROR
@@ -22,10 +26,41 @@ data class SettingsUiState(
     val customApiUrl: String = "",
     val apiKey: String = "",
     val isCustomApiConfigured: Boolean = false,
-    val audioQuality: String = "low",
+    val audioQuality: String = "high",
+    val downloadQuality: String = "high",
     val hapticIntensity: HapticIntensity = HapticIntensity.OFF,
     val connectionStatus: ConnectionStatus = ConnectionStatus.IDLE,
-    val statusMessage: String? = null
+    val statusMessage: String? = null,
+
+    // Playback
+    val autoplay: Boolean = true,
+    val intelligentShuffle: Boolean = true,
+    val gaplessPlayback: Boolean = true,
+    val crossfadeSeconds: Int = 0,
+    val continuePlaying: Boolean = true,
+
+    // Audio & Dolby
+    val audioNormalization: Boolean = true,
+    val dolbyAtmosEnabled: Boolean = true,
+
+    // Music & Discovery
+    val personalizedRecommendations: Boolean = true,
+    val trendingRegion: String = "India",
+    val newReleaseLanguage: String = "Preferred Languages",
+    val personalizationLevel: String = "Balanced",
+
+    // Notifications
+    val newReleaseNotifications: Boolean = true,
+    val trendingNotifications: Boolean = true,
+    val recommendationNotifications: Boolean = true,
+
+    // Appearance
+    val themeMode: String = "Dark",
+    val reduceMotion: Boolean = false,
+
+    // Storage
+    val cacheSizeBytes: Long = 0L,
+    val isClearingCache: Boolean = false
 )
 
 class SettingsViewModel(
@@ -75,6 +110,43 @@ class SettingsViewModel(
         }
     }
 
+    fun computeCacheSize(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                var size = 0L
+                val cacheDir = context.cacheDir
+                if (cacheDir.exists()) {
+                    size += getFolderSize(cacheDir)
+                }
+                val codeCacheDir = context.codeCacheDir
+                if (codeCacheDir.exists()) {
+                    size += getFolderSize(codeCacheDir)
+                }
+                _uiState.update { it.copy(cacheSizeBytes = size) }
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun clearCache(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(isClearingCache = true) }
+            try {
+                context.cacheDir.deleteRecursively()
+                context.cacheDir.mkdirs()
+            } catch (_: Exception) {}
+            _uiState.update { it.copy(cacheSizeBytes = 0L, isClearingCache = false) }
+        }
+    }
+
+    private fun getFolderSize(dir: File): Long {
+        var size = 0L
+        val files = dir.listFiles() ?: return 0L
+        for (file in files) {
+            size += if (file.isDirectory) getFolderSize(file) else file.length()
+        }
+        return size
+    }
+
     fun onCustomApiUrlChange(url: String) {
         _uiState.update { it.copy(customApiUrl = url, connectionStatus = ConnectionStatus.IDLE) }
     }
@@ -88,6 +160,62 @@ class SettingsViewModel(
         viewModelScope.launch {
             preferencesManager.setAudioQuality(quality)
         }
+    }
+
+    fun onDownloadQualityChange(quality: String) {
+        _uiState.update { it.copy(downloadQuality = quality) }
+    }
+
+    fun onAutoplayToggle(enabled: Boolean) {
+        _uiState.update { it.copy(autoplay = enabled) }
+    }
+
+    fun onIntelligentShuffleToggle(enabled: Boolean) {
+        _uiState.update { it.copy(intelligentShuffle = enabled) }
+    }
+
+    fun onGaplessPlaybackToggle(enabled: Boolean) {
+        _uiState.update { it.copy(gaplessPlayback = enabled) }
+    }
+
+    fun onCrossfadeSecondsChange(seconds: Int) {
+        _uiState.update { it.copy(crossfadeSeconds = seconds) }
+    }
+
+    fun onPersonalizedRecommendationsToggle(enabled: Boolean) {
+        _uiState.update { it.copy(personalizedRecommendations = enabled) }
+    }
+
+    fun onTrendingRegionChange(region: String) {
+        _uiState.update { it.copy(trendingRegion = region) }
+    }
+
+    fun onNewReleaseLanguageChange(language: String) {
+        _uiState.update { it.copy(newReleaseLanguage = language) }
+    }
+
+    fun onPersonalizationLevelChange(level: String) {
+        _uiState.update { it.copy(personalizationLevel = level) }
+    }
+
+    fun onNewReleaseNotificationsToggle(enabled: Boolean) {
+        _uiState.update { it.copy(newReleaseNotifications = enabled) }
+    }
+
+    fun onTrendingNotificationsToggle(enabled: Boolean) {
+        _uiState.update { it.copy(trendingNotifications = enabled) }
+    }
+
+    fun onRecommendationNotificationsToggle(enabled: Boolean) {
+        _uiState.update { it.copy(recommendationNotifications = enabled) }
+    }
+
+    fun onThemeModeChange(mode: String) {
+        _uiState.update { it.copy(themeMode = mode) }
+    }
+
+    fun onReduceMotionToggle(enabled: Boolean) {
+        _uiState.update { it.copy(reduceMotion = enabled) }
     }
 
     fun onHapticIntensityChange(intensity: HapticIntensity) {
@@ -168,4 +296,3 @@ class SettingsViewModel(
         }
     }
 }
-

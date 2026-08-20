@@ -21,11 +21,9 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,6 +31,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -42,9 +42,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.musync.app.domain.model.PlaybackState
 import com.musync.app.ui.theme.IconGrey
-import com.musync.app.ui.theme.IconWhite
-import com.musync.app.ui.theme.TextGreySecondary
-import com.musync.app.ui.theme.TextWhite
 
 @Composable
 fun MiniPlayer(
@@ -56,147 +53,146 @@ fun MiniPlayer(
     modifier: Modifier = Modifier
 ) {
     val track = playbackState.currentTrack ?: return
-
-    val progress = if (playbackState.durationMs > 0) {
-        (playbackState.currentPositionMs.toFloat() / playbackState.durationMs.toFloat()).coerceIn(0f, 1f)
-    } else 0f
-
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+    val pillShape = RoundedCornerShape(32.dp)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xF2202024))
-            .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(16.dp))
+            .shadow(12.dp, pillShape, spotColor = Color.Black)
+            .clip(pillShape)
+            .background(Color(0xF518181B))
+            .border(
+                1.dp,
+                Brush.verticalGradient(
+                    listOf(
+                        Color(0x38FFFFFF),
+                        Color(0x10FFFFFF)
+                    )
+                ),
+                pillShape
+            )
             .clickable {
                 haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                 onClick()
             }
+            .padding(start = 8.dp, end = 10.dp, top = 6.dp, bottom = 6.dp)
     ) {
-        Column {
-            // Subtle Red Progress Bar
-            LinearProgressIndicator(
-                progress = progress,
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(46.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Rounded Square Album Artwork
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp),
-                color = com.musync.app.ui.theme.AppleMusicRed,
-                trackColor = Color(0x1AFFFFFF)
-            )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 7.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF222226)),
+                contentAlignment = Alignment.Center
             ) {
-                // Square Rounded Album Artwork (Apple Music style)
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF161618)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val context = androidx.compose.ui.platform.LocalContext.current
-                    val imageRequest = remember(track.artworkUrl, track.id) {
-                        com.musync.app.core.image.ImageQualityHelper.buildOptimizedImageRequest(context, track.artworkUrl, track.id)
-                    }
-
-                    if (!track.artworkUrl.isNullOrBlank() || track.id.isNotBlank()) {
-                        AsyncImage(
-                            model = imageRequest,
-                            contentDescription = track.title,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(RoundedCornerShape(8.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = null,
-                            tint = IconGrey,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val imageRequest = remember(track.artworkUrl, track.id) {
+                    com.musync.app.core.image.ImageQualityHelper.buildOptimizedImageRequest(context, track.artworkUrl, track.id)
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
-
-                // Title and Artist
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = track.title,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        ),
-                        color = TextWhite,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(1.dp))
-                    Text(
-                        text = track.artist.name,
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                        color = TextGreySecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Play / Pause Button
-                if (playbackState.isBuffering) {
-                    CircularProgressIndicator(
+                if (!track.artworkUrl.isNullOrBlank() || track.id.isNotBlank()) {
+                    AsyncImage(
+                        model = imageRequest,
+                        contentDescription = track.title,
                         modifier = Modifier
-                            .size(36.dp)
-                            .padding(6.dp),
-                        color = TextWhite,
-                        strokeWidth = 2.5.dp
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(10.dp)),
+                        contentScale = ContentScale.Crop
                     )
                 } else {
-                    IconButton(
-                        onClick = {
-                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                            onTogglePlay()
-                        },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
-                            tint = Color.White,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = IconGrey,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
+            }
 
-                Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
-                // Next Button
+            // Title and Artist
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = track.title,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.1.sp
+                    ),
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = track.artist.name,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Normal
+                    ),
+                    color = Color(0xFF9E9EA4),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            // Play / Pause Button
+            if (playbackState.isBuffering) {
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .padding(6.dp),
+                    color = Color.White,
+                    strokeWidth = 2.dp
+                )
+            } else {
                 IconButton(
                     onClick = {
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        onSkipNext()
+                        onTogglePlay()
                     },
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.SkipNext,
-                        contentDescription = "Next",
+                        imageVector = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
                         tint = Color.White,
                         modifier = Modifier.size(26.dp)
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.width(4.dp))
+
+            // Skip Next Button
+            IconButton(
+                onClick = {
+                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    onSkipNext()
+                },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SkipNext,
+                    contentDescription = "Next",
+                    tint = Color.White,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
         }
     }
 }
-
-

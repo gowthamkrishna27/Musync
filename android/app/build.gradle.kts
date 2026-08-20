@@ -14,8 +14,8 @@ android {
         applicationId = "com.musync.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1165
-        versionName = "1.1.6.5"
+        versionCode = 1170
+        versionName = "1.1.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

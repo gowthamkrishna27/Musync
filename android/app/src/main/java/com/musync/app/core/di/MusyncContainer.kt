@@ -13,6 +13,7 @@ import com.musync.app.domain.repository.MusicRepository
 import com.musync.app.domain.repository.PlaylistRepository
 import com.musync.app.domain.repository.RecentlyPlayedRepository
 import com.musync.app.playback.PlaybackManager
+import com.musync.app.playback.recommendation.RealTimeRecommendationEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -38,6 +39,8 @@ class MusyncContainer(private val context: Context) {
             preferencesManager.baseUrl.collect { url ->
                 val activeUrl = if (url == "none") "" else url
                 universalMusicProvider.updateConfiguration(activeUrl, preferencesManager.getApiKey())
+                // Keep session tracker in sync with the active backend URL
+                playbackManager.sessionTracker.backendBaseUrl = activeUrl
             }
         }
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
@@ -101,6 +104,18 @@ class MusyncContainer(private val context: Context) {
 
     val playbackManager: PlaybackManager by lazy {
         PlaybackManager(context)
+    }
+
+    val realTimeRecommendationEngine: RealTimeRecommendationEngine by lazy {
+        RealTimeRecommendationEngine(
+            scope = kotlinx.coroutines.CoroutineScope(
+                kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+            ),
+            musicRepository = musicRepository,
+            favoritesRepository = favoritesRepository,
+            recentlyPlayedRepository = recentlyPlayedRepository,
+            sessionTracker = playbackManager.sessionTracker
+        )
     }
 }
 

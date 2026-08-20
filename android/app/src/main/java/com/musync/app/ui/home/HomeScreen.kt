@@ -20,14 +20,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.util.lerp
-import kotlin.math.absoluteValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.MusicNote
@@ -91,6 +85,22 @@ fun HomeScreen(
     val favoriteIds = favorites.map { it.id }.toSet()
     val moodPills = listOf("Podcasts", "Feel good", "Romance", "Relax", "Party", "Workout", "Focus", "Telugu", "Tamil", "Hindi", "All")
     var selectedMood by remember { mutableStateOf("Feel good") }
+
+    val editorialItems = remember(
+        uiState.trendingTracks,
+        uiState.teluguTracks,
+        uiState.tamilTracks,
+        uiState.hindiTracks,
+        uiState.globalTracks
+    ) {
+        buildEditorialCarouselItems(
+            trendingTracks = uiState.trendingTracks,
+            teluguTracks = uiState.teluguTracks,
+            tamilTracks = uiState.tamilTracks,
+            hindiTracks = uiState.hindiTracks,
+            globalTracks = uiState.globalTracks
+        )
+    }
 
     Box(
         modifier = modifier
@@ -205,96 +215,18 @@ fun HomeScreen(
                         }
                     }
 
-                    // 3. Top Playlists / Hero Showcase Carousel with 3D Horizontal Peek Transition
-                    if (!uiState.isOffline && uiState.searchQuery.isBlank()) {
-                        val heroTracks = (uiState.trendingTracks.takeIf { it.isNotEmpty() } ?: uiState.teluguTracks).take(10)
-                        if (heroTracks.isNotEmpty()) {
-                            item {
-                                val pagerState = rememberPagerState(initialPage = 0) { heroTracks.size }
-
-                                HorizontalPager(
-                                    state = pagerState,
-                                    contentPadding = PaddingValues(horizontal = 46.dp),
-                                    pageSpacing = 14.dp,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
-                                ) { page ->
-                                    val track = heroTracks[page]
-                                    val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
-                                    val scale = lerp(1f, 0.88f, pageOffset.coerceIn(0f, 1f))
-                                    val alpha = lerp(1f, 0.68f, pageOffset.coerceIn(0f, 1f))
-
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(340.dp)
-                                            .graphicsLayer {
-                                                scaleX = scale
-                                                scaleY = scale
-                                                this.alpha = alpha
-                                            }
-                                            .clip(RoundedCornerShape(30.dp))
-                                            .background(Color(0xFF19191E))
-                                            .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(30.dp))
-                                            .clickable { viewModel.playTrack(track, heroTracks) }
-                                    ) {
-                                        if (!track.artworkUrl.isNullOrBlank()) {
-                                            AsyncImage(
-                                                model = track.artworkUrl,
-                                                contentDescription = track.title,
-                                                modifier = Modifier.fillMaxSize(),
-                                                contentScale = ContentScale.Crop
-                                            )
-                                        }
-
-                                        // Vignette Gradient Overlay at bottom
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .background(
-                                                    Brush.verticalGradient(
-                                                        listOf(
-                                                            Color.Transparent,
-                                                            Color(0x33000000),
-                                                            Color(0xBB000000),
-                                                            Color(0xF5000000)
-                                                        )
-                                                    )
-                                                )
-                                        )
-
-                                        // Track Info Overlay
-                                        Column(
-                                            modifier = Modifier
-                                                .align(Alignment.BottomStart)
-                                                .padding(horizontal = 22.dp, vertical = 20.dp)
-                                        ) {
-                                            Text(
-                                                text = track.title,
-                                                style = MaterialTheme.typography.headlineSmall.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 22.sp
-                                                ),
-                                                color = Color.White,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Text(
-                                                text = "${track.artist.name} · Trending",
-                                                style = MaterialTheme.typography.bodyMedium.copy(
-                                                    fontSize = 13.sp
-                                                ),
-                                                color = Color(0xCCFFFFFF),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                    }
+                    // 3. Top Playlists / Hero Showcase Carousel with 3D Depth Transition & Infinite Looping
+                    if (!uiState.isOffline && uiState.searchQuery.isBlank() && editorialItems.isNotEmpty()) {
+                        item {
+                            PremiumPlaylistCarousel(
+                                items = editorialItems,
+                                isPlaying = playbackState.isPlaying,
+                                currentTrackId = playbackState.currentTrack?.id,
+                                onPlayTrack = { track, tracks ->
+                                    viewModel.playTrack(track, tracks)
                                 }
-                                Spacer(modifier = Modifier.height(10.dp))
-                            }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
                         }
                     }
 

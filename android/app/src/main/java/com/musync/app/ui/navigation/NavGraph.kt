@@ -54,11 +54,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.musync.app.ui.theme.AppleMusicPink
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -413,60 +416,127 @@ fun MainApp(
                     }
                 }
 
-                // 2. 5-TAB FLOATING NAVIGATION BAR (Apple Music style)
-                Box(
+                // 2. APPLE MUSIC FLOATING DOCK: 4-TAB CAPSULE + DETACHED SEARCH CIRCLE
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(32.dp))
-                        .background(Color(0xF21B1B1E))
-                        .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(32.dp))
-                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                        .height(60.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceAround,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Screen.bottomNavItems.forEach { screen ->
-                            val isSelected = currentRoute == screen.route
-                            val activeColor = AppleMusicRed
-                            val inactiveColor = Color(0xFF8E8E93)
-
-                            Column(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .clickable {
-                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                        navController.navigate(screen.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 4.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                val icon = if (isSelected) screen.selectedIcon ?: screen.unselectedIcon else screen.unselectedIcon
-                                if (icon != null) {
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = screen.title,
-                                        tint = if (isSelected) activeColor else inactiveColor,
-                                        modifier = Modifier.size(22.dp)
+                    // Main 4-Tab Navigation Capsule
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(60.dp)
+                            .shadow(12.dp, CircleShape, spotColor = Color.Black)
+                            .clip(CircleShape)
+                            .background(Color(0xF518181B))
+                            .border(
+                                1.dp,
+                                Brush.verticalGradient(
+                                    listOf(
+                                        Color(0x38FFFFFF),
+                                        Color(0x10FFFFFF)
                                     )
+                                ),
+                                CircleShape
+                            )
+                            .padding(horizontal = 6.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Screen.primaryDockItems.forEach { screen ->
+                                val isSelected = currentRoute == screen.route
+                                val activeColor = AppleMusicPink
+                                val inactiveColor = Color(0xFFE5E5EA)
+
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .then(
+                                            if (isSelected) {
+                                                Modifier.background(Color(0x28FFFFFF))
+                                            } else Modifier
+                                        )
+                                        .clickable {
+                                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                            navController.navigate(screen.route) {
+                                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        }
+                                        .padding(horizontal = if (isSelected) 14.dp else 10.dp, vertical = 5.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        val icon = if (isSelected) screen.selectedIcon ?: screen.unselectedIcon else screen.unselectedIcon
+                                        if (icon != null) {
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = screen.title,
+                                                tint = if (isSelected) activeColor else inactiveColor,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = screen.title,
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontSize = 10.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                            ),
+                                            color = if (isSelected) activeColor else inactiveColor
+                                        )
+                                    }
                                 }
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = screen.title,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = 10.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                    ),
-                                    color = if (isSelected) activeColor else inactiveColor
-                                )
                             }
                         }
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    // Detached Floating Search Circle Button
+                    val isSearchSelected = currentRoute == Screen.Search.route
+                    Box(
+                        modifier = Modifier
+                            .size(60.dp)
+                            .shadow(12.dp, CircleShape, spotColor = Color.Black)
+                            .clip(CircleShape)
+                            .background(if (isSearchSelected) Color(0xF52A2A2E) else Color(0xF518181B))
+                            .border(
+                                1.dp,
+                                Brush.verticalGradient(
+                                    listOf(
+                                        if (isSearchSelected) Color(0x55FFFFFF) else Color(0x38FFFFFF),
+                                        Color(0x10FFFFFF)
+                                    )
+                                ),
+                                CircleShape
+                            )
+                            .clickable {
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                navController.navigate(Screen.Search.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search",
+                            tint = if (isSearchSelected) AppleMusicPink else Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
                     }
                 }
             }

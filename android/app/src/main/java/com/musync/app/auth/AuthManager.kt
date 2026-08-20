@@ -337,6 +337,15 @@ class AuthManager(
         }
     }
 
+    suspend fun sendPasswordReset(email: String): Result<Unit> = runCatching {
+        auth.sendPasswordResetEmail(email.trim()).await()
+    }
+
+    suspend fun deleteAccount(): Result<Unit> = runCatching {
+        auth.currentUser?.delete()?.await()
+        signOut()
+    }
+
     // ──────────────────────────────────────────────────────────────
     //  HELPERS
     // ──────────────────────────────────────────────────────────────

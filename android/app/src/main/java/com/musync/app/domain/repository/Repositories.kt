@@ -19,6 +19,9 @@ interface MusicRepository {
     suspend fun getStreamUrl(track: Track): String?
     suspend fun testConnection(baseUrl: String?, apiKey: String?): Boolean
     suspend fun getRecommendations(trackId: String, limit: Int = 5): Result<List<Track>>
+    suspend fun getDiscoverTrending(region: String = "global", language: String = "All"): Result<List<Track>>
+    suspend fun getDiscoverNew(language: String = "All"): Result<List<Track>>
+    suspend fun getDiscoverRising(): Result<List<Track>>
 }
 
 interface FavoritesRepository {
