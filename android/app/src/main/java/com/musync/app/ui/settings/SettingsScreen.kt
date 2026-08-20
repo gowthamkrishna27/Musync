@@ -39,8 +39,10 @@ import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -91,6 +93,8 @@ fun SettingsScreen(
     val app = context.applicationContext as com.musync.app.MusyncApplication
     val audioEffectManager = app.container.audioEffectManager
     val eqState by audioEffectManager.state.collectAsState()
+    val appUpdateManager = app.container.appUpdateManager
+    val updateState by appUpdateManager.updateState.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
 
@@ -102,6 +106,7 @@ fun SettingsScreen(
     var showHapticsDialog by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var cacheClearedMessage by remember { mutableStateOf(false) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
     var showTermsDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
 
@@ -323,10 +328,15 @@ fun SettingsScreen(
                 SettingsSectionTitle("About Musync")
                 SettingsCardContainer {
                     SettingsRow(
-                        title = "Version",
-                        value = "1.1.6",
-                        valueColor = Color(0xBBFFFFFF),
-                        onClick = {}
+                        title = "Musync Version",
+                        value = "${com.musync.app.BuildConfig.VERSION_NAME} · Check Update",
+                        valueColor = StatusGreen,
+                        onClick = {
+                            showUpdateDialog = true
+                            scope.launch {
+                                appUpdateManager.checkForUpdates(silent = false)
+                            }
+                        }
                     )
                     SettingsDivider()
                     SettingsRow(
@@ -741,6 +751,205 @@ fun SettingsScreen(
             confirmButton = {
                 TextButton(onClick = { showPrivacyDialog = false }) {
                     Text("Close", color = Color.White)
+                }
+            },
+            containerColor = SurfaceBlack,
+            shape = RoundedCornerShape(18.dp)
+        )
+    }
+
+    // App Update Dialog
+    if (showUpdateDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                if (updateState !is com.musync.app.update.UpdateDownloadState.Downloading) {
+                    showUpdateDialog = false
+                    appUpdateManager.resetState()
+                }
+            },
+            title = {
+                Text(
+                    text = "Musync Update",
+                    color = TextWhite,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    when (val state = updateState) {
+                        is com.musync.app.update.UpdateDownloadState.Checking -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 12.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    color = StatusGreen,
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Text("Checking for new releases...", color = TextGreySecondary, fontSize = 13.sp)
+                            }
+                        }
+                        is com.musync.app.update.UpdateDownloadState.UpToDate -> {
+                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                Text(
+                                    text = "Musync ${com.musync.app.BuildConfig.VERSION_NAME} is up to date.",
+                                    color = TextWhite,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "You are running the newest release with all audio features and performance optimizations.",
+                                    color = TextGreySecondary,
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp
+                                )
+                            }
+                        }
+                        is com.musync.app.update.UpdateDownloadState.Available -> {
+                            val info = state.info
+                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Installed: v${info.currentVersion}", color = TextGreyMuted, fontSize = 12.sp)
+                                    Text("New: v${info.latestVersion}", color = StatusGreen, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text("What's New:", color = TextWhite, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0x18FFFFFF))
+                                        .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(10.dp))
+                                        .padding(10.dp)
+                                ) {
+                                    Text(
+                                        text = info.changelog.ifBlank { "Performance improvements and newest features." },
+                                        color = TextGreySecondary,
+                                        fontSize = 11.sp,
+                                        lineHeight = 15.sp,
+                                        maxLines = 6,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                        is com.musync.app.update.UpdateDownloadState.Downloading -> {
+                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text("Downloading Update...", color = TextWhite, fontSize = 13.sp)
+                                    Text("${state.progressPercent}%", color = StatusGreen, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                LinearProgressIndicator(
+                                    progress = { state.progressPercent / 100f },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = StatusGreen,
+                                    trackColor = Color(0x22FFFFFF)
+                                )
+                            }
+                        }
+                        is com.musync.app.update.UpdateDownloadState.ReadyToInstall -> {
+                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                Text(
+                                    text = "Update downloaded successfully!",
+                                    color = StatusGreen,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Tap 'Install Now' to complete the installation.",
+                                    color = TextGreySecondary,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                        is com.musync.app.update.UpdateDownloadState.Error -> {
+                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                Text(
+                                    text = state.message,
+                                    color = Color(0xFFFF5252),
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                        else -> {}
+                    }
+                }
+            },
+            confirmButton = {
+                when (val state = updateState) {
+                    is com.musync.app.update.UpdateDownloadState.Available -> {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    appUpdateManager.downloadAndInstallUpdate(state.info.downloadUrl, state.info.fileName)
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = StatusGreen),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Download & Update", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
+                    is com.musync.app.update.UpdateDownloadState.ReadyToInstall -> {
+                        Button(
+                            onClick = {
+                                appUpdateManager.launchPackageInstaller(state.apkFile)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = StatusGreen),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Install Now", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
+                    is com.musync.app.update.UpdateDownloadState.Error -> {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    appUpdateManager.checkForUpdates(silent = false)
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x33FFFFFF)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Retry", color = TextWhite, fontSize = 12.sp)
+                        }
+                    }
+                    else -> {
+                        if (updateState is com.musync.app.update.UpdateDownloadState.UpToDate) {
+                            TextButton(onClick = {
+                                showUpdateDialog = false
+                                appUpdateManager.resetState()
+                            }) {
+                                Text("Done", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                if (updateState !is com.musync.app.update.UpdateDownloadState.Downloading && updateState !is com.musync.app.update.UpdateDownloadState.UpToDate) {
+                    TextButton(onClick = {
+                        showUpdateDialog = false
+                        appUpdateManager.resetState()
+                    }) {
+                        Text("Close", color = TextGreySecondary, fontSize = 12.sp)
+                    }
                 }
             },
             containerColor = SurfaceBlack,
