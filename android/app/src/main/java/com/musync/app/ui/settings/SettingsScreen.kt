@@ -1,9 +1,10 @@
 package com.musync.app.ui.settings
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -26,7 +27,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -58,7 +58,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.musync.app.BuildConfig
 import com.musync.app.MusyncApplication
-import com.musync.app.playback.HapticIntensity
 import com.musync.app.ui.theme.AppleMusicPink
 import com.musync.app.ui.theme.AppleMusicRed
 import com.musync.app.ui.theme.BackgroundBlack
@@ -77,7 +76,6 @@ enum class SettingsSection(val title: String) {
     MUSIC_DISCOVERY("Music & Discovery"),
     LIBRARY("Library"),
     NOTIFICATIONS("Notifications"),
-    APPEARANCE("Appearance"),
     PRIVACY_SECURITY("Privacy & Security"),
     STORAGE_DATA("Storage & Data"),
     APP_UPDATES("App Updates"),
@@ -135,12 +133,12 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 24.dp, vertical = 20.dp)
                 ) {
-                    // Header Back Navigation & Title
+                    // Header Back Navigation
                     item {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 24.dp),
+                                .padding(bottom = 20.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
@@ -160,7 +158,7 @@ fun SettingsScreen(
                         }
                     }
 
-                    // Profile / Account Header
+                    // Settings Heading + User Account Info
                     item {
                         Column(
                             modifier = Modifier
@@ -173,24 +171,33 @@ fun SettingsScreen(
                                         selectedSection = SettingsSection.ACCOUNT
                                     }
                                 }
-                                .padding(bottom = 32.dp)
+                                .padding(bottom = 28.dp)
                         ) {
                             Text(
-                                text = currentUser?.displayName ?: "Gowtham Krishna",
-                                style = MaterialTheme.typography.headlineMedium.copy(
+                                text = "Settings",
+                                style = MaterialTheme.typography.headlineLarge.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 28.sp,
+                                    fontSize = 34.sp,
                                     letterSpacing = (-0.5).sp
                                 ),
                                 color = TextWhite
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = currentUser?.displayName ?: "Gowtham Krishna",
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium
+                                ),
+                                color = AppleMusicPink
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = currentUser?.email ?: "email@example.com",
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontSize = 15.sp,
-                                    color = TextGreySecondary
-                                )
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = 13.sp
+                                ),
+                                color = TextGreySecondary
                             )
                         }
                     }
@@ -206,7 +213,7 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
-                    // The 12 Sections (Pure text navigation, no icons)
+                    // The Core Sections (Pure text navigation, zero icons)
                     items(SettingsSection.values().size) { index ->
                         val section = SettingsSection.values()[index]
                         Column(
@@ -345,7 +352,7 @@ private fun SettingsDetailView(
         when (section) {
             SettingsSection.GENERAL -> {
                 item {
-                    SettingsGroupHeader(title = "Profile")
+                    SettingsGroupHeader(title = "Settings")
                     SettingsRow(title = "Name", value = currentUser?.displayName ?: "Gowtham Krishna")
                     SettingsRow(title = "Email", value = currentUser?.email ?: "email@example.com")
                     SettingsRow(title = "Language", value = "English")
@@ -522,27 +529,6 @@ private fun SettingsDetailView(
                 }
             }
 
-            SettingsSection.APPEARANCE -> {
-                item {
-                    SettingsGroupHeader(title = "Theme")
-                    SettingsOptionSelector(
-                        title = "Appearance Theme",
-                        options = listOf("Dark", "System", "Light"),
-                        selected = uiState.themeMode,
-                        onSelect = { viewModel.onThemeModeChange(it) }
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    SettingsGroupHeader(title = "Motion & Visuals")
-                    SettingsToggleRow(
-                        title = "Reduce Motion",
-                        subtitle = "Minimize carousel animations and transitions",
-                        checked = uiState.reduceMotion,
-                        onCheckedChange = { viewModel.onReduceMotionToggle(it) }
-                    )
-                    SettingsRow(title = "Interface Effects", value = "Subtle Frosted Glass")
-                }
-            }
-
             SettingsSection.PRIVACY_SECURITY -> {
                 item {
                     SettingsGroupHeader(title = "Data & Privacy")
@@ -696,10 +682,21 @@ private fun SettingsDetailView(
                 item {
                     SettingsGroupHeader(title = "About Musync")
                     SettingsRow(title = "Musync", value = "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                    SettingsActionRow(
+                        title = "Instagram",
+                        value = "@gowthamchowdary.27",
+                        textColor = TextWhite,
+                        onClick = {
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://instagram.com/gowthamchowdary.27"))
+                                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                context.startActivity(intent)
+                            } catch (_: Exception) {}
+                        }
+                    )
                     SettingsActionRow(title = "Terms of Service", onClick = {})
                     SettingsActionRow(title = "Privacy Policy", onClick = {})
                     SettingsActionRow(title = "Open Source Licenses", onClick = {})
-                    SettingsRow(title = "Credits", value = "Built with Google DeepMind Antigravity")
                 }
             }
         }
@@ -768,6 +765,7 @@ private fun SettingsRow(
 @Composable
 private fun SettingsActionRow(
     title: String,
+    value: String? = null,
     textColor: Color = TextWhite,
     onClick: () -> Unit
 ) {
@@ -781,14 +779,28 @@ private fun SettingsActionRow(
             }
             .padding(vertical = 12.dp)
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge.copy(
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Normal
-            ),
-            color = textColor
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Normal
+                ),
+                color = textColor
+            )
+            if (!value.isNullOrBlank()) {
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                    color = AppleMusicPink,
+                    textAlign = TextAlign.End
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(10.dp))
         Box(
             modifier = Modifier

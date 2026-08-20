@@ -341,6 +341,29 @@ class AuthManager(
         auth.sendPasswordResetEmail(email.trim()).await()
     }
 
+    suspend fun updateProfileName(newName: String): Result<MusyncUser> = runCatching {
+        val user = auth.currentUser
+        if (user != null) {
+            val req = com.google.firebase.auth.UserProfileChangeRequest.Builder()
+                .setDisplayName(newName.trim())
+                .build()
+            user.updateProfile(req).await()
+            val updated = user.toMusyncUser()
+            _currentUser.value = updated
+            updated
+        } else {
+            val cur = _currentUser.value ?: throw IllegalStateException("No active user session")
+            val updated = cur.copy(displayName = newName.trim())
+            setDirectUser(updated)
+            updated
+        }
+    }
+
+    suspend fun updatePassword(newPass: String): Result<Unit> = runCatching {
+        val user = auth.currentUser ?: throw IllegalStateException("Not signed in to a Firebase account")
+        user.updatePassword(newPass.trim()).await()
+    }
+
     suspend fun deleteAccount(): Result<Unit> = runCatching {
         auth.currentUser?.delete()?.await()
         signOut()

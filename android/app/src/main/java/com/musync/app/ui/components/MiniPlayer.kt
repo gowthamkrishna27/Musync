@@ -85,11 +85,11 @@ fun MiniPlayer(
                 .height(46.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Rounded Square Album Artwork
+            // Round Circular Album Artwork
             Box(
                 modifier = Modifier
                     .size(44.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(CircleShape)
                     .background(Color(0xFF222226)),
                 contentAlignment = Alignment.Center
             ) {
@@ -104,7 +104,7 @@ fun MiniPlayer(
                         contentDescription = track.title,
                         modifier = Modifier
                             .fillMaxSize()
-                            .clip(RoundedCornerShape(10.dp)),
+                            .clip(CircleShape),
                         contentScale = ContentScale.Crop
                     )
                 } else {

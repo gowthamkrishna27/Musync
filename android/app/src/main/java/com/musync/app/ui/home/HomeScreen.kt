@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -151,7 +152,7 @@ fun HomeScreen(
                                 )
                             }
 
-                            // Profile Avatar Icon (Apple Music style)
+                            // Settings Button (Apple Music style)
                             Box(
                                 modifier = Modifier
                                     .size(38.dp)
@@ -168,8 +169,8 @@ fun HomeScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Outlined.Person,
-                                    contentDescription = "Profile & Account",
+                                    imageVector = Icons.Outlined.Settings,
+                                    contentDescription = "Settings",
                                     tint = Color.White,
                                     modifier = Modifier.size(20.dp)
                                 )
