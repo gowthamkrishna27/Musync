@@ -1,5 +1,9 @@
 package com.musync.app.ui.settings
 
+import android.content.Context
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,49 +18,55 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.ui.text.style.TextAlign
-import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.musync.app.playback.EngineMode
+import com.musync.app.playback.HapticIntensity
+import com.musync.app.playback.SoundEngineRegistry
 import com.musync.app.ui.theme.BackgroundBlack
 import com.musync.app.ui.theme.BorderStroke
 import com.musync.app.ui.theme.CardElevated
@@ -66,37 +76,34 @@ import com.musync.app.ui.theme.SurfaceBlack
 import com.musync.app.ui.theme.TextGreyMuted
 import com.musync.app.ui.theme.TextGreySecondary
 import com.musync.app.ui.theme.TextWhite
-import androidx.compose.foundation.layout.statusBarsPadding
-import com.musync.app.ui.auth.AccountProfileCard
-import com.musync.app.ui.auth.AuthBottomSheet
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
+    onNavigateBack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val app = context.applicationContext as com.musync.app.MusyncApplication
     val audioEffectManager = app.container.audioEffectManager
     val eqState by audioEffectManager.state.collectAsState()
-    val appUpdateManager = app.container.appUpdateManager
-    val updateState by appUpdateManager.updateState.collectAsState()
-    val currentUser by viewModel.authManager.currentUser.collectAsState()
-    val syncStatus by viewModel.authManager.syncStatus.collectAsState()
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
-
     val uiState by viewModel.uiState.collectAsState()
+    val scope = rememberCoroutineScope()
+
     var autoplayEnabled by remember { mutableStateOf(true) }
+    var showQualityDialog by remember { mutableStateOf(false) }
     var showCrossfadeDialog by remember { mutableStateOf(false) }
     var selectedCrossfade by remember { mutableStateOf("5 sec") }
-    var showQualityDialog by remember { mutableStateOf(false) }
     var showEqDialog by remember { mutableStateOf(false) }
-    var showUpdateDialog by remember { mutableStateOf(false) }
+    var showHapticsDialog by remember { mutableStateOf(false) }
+    var showClearCacheDialog by remember { mutableStateOf(false) }
+    var cacheClearedMessage by remember { mutableStateOf(false) }
     var showTermsDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
-    var showHapticsDialog by remember { mutableStateOf(false) }
-    var showAuthSheet by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -105,81 +112,176 @@ fun SettingsScreen(
             .statusBarsPadding()
             .padding(top = 8.dp)
     ) {
-        Text(
-            text = "Settings",
-            style = MaterialTheme.typography.headlineMedium.copy(
-                fontWeight = FontWeight.Bold,
-                fontSize = 22.sp
-            ),
-            color = TextWhite,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
+        // 1. Navigation Header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = onNavigateBack,
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF222227))
+                    .border(1.dp, Color(0x33FFFFFF), CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
 
-        Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Text(
+                text = "Settings",
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 24.sp
+                ),
+                color = TextWhite
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp)
+            contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 48.dp)
         ) {
-            // Group 0: Account & Cloud Sync
+            // Group 0: Minimal Apple Music Profile Card
             item {
-                SettingsSectionTitle("Account & Cloud Backup")
-                AccountProfileCard(
-                    user = currentUser,
-                    syncStatus = syncStatus,
-                    onSignInClick = { showAuthSheet = true },
-                    onSyncClick = { viewModel.cloudSyncManager.triggerSync() },
-                    onSignOutClick = { viewModel.authManager.signOut() }
-                )
-                Spacer(modifier = Modifier.height(18.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color(0xFF2A2A32),
+                                    Color(0xFF19191E)
+                                )
+                            )
+                        )
+                        .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(20.dp))
+                        .padding(20.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(
+                                            Color(0xFFFF2D55),
+                                            Color(0xFFFF375F),
+                                            Color(0xFFFF9F0A)
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = "Profile",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Musync Music",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 17.sp
+                                ),
+                                color = TextWhite
+                            )
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(StatusGreen)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "High-Fidelity Audio Active",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                    color = Color(0xCCFFFFFF)
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // Group 1: Playback & Audio
+            // Group 1: Audio & Playback
             item {
-                SettingsSectionTitle("Playback & Audio")
+                SettingsSectionTitle("Audio & Playback")
                 SettingsCardContainer {
                     SettingsRow(
-                        title = "Streaming Quality",
+                        title = "Audio Quality",
                         value = when (uiState.audioQuality) {
-                            "low", "saver" -> "Data Saver (64kbps)"
-                            "standard" -> "Standard (128kbps)"
-                            else -> "High (320kbps)"
+                            "low", "saver" -> "Data Saver (64 kbps)"
+                            "standard" -> "Standard (128 kbps)"
+                            else -> "High Quality (320 kbps)"
                         },
                         onClick = { showQualityDialog = true }
                     )
                     SettingsDivider()
                     SettingsRow(
-                        title = "Studio & Spatial Audio",
-                        value = if (eqState.isEnabled) eqState.currentMode.title else "Disabled",
-                        valueColor = if (eqState.isEnabled) Color.White else TextGreyMuted,
+                        title = "Equalizer & Sound Presets",
+                        value = if (eqState.isEnabled) eqState.currentMode.title else "Balanced (Off)",
+                        valueColor = if (eqState.isEnabled) StatusGreen else TextGreySecondary,
                         onClick = { showEqDialog = true }
                     )
                     SettingsDivider()
                     SettingsRow(
-                        title = "Crossfade",
+                        title = "Crossfade Transition",
                         value = selectedCrossfade,
                         onClick = { showCrossfadeDialog = true }
                     )
                     SettingsDivider()
                     SettingsRow(
-                        title = "Beat Haptics (Bass Sync)",
+                        title = "Haptic Sound Feedback",
                         value = uiState.hapticIntensity.description,
-                        valueColor = if (uiState.hapticIntensity == com.musync.app.playback.HapticIntensity.OFF) TextGreyMuted else StatusGreen,
+                        valueColor = if (uiState.hapticIntensity == HapticIntensity.OFF) TextGreySecondary else StatusGreen,
                         onClick = { showHapticsDialog = true }
                     )
                     SettingsDivider()
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                            .padding(horizontal = 18.dp, vertical = 13.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Autoplay",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-                            color = TextWhite
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Continuous Playback",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                                color = TextWhite
+                            )
+                            Text(
+                                text = "Keep playing recommended music when queue ends",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                color = TextGreySecondary
+                            )
+                        }
                         Switch(
                             checked = autoplayEnabled,
                             onCheckedChange = { autoplayEnabled = it },
@@ -187,28 +289,44 @@ fun SettingsScreen(
                                 checkedThumbColor = Color.Black,
                                 checkedTrackColor = Color.White,
                                 uncheckedThumbColor = TextGreySecondary,
-                                uncheckedTrackColor = CardElevated
+                                uncheckedTrackColor = Color(0x33FFFFFF)
                             )
                         )
                     }
                 }
+                Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // Group 2: About
+            // Group 2: Storage & Cache
             item {
-                Spacer(modifier = Modifier.height(20.dp))
-                SettingsSectionTitle("About")
+                SettingsSectionTitle("Storage & Data")
                 SettingsCardContainer {
                     SettingsRow(
-                        title = "Check for Updates",
-                        value = "v${com.musync.app.BuildConfig.VERSION_NAME}",
-                        valueColor = StatusGreen,
-                        onClick = {
-                            showUpdateDialog = true
-                            scope.launch {
-                                appUpdateManager.checkForUpdates(silent = false)
-                            }
-                        }
+                        title = "Clear Music Cache",
+                        value = if (cacheClearedMessage) "Cache Cleared ✓" else "Clean Temporary Files",
+                        valueColor = if (cacheClearedMessage) StatusGreen else TextGreySecondary,
+                        onClick = { showClearCacheDialog = true }
+                    )
+                    SettingsDivider()
+                    SettingsRow(
+                        title = "Download Format",
+                        value = "Lossless Audio",
+                        valueColor = TextGreySecondary,
+                        onClick = {}
+                    )
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            // Group 3: About
+            item {
+                SettingsSectionTitle("About Musync")
+                SettingsCardContainer {
+                    SettingsRow(
+                        title = "Version",
+                        value = "1.1.6",
+                        valueColor = Color(0xBBFFFFFF),
+                        onClick = {}
                     )
                     SettingsDivider()
                     SettingsRow(
@@ -222,83 +340,29 @@ fun SettingsScreen(
                         value = "",
                         onClick = { showPrivacyDialog = true }
                     )
-                    SettingsDivider()
-                    SettingsRow(
-                        title = "Developer",
-                        value = "@gowthamchowdary.27",
-                        valueColor = StatusGreen,
-                        onClick = {
-                            try {
-                                val intent = android.content.Intent(
-                                    android.content.Intent.ACTION_VIEW,
-                                    android.net.Uri.parse("https://instagram.com/gowthamchowdary.27")
-                                )
-                                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                context.startActivity(intent)
-                            } catch (_: Exception) {}
-                        }
-                    )
                 }
             }
         }
-    }
-
-    // Crossfade Dialog
-    if (showCrossfadeDialog) {
-        AlertDialog(
-            onDismissRequest = { showCrossfadeDialog = false },
-            title = { Text("Crossfade Transition", color = TextWhite, fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    val options = listOf("Off", "3 sec", "5 sec", "8 sec", "12 sec")
-                    options.forEach { opt ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    selectedCrossfade = opt
-                                    showCrossfadeDialog = false
-                                }
-                                .padding(vertical = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(opt, color = TextWhite, fontSize = 14.sp)
-                            if (selectedCrossfade == opt) {
-                                Text("✓", color = StatusGreen, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0x22FFFFFF))
-                        .clickable { showCrossfadeDialog = false }
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Close", color = Color.White, fontSize = 12.sp)
-                }
-            },
-            containerColor = SurfaceBlack,
-            shape = RoundedCornerShape(14.dp)
-        )
     }
 
     // Streaming Quality Dialog
     if (showQualityDialog) {
         AlertDialog(
             onDismissRequest = { showQualityDialog = false },
-            title = { Text("Streaming Quality", color = TextWhite, fontWeight = FontWeight.Bold) },
+            title = {
+                Text(
+                    text = "Streaming Audio Quality",
+                    color = TextWhite,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     val qualities = listOf(
-                        Triple("high", "High (320kbps)", "Best studio sound clarity & dynamic range"),
-                        Triple("standard", "Standard (128kbps)", "Balanced mobile data & smooth audio"),
-                        Triple("saver", "Data Saver (64kbps)", "Ultra-low data usage for 2G / weak cellular")
+                        Triple("high", "High Quality (320 kbps)", "Best studio sound clarity and dynamic range"),
+                        Triple("standard", "Standard (128 kbps)", "Balanced sound with reduced data usage"),
+                        Triple("saver", "Data Saver (64 kbps)", "Minimal data consumption for mobile networks")
                     )
 
                     qualities.forEach { (key, title, subtitle) ->
@@ -306,12 +370,113 @@ fun SettingsScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSelected) Color(0x22FFFFFF) else CardElevated)
-                                .border(1.dp, if (isSelected) Color.White else BorderStroke, RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isSelected) Color(0x28FFFFFF) else Color(0x15FFFFFF))
+                                .border(1.dp, if (isSelected) Color.White else Color(0x22FFFFFF), RoundedCornerShape(12.dp))
                                 .clickable {
                                     viewModel.onAudioQualityChange(key)
                                     showQualityDialog = false
+                                }
+                                .padding(14.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = title,
+                                        color = TextWhite,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = subtitle,
+                                        color = TextGreySecondary,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Check,
+                                        contentDescription = null,
+                                        tint = StatusGreen,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showQualityDialog = false }) {
+                    Text("Done", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = SurfaceBlack,
+            shape = RoundedCornerShape(18.dp)
+        )
+    }
+
+    // Equalizer Presets Modal
+    if (showEqDialog) {
+        val scrollState = rememberScrollState()
+
+        AlertDialog(
+            onDismissRequest = { showEqDialog = false },
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Sound Equalizer",
+                        color = TextWhite,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                    Switch(
+                        checked = eqState.isEnabled,
+                        onCheckedChange = { audioEffectManager.setEnabled(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.Black,
+                            checkedTrackColor = Color.White,
+                            uncheckedThumbColor = TextGreySecondary,
+                            uncheckedTrackColor = Color(0x33FFFFFF)
+                        )
+                    )
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(scrollState),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "PRESETS",
+                        color = Color(0x88FFFFFF),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+
+                    SoundEngineRegistry.signatureEngines.forEach { mode ->
+                        val isSelected = eqState.currentMode.id == mode.id && eqState.isEnabled
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isSelected) Color(0x28FFFFFF) else Color(0x15FFFFFF))
+                                .border(1.dp, if (isSelected) Color.White else Color(0x22FFFFFF), RoundedCornerShape(12.dp))
+                                .clickable {
+                                    if (!eqState.isEnabled) audioEffectManager.setEnabled(true)
+                                    audioEffectManager.setEngineMode(mode)
                                 }
                                 .padding(12.dp)
                         ) {
@@ -321,12 +486,25 @@ fun SettingsScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(title, color = TextWhite, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(subtitle, color = TextGreySecondary, fontSize = 11.sp)
+                                    Text(
+                                        text = mode.title,
+                                        color = TextWhite,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        text = mode.subtitle,
+                                        color = TextGreySecondary,
+                                        fontSize = 11.sp
+                                    )
                                 }
                                 if (isSelected) {
-                                    Text("✓", color = StatusGreen, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    Icon(
+                                        imageVector = Icons.Outlined.Check,
+                                        contentDescription = null,
+                                        tint = StatusGreen,
+                                        modifier = Modifier.size(18.dp)
+                                    )
                                 }
                             }
                         }
@@ -334,277 +512,56 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0x22FFFFFF))
-                        .clickable { showQualityDialog = false }
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Close", color = Color.White, fontSize = 12.sp)
+                TextButton(onClick = { showEqDialog = false }) {
+                    Text("Done", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             },
             containerColor = SurfaceBlack,
-            shape = RoundedCornerShape(14.dp)
+            shape = RoundedCornerShape(18.dp)
         )
     }
 
-    // Dolby Atmos 3D Audio Dialog
-    if (showEqDialog) {
-        val scrollState = androidx.compose.foundation.rememberScrollState()
-        val user = currentUser
-        val isLoggedIn = user != null && !user.isAnonymous
-        var isEngineDropdownExpanded by remember { mutableStateOf(false) }
-
+    // Crossfade Dialog
+    if (showCrossfadeDialog) {
         AlertDialog(
-            onDismissRequest = { showEqDialog = false },
+            onDismissRequest = { showCrossfadeDialog = false },
             title = {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable(enabled = isLoggedIn) {
-                            audioEffectManager.setEnabled(!eqState.isEnabled)
-                        }
-                        .padding(vertical = 2.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0x22FFFFFF))
-                                .border(1.dp, Color(0x35FFFFFF), RoundedCornerShape(10.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            com.musync.app.ui.components.SoundEngineSymbol(
-                                engineId = eqState.currentEngine.id,
-                                tint = if (isLoggedIn && eqState.isEnabled) Color.White else IconGrey,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text("Studio & Spatial Audio", color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Text(
-                                text = if (!isLoggedIn) "Member Exclusive" else if (eqState.isEnabled) "DSP Engine Active" else "Bypassed",
-                                color = if (!isLoggedIn) Color(0xBBFFFFFF) else if (eqState.isEnabled) Color.White else TextGreyMuted,
-                                fontSize = 11.sp
-                            )
-                        }
-                    }
-                    if (isLoggedIn) {
-                        Switch(
-                            checked = eqState.isEnabled,
-                            onCheckedChange = { audioEffectManager.setEnabled(it) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.Black,
-                                checkedTrackColor = Color.White,
-                                uncheckedThumbColor = TextGreySecondary,
-                                uncheckedTrackColor = Color(0x22FFFFFF)
-                            )
-                        )
-                    }
-                }
+                Text(
+                    text = "Crossfade Transition",
+                    color = TextWhite,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
             },
             text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(scrollState)
-                ) {
-                    if (!isLoggedIn) {
-                        // Translucent Dark Glass Member Exclusive Lock Card
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val options = listOf("Off", "3 sec", "5 sec", "8 sec", "12 sec")
+                    options.forEach { opt ->
+                        val isSelected = selectedCrossfade == opt
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0x18FFFFFF))
-                                .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(16.dp))
-                                .padding(18.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0x28FFFFFF)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Lock,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) Color(0x28FFFFFF) else Color(0x15FFFFFF))
+                                .clickable {
+                                    selectedCrossfade = opt
+                                    showCrossfadeDialog = false
                                 }
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text(
-                                    text = "Member Exclusive Sound",
-                                    color = TextWhite,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "Sign in to unlock all 7 spatial sound engines, sub-modes, and psychoacoustic hardware DSP.",
-                                    color = Color(0x99FFFFFF),
-                                    fontSize = 12.sp,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                    lineHeight = 16.sp
-                                )
-                                Spacer(modifier = Modifier.height(14.dp))
-                                Button(
-                                    onClick = {
-                                        showEqDialog = false
-                                        showAuthSheet = true
-                                    },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(42.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Text("Sign In to Unlock", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                }
-                            }
-                        }
-                    } else {
-                        // Direct 7 Actual Sound Engines
-                        Text(
-                            text = "SOUND ENGINES",
-                            color = Color(0x88FFFFFF),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        val signatureEngines = com.musync.app.playback.SoundEngineRegistry.signatureEngines
-
-                        // 7 Engine Square Buttons Row
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            signatureEngines.forEach { engineMode ->
-                                val isEngineSelected = eqState.currentEngine == engineMode.engine
-
-                                Box(
-                                    modifier = Modifier
-                                        .size(52.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(
-                                            if (isEngineSelected && eqState.isEnabled) Color(0x38FFFFFF) else Color(0x14FFFFFF)
-                                        )
-                                        .border(
-                                            if (isEngineSelected && eqState.isEnabled) 1.5.dp else 1.dp,
-                                            if (isEngineSelected && eqState.isEnabled) Color.White else Color(0x24FFFFFF),
-                                            RoundedCornerShape(12.dp)
-                                        )
-                                        .clickable {
-                                            audioEffectManager.setEngineMode(engineMode)
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    com.musync.app.ui.components.SoundEngineSymbol(
-                                        engineId = engineMode.engine.id,
-                                        tint = if (isEngineSelected && eqState.isEnabled) Color.White else Color(0x77FFFFFF),
-                                        modifier = Modifier.size(22.dp)
-                                    )
-
-                                    if (isEngineSelected && eqState.isEnabled) {
-                                        Box(
-                                            modifier = Modifier
-                                                .align(Alignment.BottomCenter)
-                                                .padding(bottom = 3.dp)
-                                                .size(3.5.dp)
-                                                .clip(CircleShape)
-                                                .background(Color.White)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Active Engine & Signature Mode Info Card
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0x18FFFFFF))
-                                .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(12.dp))
-                                .padding(horizontal = 12.dp, vertical = 9.dp)
+                                .padding(horizontal = 14.dp, vertical = 12.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier.weight(1f),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0x24FFFFFF)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        com.musync.app.ui.components.SoundEngineSymbol(
-                                            engineId = eqState.currentEngine.id,
-                                            tint = TextWhite,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column {
-                                        Text(
-                                            text = eqState.currentMode.title,
-                                            color = TextWhite,
-                                            fontSize = 12.5.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = eqState.currentMode.subtitle,
-                                            color = Color(0x99FFFFFF),
-                                            fontSize = 10.sp
-                                        )
-                                    }
-                                }
-
-                                val modeTag = eqState.currentMode.recommendationTag
-                                if (modeTag != null) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(5.dp))
-                                            .background(Color(0x22FFFFFF))
-                                            .border(0.8.dp, Color(0x33FFFFFF), RoundedCornerShape(5.dp))
-                                            .padding(horizontal = 7.dp, vertical = 2.5.dp)
-                                    ) {
-                                        Text(
-                                            text = modeTag,
-                                            color = Color.White,
-                                            fontSize = 8.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            letterSpacing = 0.3.sp
-                                        )
-                                    }
+                                Text(opt, color = TextWhite, fontSize = 14.sp)
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Check,
+                                        contentDescription = null,
+                                        tint = StatusGreen,
+                                        modifier = Modifier.size(18.dp)
+                                    )
                                 }
                             }
                         }
@@ -612,19 +569,124 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color.White)
-                        .clickable { showEqDialog = false }
-                        .padding(horizontal = 20.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Done", color = Color.Black, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                TextButton(onClick = { showCrossfadeDialog = false }) {
+                    Text("Close", color = Color.White)
                 }
             },
-            containerColor = Color(0xF212131A),
-            shape = RoundedCornerShape(20.dp)
+            containerColor = SurfaceBlack,
+            shape = RoundedCornerShape(18.dp)
+        )
+    }
+
+    // Haptics Dialog
+    if (showHapticsDialog) {
+        AlertDialog(
+            onDismissRequest = { showHapticsDialog = false },
+            title = {
+                Text(
+                    text = "Haptic Sound Feedback",
+                    color = TextWhite,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HapticIntensity.entries.forEach { intensity ->
+                        val isSelected = uiState.hapticIntensity == intensity
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) Color(0x28FFFFFF) else Color(0x15FFFFFF))
+                                .clickable {
+                                    viewModel.onHapticIntensityChange(intensity)
+                                    showHapticsDialog = false
+                                }
+                                .padding(horizontal = 14.dp, vertical = 12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = intensity.description,
+                                        color = TextWhite,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Check,
+                                        contentDescription = null,
+                                        tint = StatusGreen,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showHapticsDialog = false }) {
+                    Text("Close", color = Color.White)
+                }
+            },
+            containerColor = SurfaceBlack,
+            shape = RoundedCornerShape(18.dp)
+        )
+    }
+
+    // Clear Cache Confirmation Dialog
+    if (showClearCacheDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearCacheDialog = false },
+            title = {
+                Text(
+                    text = "Clear Music Cache?",
+                    color = TextWhite,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Text(
+                    text = "This will free up disk space by clearing temporarily cached audio and album artwork.",
+                    color = TextGreySecondary,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                try {
+                                    context.cacheDir.deleteRecursively()
+                                } catch (_: Exception) {}
+                            }
+                            cacheClearedMessage = true
+                            showClearCacheDialog = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3B30)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Clear Cache", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearCacheDialog = false }) {
+                    Text("Cancel", color = TextGreySecondary)
+                }
+            },
+            containerColor = SurfaceBlack,
+            shape = RoundedCornerShape(18.dp)
         )
     }
 
@@ -634,28 +696,26 @@ fun SettingsScreen(
             onDismissRequest = { showTermsDialog = false },
             title = { Text("Terms of Service", color = TextWhite, fontWeight = FontWeight.Bold) },
             text = {
-                Text(
-                    text = "Musync is an advanced local & networked music player integrating Android MediaSession, Bluetooth AVRCP, and real-time transient haptics.",
-                    color = TextGreySecondary,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp
-                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        text = "Musync is a modern music player designed for personal entertainment and high-fidelity audio playback.\n\nAll music streams and media metadata are indexed from public open sources. By using Musync, you agree to use the service for personal, non-commercial purposes only.",
+                        color = TextGreySecondary,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
+                    )
+                }
             },
             confirmButton = {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0x351E222D))
-                        .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(12.dp))
-                        .clickable { showTermsDialog = false }
-                        .padding(horizontal = 18.dp, vertical = 9.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("I Understand", color = TextWhite, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                TextButton(onClick = { showTermsDialog = false }) {
+                    Text("Close", color = Color.White)
                 }
             },
             containerColor = SurfaceBlack,
-            shape = RoundedCornerShape(14.dp)
+            shape = RoundedCornerShape(18.dp)
         )
     }
 
@@ -665,290 +725,26 @@ fun SettingsScreen(
             onDismissRequest = { showPrivacyDialog = false },
             title = { Text("Privacy Policy", color = TextWhite, fontWeight = FontWeight.Bold) },
             text = {
-                Text(
-                    text = "Musync values user privacy:\n• Zero tracking or personal telemetry.\n• Custom API tokens are encrypted with Android Keystore.\n• Playback cache and favorites remain on your device in local SQLite Room DB.",
-                    color = TextGreySecondary,
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp
-                )
-            },
-            confirmButton = {
-                Box(
+                Column(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0x351E222D))
-                        .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(12.dp))
-                        .clickable { showPrivacyDialog = false }
-                        .padding(horizontal = 18.dp, vertical = 9.dp),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
                 ) {
-                    Text("Got It", color = TextWhite, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                }
-            },
-            containerColor = SurfaceBlack,
-            shape = RoundedCornerShape(14.dp)
-        )
-    }
-
-    // Beat Haptics Configuration Dialog
-    if (showHapticsDialog) {
-        AlertDialog(
-            onDismissRequest = { showHapticsDialog = false },
-            title = { Text("Song Beat Haptics", color = TextWhite, fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
                     Text(
-                        text = "Musync synchronizes your phone's vibration motor with real-time bass and kick drum beats of currently playing music.",
+                        text = "Musync values your privacy.\n\n• Zero Personal Data Collection: We do not collect or track your personal identity or browsing habits.\n• Local Storage: Playlists, favorites, and player preferences are stored locally on your device.\n• Secure Connections: All streaming requests use encrypted connections.",
                         color = TextGreySecondary,
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
                     )
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    val hapticOptions = listOf(
-                        com.musync.app.playback.HapticIntensity.OFF to "No vibration during playback",
-                        com.musync.app.playback.HapticIntensity.SUBTLE to "Light rhythmic micro-ticks",
-                        com.musync.app.playback.HapticIntensity.BALANCED to "Pleasant bass transient pulses",
-                        com.musync.app.playback.HapticIntensity.HEAVY to "Strong kick & bass impact"
-                    )
-
-                    hapticOptions.forEach { (intensity, desc) ->
-                        val isSelected = uiState.hapticIntensity == intensity
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.onHapticIntensityChange(intensity)
-                                    showHapticsDialog = false
-                                }
-                                .padding(vertical = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(intensity.description, color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                Text(desc, color = TextGreyMuted, fontSize = 11.sp)
-                            }
-                            if (isSelected) {
-                                Text("✓", color = StatusGreen, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showHapticsDialog = false }) {
-                    Text("Done", color = TextGreySecondary)
+                TextButton(onClick = { showPrivacyDialog = false }) {
+                    Text("Close", color = Color.White)
                 }
             },
             containerColor = SurfaceBlack,
-            shape = RoundedCornerShape(14.dp)
-        )
-    }
-
-    // In-App OTA Update Dialog
-    if (showUpdateDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                if (updateState !is com.musync.app.update.UpdateDownloadState.Downloading) {
-                    showUpdateDialog = false
-                    appUpdateManager.resetState()
-                }
-            },
-            title = {
-                Text(
-                    text = when (updateState) {
-                        is com.musync.app.update.UpdateDownloadState.Checking -> "Checking for Updates"
-                        is com.musync.app.update.UpdateDownloadState.Available -> "Update Available! 🚀"
-                        is com.musync.app.update.UpdateDownloadState.Downloading -> "Downloading Update..."
-                        is com.musync.app.update.UpdateDownloadState.ReadyToInstall -> "Ready to Install"
-                        is com.musync.app.update.UpdateDownloadState.UpToDate -> "You're Up to Date!"
-                        is com.musync.app.update.UpdateDownloadState.Error -> "Update Check Failed"
-                        else -> "App Updates"
-                    },
-                    color = TextWhite,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
-            },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    when (val state = updateState) {
-                        is com.musync.app.update.UpdateDownloadState.Checking -> {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(vertical = 12.dp)
-                            ) {
-                                CircularProgressIndicator(
-                                    color = StatusGreen,
-                                    strokeWidth = 2.dp,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.width(14.dp))
-                                Text("Connecting to update server...", color = TextGreySecondary, fontSize = 13.sp)
-                            }
-                        }
-                        is com.musync.app.update.UpdateDownloadState.UpToDate -> {
-                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                Text(
-                                    text = "Musync v${com.musync.app.BuildConfig.VERSION_NAME} is currently the latest version.",
-                                    color = TextWhite,
-                                    fontSize = 13.sp
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "You have all the newest features, sound equalizer improvements, and performance patches.",
-                                    color = TextGreyMuted,
-                                    fontSize = 11.sp
-                                )
-                            }
-                        }
-                        is com.musync.app.update.UpdateDownloadState.Available -> {
-                            val info = state.info
-                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("Installed: v${info.currentVersion}", color = TextGreyMuted, fontSize = 12.sp)
-                                    Text("Latest: v${info.latestVersion}", color = StatusGreen, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                }
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text("What's New:", color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(CardElevated)
-                                        .padding(10.dp)
-                                ) {
-                                    Text(
-                                        text = info.changelog.ifBlank { "Performance improvements and bug fixes." },
-                                        color = TextGreySecondary,
-                                        fontSize = 11.sp,
-                                        lineHeight = 15.sp,
-                                        maxLines = 6,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                        }
-                        is com.musync.app.update.UpdateDownloadState.Downloading -> {
-                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("Downloading APK...", color = TextWhite, fontSize = 12.sp)
-                                    Text("${state.progressPercent}%", color = StatusGreen, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                androidx.compose.material3.LinearProgressIndicator(
-                                    progress = { state.progressPercent / 100f },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(3.dp)),
-                                    color = StatusGreen,
-                                    trackColor = CardElevated
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                val mbDownloaded = "%.1f".format(state.bytesDownloaded / (1024.0 * 1024.0))
-                                val mbTotal = if (state.totalBytes > 0) "%.1f".format(state.totalBytes / (1024.0 * 1024.0)) else "?"
-                                Text("$mbDownloaded MB / $mbTotal MB", color = TextGreyMuted, fontSize = 10.sp)
-                            }
-                        }
-                        is com.musync.app.update.UpdateDownloadState.ReadyToInstall -> {
-                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                Text(
-                                    text = "✓ Update downloaded successfully!",
-                                    color = StatusGreen,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = "Tap 'Install Now' to open Android package installer and complete the update.",
-                                    color = TextGreySecondary,
-                                    fontSize = 11.sp
-                                )
-                            }
-                        }
-                        is com.musync.app.update.UpdateDownloadState.Error -> {
-                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                Text(
-                                    text = state.message,
-                                    color = Color(0xFFFF5252),
-                                    fontSize = 12.sp
-                                )
-                            }
-                        }
-                        else -> {}
-                    }
-                }
-            },
-            confirmButton = {
-                when (val state = updateState) {
-                    is com.musync.app.update.UpdateDownloadState.Available -> {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    appUpdateManager.downloadAndInstallUpdate(state.info.downloadUrl, state.info.fileName)
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = StatusGreen),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Update Now", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
-                    }
-                    is com.musync.app.update.UpdateDownloadState.ReadyToInstall -> {
-                        Button(
-                            onClick = {
-                                appUpdateManager.launchPackageInstaller(state.apkFile)
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = StatusGreen),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Install Now", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
-                    }
-                    is com.musync.app.update.UpdateDownloadState.Error -> {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    appUpdateManager.checkForUpdates(silent = false)
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x33FFFFFF)),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Retry", color = TextWhite, fontSize = 12.sp)
-                        }
-                    }
-                    else -> {}
-                }
-            },
-            dismissButton = {
-                if (updateState !is com.musync.app.update.UpdateDownloadState.Downloading) {
-                    TextButton(onClick = {
-                        showUpdateDialog = false
-                        appUpdateManager.resetState()
-                    }) {
-                        Text("Close", color = TextGreySecondary, fontSize = 12.sp)
-                    }
-                }
-            },
-            containerColor = SurfaceBlack,
-            shape = RoundedCornerShape(14.dp)
-        )
-    }
-
-    if (showAuthSheet) {
-        AuthBottomSheet(
-            authManager = viewModel.authManager,
-            onDismiss = { showAuthSheet = false }
+            shape = RoundedCornerShape(18.dp)
         )
     }
 }
@@ -959,10 +755,10 @@ private fun SettingsSectionTitle(title: String) {
         text = title,
         style = MaterialTheme.typography.titleMedium.copy(
             fontWeight = FontWeight.Bold,
-            fontSize = 15.sp
+            fontSize = 14.sp
         ),
-        color = TextWhite,
-        modifier = Modifier.padding(bottom = 8.dp)
+        color = Color(0x99FFFFFF),
+        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
     )
 }
 
@@ -973,9 +769,9 @@ private fun SettingsCardContainer(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(CardElevated)
-            .border(1.dp, BorderStroke, RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xFF1B1B20))
+            .border(1.dp, Color(0x1FFFFFFF), RoundedCornerShape(16.dp))
     ) {
         content()
     }
@@ -992,7 +788,7 @@ private fun SettingsRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 18.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1014,8 +810,8 @@ private fun SettingsRow(
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = IconGrey,
-                modifier = Modifier.size(18.dp)
+                tint = Color(0x55FFFFFF),
+                modifier = Modifier.size(16.dp)
             )
         }
     }
@@ -1027,7 +823,6 @@ private fun SettingsDivider() {
         modifier = Modifier
             .fillMaxWidth()
             .height(1.dp)
-            .background(BorderStroke)
+            .background(Color(0x14FFFFFF))
     )
 }
-

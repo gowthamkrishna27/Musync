@@ -97,15 +97,15 @@ fun SearchScreen(
             .statusBarsPadding()
             .padding(top = 8.dp)
     ) {
-        // Title: "Search"
+        // Title: "Musync"
         Text(
-            text = "Search",
-            style = MaterialTheme.typography.headlineMedium.copy(
+            text = "Musync",
+            style = MaterialTheme.typography.headlineLarge.copy(
                 fontWeight = FontWeight.Bold,
-                fontSize = 22.sp
+                fontSize = 32.sp
             ),
             color = TextWhite,
-            modifier = Modifier.padding(horizontal = 16.dp)
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
         )
 
         Spacer(modifier = Modifier.height(14.dp))

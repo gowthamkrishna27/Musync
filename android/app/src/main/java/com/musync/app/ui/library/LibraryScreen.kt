@@ -116,19 +116,19 @@ fun LibraryScreen(
             .statusBarsPadding()
             .padding(top = 8.dp)
     ) {
-        // Title: "Library"
+        // Title: "Musync"
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 20.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Library",
-                style = MaterialTheme.typography.headlineMedium.copy(
+                text = "Musync",
+                style = MaterialTheme.typography.headlineLarge.copy(
                     fontWeight = FontWeight.Bold,
-                    fontSize = 22.sp
+                    fontSize = 32.sp
                 ),
                 color = TextWhite
             )
@@ -139,25 +139,13 @@ fun LibraryScreen(
                         imageVector = Icons.Default.Add,
                         contentDescription = "New Playlist",
                         tint = TextWhite,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(10.dp))
-
-        // Account Profile & Sync Badge
-        AccountProfileCard(
-            user = currentUser,
-            syncStatus = syncStatus,
-            onSignInClick = { showAuthSheet = true },
-            onSyncClick = { cloudSyncManager.triggerSync() },
-            onSignOutClick = { authManager.signOut() },
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
 
         // Tabs: Favorites, Playlists, History, Local
         TabRow(
@@ -619,13 +607,6 @@ fun LibraryScreen(
             },
             containerColor = SurfaceBlack,
             shape = RoundedCornerShape(14.dp)
-        )
-    }
-
-    if (showAuthSheet) {
-        AuthBottomSheet(
-            authManager = authManager,
-            onDismiss = { showAuthSheet = false }
         )
     }
 

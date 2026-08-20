@@ -1,14 +1,20 @@
 package com.musync.app.ui.navigation
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -225,7 +231,27 @@ fun MainApp(
         NavHost(
             navController = navController,
             startDestination = Screen.Home.route,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            enterTransition = {
+                fadeIn(animationSpec = tween(170, easing = FastOutSlowInEasing)) +
+                slideInHorizontally(
+                    initialOffsetX = { (it * 0.08f).toInt() },
+                    animationSpec = tween(170, easing = FastOutSlowInEasing)
+                )
+            },
+            exitTransition = {
+                fadeOut(animationSpec = tween(130, easing = FastOutLinearInEasing))
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(170, easing = LinearOutSlowInEasing))
+            },
+            popExitTransition = {
+                fadeOut(animationSpec = tween(130, easing = FastOutLinearInEasing)) +
+                slideOutHorizontally(
+                    targetOffsetX = { (it * 0.08f).toInt() },
+                    animationSpec = tween(130, easing = FastOutLinearInEasing)
+                )
+            }
         ) {
             composable(
                 route = Screen.Home.route,
@@ -291,7 +317,10 @@ fun MainApp(
                     navDeepLink { uriPattern = "musync://settings" }
                 )
             ) {
-                SettingsScreen(viewModel = settingsViewModel)
+                SettingsScreen(
+                    viewModel = settingsViewModel,
+                    onNavigateBack = { navController.popBackStack() }
+                )
             }
 
             composable(
@@ -345,89 +374,98 @@ fun MainApp(
         // Apple Music Inspired Floating Dock: Mini Player + 5-Tab Navigation Bar
         val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
         val isPlayingTrack = playbackState.currentTrack != null
+        val showBottomBarAndDock = currentRoute in Screen.bottomNavItems.map { it.route }
 
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(start = 14.dp, end = 14.dp, bottom = 22.dp, top = 6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        AnimatedVisibility(
+            visible = showBottomBarAndDock,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
+                    slideInVertically(initialOffsetY = { it }),
+            exit = fadeOut(spring(stiffness = Spring.StiffnessMediumLow)) +
+                    slideOutVertically(targetOffsetY = { it })
         ) {
-            // 1. DOCKED FLOATING MINI PLAYER (Floats directly above navigation bar)
-            AnimatedVisibility(
-                visible = isPlayingTrack,
-                enter = fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
-                        slideInVertically(initialOffsetY = { it / 2 }) +
-                        expandHorizontally(),
-                exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 }) + shrinkHorizontally()
-            ) {
-                if (playbackState.currentTrack != null) {
-                    MiniPlayer(
-                        playbackState = playbackState,
-                        onTogglePlay = { playerViewModel.togglePlay() },
-                        onSkipNext = { playerViewModel.skipNext() },
-                        onSkipPrevious = { playerViewModel.skipPrevious() },
-                        onClick = {
-                            showNowPlaying = true
-                        },
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                }
-            }
-
-            // 2. 5-TAB FLOATING NAVIGATION BAR (Apple Music style)
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(Color(0xF21B1B1E))
-                    .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(32.dp))
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                    .navigationBarsPadding()
+                    .padding(start = 14.dp, end = 14.dp, bottom = 8.dp, top = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceAround,
-                    verticalAlignment = Alignment.CenterVertically
+                // 1. DOCKED FLOATING MINI PLAYER (Floats directly above navigation bar)
+                AnimatedVisibility(
+                    visible = isPlayingTrack,
+                    enter = fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
+                            slideInVertically(initialOffsetY = { it / 2 }) +
+                            expandHorizontally(),
+                    exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 }) + shrinkHorizontally()
                 ) {
-                    Screen.bottomNavItems.forEach { screen ->
-                        val isSelected = currentRoute == screen.route
-                        val activeColor = AppleMusicRed
-                        val inactiveColor = Color(0xFF8E8E93)
+                    if (playbackState.currentTrack != null) {
+                        MiniPlayer(
+                            playbackState = playbackState,
+                            onTogglePlay = { playerViewModel.togglePlay() },
+                            onSkipNext = { playerViewModel.skipNext() },
+                            onSkipPrevious = { playerViewModel.skipPrevious() },
+                            onClick = {
+                                showNowPlaying = true
+                            },
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+                }
 
-                        Column(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .clickable {
-                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                    navController.navigate(screen.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
+                // 2. 5-TAB FLOATING NAVIGATION BAR (Apple Music style)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(32.dp))
+                        .background(Color(0xF21B1B1E))
+                        .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(32.dp))
+                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceAround,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Screen.bottomNavItems.forEach { screen ->
+                            val isSelected = currentRoute == screen.route
+                            val activeColor = AppleMusicRed
+                            val inactiveColor = Color(0xFF8E8E93)
+
+                            Column(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .clickable {
+                                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                        navController.navigate(screen.route) {
+                                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
                                     }
+                                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                val icon = if (isSelected) screen.selectedIcon ?: screen.unselectedIcon else screen.unselectedIcon
+                                if (icon != null) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = screen.title,
+                                        tint = if (isSelected) activeColor else inactiveColor,
+                                        modifier = Modifier.size(22.dp)
+                                    )
                                 }
-                                .padding(horizontal = 12.dp, vertical = 4.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            val icon = if (isSelected) screen.selectedIcon ?: screen.unselectedIcon else screen.unselectedIcon
-                            if (icon != null) {
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = screen.title,
-                                    tint = if (isSelected) activeColor else inactiveColor,
-                                    modifier = Modifier.size(22.dp)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = screen.title,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 10.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    ),
+                                    color = if (isSelected) activeColor else inactiveColor
                                 )
                             }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = screen.title,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 10.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                ),
-                                color = if (isSelected) activeColor else inactiveColor
-                            )
                         }
                     }
                 }
