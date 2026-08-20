@@ -104,29 +104,39 @@ fun NetworkQualityDot(isBuffering: Boolean = false, modifier: Modifier = Modifie
     val quality by androidx.compose.runtime.produceState(
         initialValue = com.musync.app.core.network.NetworkQualityHelper.getRecommendedQuality(context)
     ) {
-        val cm = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE)
-                as android.net.ConnectivityManager
+        val cm = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        if (cm != null) {
+            val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    value = com.musync.app.core.network.NetworkQualityHelper.getRecommendedQuality(context)
+                }
+                override fun onLost(network: android.net.Network) {
+                    value = "saver" // treat as very slow / offline
+                }
+                override fun onCapabilitiesChanged(
+                    network: android.net.Network,
+                    caps: android.net.NetworkCapabilities
+                ) {
+                    value = com.musync.app.core.network.NetworkQualityHelper.getRecommendedQuality(context)
+                }
+            }
 
-        val callback = object : android.net.ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: android.net.Network) {
-                value = com.musync.app.core.network.NetworkQualityHelper.getRecommendedQuality(context)
+            try {
+                val request = android.net.NetworkRequest.Builder().build()
+                cm.registerNetworkCallback(request, callback)
+            } catch (e: Exception) {
+                // Ignore if permission or restricted mode
             }
-            override fun onLost(network: android.net.Network) {
-                value = "saver" // treat as very slow / offline
-            }
-            override fun onCapabilitiesChanged(
-                network: android.net.Network,
-                caps: android.net.NetworkCapabilities
-            ) {
-                value = com.musync.app.core.network.NetworkQualityHelper.getRecommendedQuality(context)
+
+            // Unregister when the composable leaves composition
+            awaitDispose {
+                try {
+                    cm.unregisterNetworkCallback(callback)
+                } catch (e: Exception) {
+                    // Ignore if already unregistered
+                }
             }
         }
-
-        val request = android.net.NetworkRequest.Builder().build()
-        cm.registerNetworkCallback(request, callback)
-
-        // Unregister when the composable leaves composition
-        awaitDispose { cm.unregisterNetworkCallback(callback) }
     }
 
     val dotColor = when (quality) {

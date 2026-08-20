@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -206,7 +207,7 @@ fun NewScreen(
             )
         }
 
-        items(uiState.trendingTracks.take(15), key = { "new_${it.id}" }) { track ->
+        itemsIndexed(uiState.trendingTracks.take(15), key = { index, track -> "new_${track.id}_$index" }) { _, track ->
             TrackItem(
                 track = track,
                 isPlaying = playbackState.currentTrack?.id == track.id,

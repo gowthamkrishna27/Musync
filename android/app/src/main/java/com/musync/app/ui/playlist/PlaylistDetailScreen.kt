@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -281,7 +282,7 @@ fun PlaylistDetailScreen(
                         }
                     }
                 } else {
-                    items(tracks, key = { it.id }) { track ->
+                    itemsIndexed(tracks, key = { index, track -> "pl_${track.id}_$index" }) { _, track ->
                         TrackItem(
                             track = track,
                             isPlaying = playbackState.currentTrack?.id == track.id,

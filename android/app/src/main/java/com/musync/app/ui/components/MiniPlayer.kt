@@ -75,9 +75,9 @@ fun MiniPlayer(
             }
     ) {
         Column {
-            // Subtle White Progress Bar
+            // Subtle Red Progress Bar
             LinearProgressIndicator(
-                progress = { progress },
+                progress = progress,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(2.dp),

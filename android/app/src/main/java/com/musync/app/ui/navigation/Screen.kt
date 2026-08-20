@@ -34,7 +34,8 @@ sealed class Screen(
 
     companion object {
         // 5 Floating Bottom Nav Items inspired by Apple Music (Home, New, Radio, Library, Search)
-        val bottomNavItems = listOf(Home, New, Radio, Library, Search)
+        val bottomNavItems: List<Screen>
+            get() = listOf(Home, New, Radio, Library, Search)
     }
 }
 

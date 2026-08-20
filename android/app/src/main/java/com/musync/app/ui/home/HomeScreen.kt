@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -362,7 +363,7 @@ fun HomeScreen(
                                 contentPadding = PaddingValues(horizontal = 20.dp),
                                 horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
-                                items(uiState.trendingTracks.take(8), key = { "recent_${it.id}" }) { track ->
+                                itemsIndexed(uiState.trendingTracks.take(8), key = { index, track -> "recent_${track.id}_$index" }) { _, track ->
                                     GlassSongCard(
                                         track = track,
                                         isPlaying = playbackState.currentTrack?.id == track.id && playbackState.isPlaying,
@@ -547,7 +548,7 @@ fun HomeScreen(
                                     contentPadding = PaddingValues(horizontal = 16.dp),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    items(uiState.teluguTracks, key = { it.id }) { track ->
+                                    itemsIndexed(uiState.teluguTracks, key = { index, track -> "te_${track.id}_$index" }) { _, track ->
                                         GlassSongCard(
                                             track = track,
                                             isPlaying = playbackState.currentTrack?.id == track.id && playbackState.isPlaying,
@@ -575,7 +576,7 @@ fun HomeScreen(
                                     contentPadding = PaddingValues(horizontal = 16.dp),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    items(uiState.tamilTracks, key = { it.id }) { track ->
+                                    itemsIndexed(uiState.tamilTracks, key = { index, track -> "ta_${track.id}_$index" }) { _, track ->
                                         GlassSongCard(
                                             track = track,
                                             isPlaying = playbackState.currentTrack?.id == track.id && playbackState.isPlaying,
@@ -603,7 +604,7 @@ fun HomeScreen(
                                     contentPadding = PaddingValues(horizontal = 16.dp),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    items(uiState.hindiTracks, key = { it.id }) { track ->
+                                    itemsIndexed(uiState.hindiTracks, key = { index, track -> "hi_${track.id}_$index" }) { _, track ->
                                         GlassSongCard(
                                             track = track,
                                             isPlaying = playbackState.currentTrack?.id == track.id && playbackState.isPlaying,
@@ -631,7 +632,7 @@ fun HomeScreen(
                                     contentPadding = PaddingValues(horizontal = 16.dp),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
-                                    items(uiState.globalTracks, key = { it.id }) { track ->
+                                    itemsIndexed(uiState.globalTracks, key = { index, track -> "gl_${track.id}_$index" }) { _, track ->
                                         GlassSongCard(
                                             track = track,
                                             isPlaying = playbackState.currentTrack?.id == track.id && playbackState.isPlaying,
@@ -653,7 +654,7 @@ fun HomeScreen(
                                 )
                             }
 
-                            items(uiState.trendingTracks, key = { it.id }) { track ->
+                            itemsIndexed(uiState.trendingTracks, key = { index, track -> "tr_${track.id}_$index" }) { _, track ->
                                 TrackItem(
                                     track = track,
                                     isPlaying = playbackState.currentTrack?.id == track.id,
