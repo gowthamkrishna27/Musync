@@ -71,7 +71,7 @@ fun RadioScreen(
             .fillMaxSize()
             .background(BackgroundBlack)
             .statusBarsPadding(),
-        contentPadding = PaddingValues(top = 16.dp, bottom = 140.dp)
+        contentPadding = PaddingValues(top = 16.dp, bottom = 160.dp)
     ) {
         // 1. Header: "Radio"
         item {

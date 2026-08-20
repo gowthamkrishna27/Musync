@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -70,6 +71,7 @@ import com.musync.app.ui.theme.TextWhite
 fun HomeScreen(
     viewModel: HomeViewModel,
     onNavigateToSearch: () -> Unit = {},
+    onNavigateToSettings: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -104,7 +106,7 @@ fun HomeScreen(
             else -> {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 130.dp)
+                    contentPadding = PaddingValues(bottom = 160.dp)
                 ) {
                     // 1. Top App Header: Large "Home" Title + Profile Avatar Button
                     item {
@@ -141,14 +143,20 @@ fun HomeScreen(
                                     .clip(CircleShape)
                                     .background(Color(0xFF242429))
                                     .border(1.5.dp, Color(0x44FFFFFF), CircleShape)
-                                    .clickable { onNavigateToSearch() },
+                                    .clickable {
+                                        if (onNavigateToSettings != null) {
+                                            onNavigateToSettings()
+                                        } else {
+                                            onNavigateToSearch()
+                                        }
+                                    },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = "Search",
+                                    imageVector = Icons.Outlined.Person,
+                                    contentDescription = "Profile & Account",
                                     tint = Color.White,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }

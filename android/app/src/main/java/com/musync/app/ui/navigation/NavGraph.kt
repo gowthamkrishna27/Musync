@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -236,6 +237,9 @@ fun MainApp(
                     viewModel = homeViewModel,
                     onNavigateToSearch = {
                         navController.navigate(Screen.Search.route)
+                    },
+                    onNavigateToSettings = {
+                        navController.navigate(Screen.Settings.route)
                     }
                 )
             }
@@ -332,7 +336,8 @@ fun MainApp(
                 }
                 HomeScreen(
                     viewModel = homeViewModel,
-                    onNavigateToSearch = { navController.navigate(Screen.Search.route) }
+                    onNavigateToSearch = { navController.navigate(Screen.Search.route) },
+                    onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
                 )
             }
         }
@@ -345,7 +350,8 @@ fun MainApp(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .navigationBarsPadding()
+                .padding(start = 14.dp, end = 14.dp, bottom = 22.dp, top = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // 1. DOCKED FLOATING MINI PLAYER (Floats directly above navigation bar)

@@ -131,7 +131,7 @@ fun PlaylistDetailScreen(
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 140.dp)
+                contentPadding = PaddingValues(bottom = 160.dp)
             ) {
                 // Large Artwork Header
                 item {
