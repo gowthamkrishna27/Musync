@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -68,7 +67,6 @@ import com.musync.app.ui.components.SectionHeader
 import com.musync.app.ui.components.TrackItem
 import com.musync.app.ui.theme.BackgroundBlack
 import com.musync.app.ui.theme.IconGrey
-import com.musync.app.ui.theme.StatusGreen
 import com.musync.app.ui.theme.TextGreyMuted
 import com.musync.app.ui.theme.TextGreySecondary
 import com.musync.app.ui.theme.TextWhite
@@ -300,50 +298,6 @@ fun HomeScreen(
                         }
                     }
 
-                    // 4. "Speed dial" Quick Picks Section (3x2 compact grid)
-                    if (!uiState.isOffline && uiState.searchQuery.isBlank()) {
-                        val speedDialTracks = (uiState.teluguTracks.takeIf { it.isNotEmpty() } ?: uiState.trendingTracks).take(6)
-                        if (speedDialTracks.isNotEmpty()) {
-                            item {
-                                Text(
-                                    text = "Speed dial",
-                                    style = MaterialTheme.typography.titleLarge.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 22.sp
-                                    ),
-                                    color = TextWhite,
-                                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 12.dp)
-                                )
-
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 20.dp),
-                                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                                ) {
-                                    speedDialTracks.chunked(3).forEach { rowTracks ->
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                        ) {
-                                            rowTracks.forEach { track ->
-                                                SpeedDialCard(
-                                                    track = track,
-                                                    isPlaying = playbackState.currentTrack?.id == track.id && playbackState.isPlaying,
-                                                    onClick = { viewModel.playTrack(track, speedDialTracks) },
-                                                    modifier = Modifier.weight(1f)
-                                                )
-                                            }
-                                            repeat(3 - rowTracks.size) {
-                                                Spacer(modifier = Modifier.weight(1f))
-                                            }
-                                        }
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(20.dp))
-                            }
-                        }
-                    }
 
                     // 5. "Recently Played" Section
                     if (!uiState.isOffline && uiState.searchQuery.isBlank() && uiState.trendingTracks.isNotEmpty()) {
@@ -644,86 +598,6 @@ fun HomeScreen(
     }
 }
 
-/**
- * Compact Speed Dial Card for 3x2 Quick Picks Grid
- */
-@Composable
-private fun SpeedDialCard(
-    track: Track,
-    isPlaying: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    val imageRequest = remember(track.artworkUrl, track.id) {
-        com.musync.app.core.image.ImageQualityHelper.buildOptimizedImageRequest(context, track.artworkUrl, track.id)
-    }
-
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF1B1B20))
-                .border(1.dp, if (isPlaying) StatusGreen else Color(0x1AFFFFFF), RoundedCornerShape(12.dp))
-        ) {
-            if (!track.artworkUrl.isNullOrBlank() || track.id.isNotBlank()) {
-                AsyncImage(
-                    model = imageRequest,
-                    contentDescription = track.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        tint = IconGrey,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-
-            if (isPlaying) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color(0x66000000)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Playing",
-                        tint = StatusGreen,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = track.title,
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 12.sp
-            ),
-            color = if (isPlaying) StatusGreen else TextWhite,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
 
 /**
  * Pure Glass UI Song Card with Smooth Cached Artwork, Translucent Background & Frosted Border
