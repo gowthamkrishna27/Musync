@@ -76,6 +76,11 @@ import com.musync.app.ui.search.SearchScreen
 import com.musync.app.ui.search.SearchViewModel
 import com.musync.app.ui.settings.SettingsScreen
 import com.musync.app.ui.settings.SettingsViewModel
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import com.musync.app.ui.browse.NewScreen
+import com.musync.app.ui.radio.RadioScreen
+import com.musync.app.ui.theme.AppleMusicRed
 import com.musync.app.ui.theme.BackgroundBlack
 import com.musync.app.ui.theme.BorderStroke
 import com.musync.app.ui.theme.IconGrey
@@ -83,6 +88,7 @@ import com.musync.app.ui.theme.IconWhite
 import com.musync.app.ui.theme.SurfaceBlack
 import com.musync.app.ui.theme.TextGreyMuted
 import com.musync.app.ui.theme.TextWhite
+
 
 /**
  * Live-reactive colored dot indicating current network quality.
@@ -213,7 +219,6 @@ fun MainApp(
             composable(
                 route = Screen.Home.route,
                 deepLinks = listOf(
-                    navDeepLink { uriPattern = "musync://home" },
                     navDeepLink { uriPattern = "musync://home" }
                 )
             ) {
@@ -226,9 +231,26 @@ fun MainApp(
             }
 
             composable(
+                route = Screen.New.route,
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = "musync://new" }
+                )
+            ) {
+                NewScreen(viewModel = homeViewModel)
+            }
+
+            composable(
+                route = Screen.Radio.route,
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = "musync://radio" }
+                )
+            ) {
+                RadioScreen()
+            }
+
+            composable(
                 route = Screen.Search.route,
                 deepLinks = listOf(
-                    navDeepLink { uriPattern = "musync://search" },
                     navDeepLink { uriPattern = "musync://search" }
                 )
             ) {
@@ -238,7 +260,6 @@ fun MainApp(
             composable(
                 route = Screen.Library.route,
                 deepLinks = listOf(
-                    navDeepLink { uriPattern = "musync://library" },
                     navDeepLink { uriPattern = "musync://library" }
                 )
             ) {
@@ -253,7 +274,6 @@ fun MainApp(
             composable(
                 route = Screen.Settings.route,
                 deepLinks = listOf(
-                    navDeepLink { uriPattern = "musync://settings" },
                     navDeepLink { uriPattern = "musync://settings" }
                 )
             ) {
@@ -264,7 +284,6 @@ fun MainApp(
                 route = Screen.PlaylistDetail.route,
                 arguments = listOf(navArgument("playlistId") { type = NavType.StringType }),
                 deepLinks = listOf(
-                    navDeepLink { uriPattern = "musync://playlist/{playlistId}" },
                     navDeepLink { uriPattern = "musync://playlist/{playlistId}" }
                 )
             ) { backStackEntry ->
@@ -289,7 +308,6 @@ fun MainApp(
                 route = "track/{id}",
                 arguments = listOf(navArgument("id") { type = NavType.StringType }),
                 deepLinks = listOf(
-                    navDeepLink { uriPattern = "musync://track/{id}" },
                     navDeepLink { uriPattern = "musync://track/{id}" }
                 )
             ) { backStackEntry ->
@@ -309,220 +327,90 @@ fun MainApp(
             }
         }
 
-        // True Floating Glassmorphism Bottom Bar Overlay with Dark Frosted Glass Background
+        // Apple Music Inspired Floating Dock: Mini Player + 5-Tab Navigation Bar
         val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
         val isPlayingTrack = playbackState.currentTrack != null
 
-        Box(
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .background(Color.Transparent)
-                .padding(start = 14.dp, end = 14.dp, bottom = 24.dp),
-            contentAlignment = Alignment.Center
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(
-                modifier = if (isPlayingTrack) Modifier.fillMaxWidth() else Modifier.wrapContentWidth(),
-                horizontalArrangement = if (isPlayingTrack) Arrangement.spacedBy(8.dp) else Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+            // 1. DOCKED FLOATING MINI PLAYER (Floats directly above navigation bar)
+            AnimatedVisibility(
+                visible = isPlayingTrack,
+                enter = fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
+                        slideInVertically(initialOffsetY = { it / 2 }) +
+                        expandHorizontally(),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 }) + shrinkHorizontally()
             ) {
-                // 1. LEFT SIDE: Mini Music Player (Dark Frosted Glass Pill)
-                AnimatedVisibility(
-                    visible = isPlayingTrack,
-                    enter = fadeIn(spring(stiffness = Spring.StiffnessMediumLow)) +
-                            slideInHorizontally(initialOffsetX = { -it / 2 }, animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
-                            expandHorizontally(),
-                    exit = fadeOut() + slideOutHorizontally() + shrinkHorizontally(),
-                    modifier = Modifier.weight(1f, fill = true)
-                ) {
-                    if (playbackState.currentTrack != null) {
-                        val track = playbackState.currentTrack!!
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(36.dp))
-                                .background(Color(0xF2181A24))
-                                .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(36.dp))
-                                .clickable {
-                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                    showNowPlaying = true
-                                }
-                                .padding(start = 8.dp, end = 10.dp, top = 7.dp, bottom = 7.dp),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Circular Vinyl Artwork
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF111111))
-                                        .border(1.5.dp, Color(0x55444444), CircleShape)
-                                        .padding(2.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (!track.artworkUrl.isNullOrBlank()) {
-                                        coil.compose.AsyncImage(
-                                            model = track.artworkUrl,
-                                            contentDescription = track.title,
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .clip(CircleShape),
-                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                        )
-                                    } else {
-                                        com.musync.app.ui.components.DefaultArtworkView(
-                                            modifier = Modifier.fillMaxSize(),
-                                            iconSize = 20.dp,
-                                            shape = CircleShape
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.width(10.dp))
-
-                                // Track Title & Artist
-                                Column(
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = track.title,
-                                            style = MaterialTheme.typography.titleMedium.copy(
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Bold
-                                            ),
-                                            color = Color.White,
-                                            maxLines = 1,
-                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = track.artist.name,
-                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                        color = Color(0xFFB3B3B3),
-                                        maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.width(6.dp))
-
-                                // Dark Glass Play/Pause Button
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0xFF2C303E))
-                                        .border(1.dp, Color(0x44FFFFFF), CircleShape)
-                                        .clickable {
-                                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                            playerViewModel.togglePlay()
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = if (playbackState.isPlaying) androidx.compose.material.icons.Icons.Default.Pause else androidx.compose.material.icons.Icons.Default.PlayArrow,
-                                        contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
+                if (playbackState.currentTrack != null) {
+                    MiniPlayer(
+                        playbackState = playbackState,
+                        onTogglePlay = { playerViewModel.togglePlay() },
+                        onSkipNext = { playerViewModel.skipNext() },
+                        onSkipPrevious = { playerViewModel.skipPrevious() },
+                        onClick = {
+                            showNowPlaying = true
+                        },
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
                 }
+            }
 
-                // 2. RIGHT SIDE: Floating Navigation Pill (Home, Library, Settings with Dark Glass)
-                Box(
-                    modifier = Modifier
-                        .wrapContentWidth()
-                        .clip(RoundedCornerShape(36.dp))
-                        .background(Color(0xF2181A24))
-                        .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(36.dp))
-                        .padding(horizontal = 8.dp, vertical = 7.dp)
+            // 2. 5-TAB FLOATING NAVIGATION BAR (Apple Music style)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(32.dp))
+                    .background(Color(0xF21B1B1E))
+                    .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(32.dp))
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.wrapContentWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // 1. Home
-                        val isHome = currentRoute == Screen.Home.route
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(if (isHome) Color(0x35FFFFFF) else Color.Transparent)
-                                .clickable {
-                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                    navController.navigate(Screen.Home.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = androidx.compose.material.icons.Icons.Filled.Home,
-                                contentDescription = "Home",
-                                tint = if (isHome) Color.White else Color(0xFF9E9E9E),
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
+                    Screen.bottomNavItems.forEach { screen ->
+                        val isSelected = currentRoute == screen.route
+                        val activeColor = AppleMusicRed
+                        val inactiveColor = Color(0xFF8E8E93)
 
-                        // 2. Library
-                        val isLibrary = currentRoute == Screen.Library.route
-                        Box(
+                        Column(
                             modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(if (isLibrary) Color(0x35FFFFFF) else Color.Transparent)
+                                .clip(RoundedCornerShape(16.dp))
                                 .clickable {
                                     haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                    navController.navigate(Screen.Library.route) {
+                                    navController.navigate(screen.route) {
                                         popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                                         launchSingleTop = true
                                         restoreState = true
                                     }
-                                },
-                            contentAlignment = Alignment.Center
+                                }
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
-                            Icon(
-                                imageVector = androidx.compose.material.icons.Icons.Outlined.LibraryMusic,
-                                contentDescription = "Library",
-                                tint = if (isLibrary) Color.White else Color(0xFF9E9E9E),
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-
-                        // 3. Settings
-                        val isSettings = currentRoute == Screen.Settings.route
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(if (isSettings) Color(0x35FFFFFF) else Color.Transparent)
-                                .clickable {
-                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                    navController.navigate(Screen.Settings.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = androidx.compose.material.icons.Icons.Default.Settings,
-                                contentDescription = "Settings",
-                                tint = if (isSettings) Color.White else Color(0xFF9E9E9E),
-                                modifier = Modifier.size(22.dp)
+                            val icon = if (isSelected) screen.selectedIcon ?: screen.unselectedIcon else screen.unselectedIcon
+                            if (icon != null) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = screen.title,
+                                    tint = if (isSelected) activeColor else inactiveColor,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = screen.title,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 10.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                ),
+                                color = if (isSelected) activeColor else inactiveColor
                             )
                         }
                     }

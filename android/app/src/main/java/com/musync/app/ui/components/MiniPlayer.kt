@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.components
+package com.musync.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -66,9 +66,9 @@ fun MiniPlayer(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(36.dp))
-            .background(Color(0xF01C1717))
-            .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(36.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color(0xF2202024))
+            .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(16.dp))
             .clickable {
                 haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                 onClick()
@@ -81,24 +81,22 @@ fun MiniPlayer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(2.dp),
-                color = TextWhite,
+                color = com.musync.app.ui.theme.AppleMusicRed,
                 trackColor = Color(0x1AFFFFFF)
             )
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Circular Vinyl Artwork (with concentric dark ring)
+                // Square Rounded Album Artwork (Apple Music style)
                 Box(
                     modifier = Modifier
-                        .size(46.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF111111))
-                        .border(2.5.dp, Color(0x55444444), CircleShape)
-                        .padding(2.5.dp),
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF161618)),
                     contentAlignment = Alignment.Center
                 ) {
                     val context = androidx.compose.ui.platform.LocalContext.current
@@ -112,7 +110,7 @@ fun MiniPlayer(
                             contentDescription = track.title,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .clip(CircleShape),
+                                .clip(RoundedCornerShape(8.dp)),
                             contentScale = ContentScale.Crop
                         )
                     } else {
@@ -125,7 +123,7 @@ fun MiniPlayer(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
                 // Title and Artist
                 Column(
@@ -135,7 +133,7 @@ fun MiniPlayer(
                         text = track.title,
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.SemiBold
                         ),
                         color = TextWhite,
                         maxLines = 1,
@@ -151,55 +149,35 @@ fun MiniPlayer(
                     )
                 }
 
-                // Previous Button
-                IconButton(
-                    onClick = {
-                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        onSkipPrevious()
-                    },
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.SkipPrevious,
-                        contentDescription = "Previous",
-                        tint = IconWhite,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                Spacer(modifier = Modifier.width(8.dp))
 
-                Spacer(modifier = Modifier.width(2.dp))
-
-                // Solid White Circular Play / Pause Button with black icon
+                // Play / Pause Button
                 if (playbackState.isBuffering) {
                     CircularProgressIndicator(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .padding(6.dp),
                         color = TextWhite,
                         strokeWidth = 2.5.dp
                     )
                 } else {
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(Color.White)
-                            .clickable {
-                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                onTogglePlay()
-                            },
-                        contentAlignment = Alignment.Center
+                    IconButton(
+                        onClick = {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            onTogglePlay()
+                        },
+                        modifier = Modifier.size(36.dp)
                     ) {
                         Icon(
                             imageVector = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
-                            tint = Color.Black,
-                            modifier = Modifier.size(20.dp)
+                            tint = Color.White,
+                            modifier = Modifier.size(26.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(2.dp))
+                Spacer(modifier = Modifier.width(4.dp))
 
                 // Next Button
                 IconButton(
@@ -207,17 +185,18 @@ fun MiniPlayer(
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                         onSkipNext()
                     },
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.SkipNext,
                         contentDescription = "Next",
-                        tint = IconWhite,
-                        modifier = Modifier.size(18.dp)
+                        tint = Color.White,
+                        modifier = Modifier.size(26.dp)
                     )
                 }
             }
         }
     }
 }
+
 

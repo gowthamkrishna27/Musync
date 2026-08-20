@@ -41,3 +41,23 @@ val CyanAccent = TextWhite
 val CyanGlow = TextWhite
 val NeonPink = TextWhite
 
+// Apple Music Inspired Palette
+val AppleMusicRed = Color(0xFFFA2D48)
+val AppleMusicRedGlow = Color(0x33FA2D48)
+val AppleMusicPink = Color(0xFFFF2D55)
+val AppleMusicSurface = Color(0xF21C1C1E)
+val AppleMusicBorder = Color(0x33FFFFFF)
+val AppleMusicBarBackground = Color(0xEB1E1E22)
+val AppleMusicCardBackground = Color(0xFF1C1C1E)
+
+val ReplayGradient = listOf(
+    Color(0xFF00C6FF),
+    Color(0xFFFF007A),
+    Color(0xFFFF7E40)
+)
+val ListenAgainGradient = listOf(
+    Color(0xFF2C3E50),
+    Color(0xFF000000)
+)
+
+

@@ -56,6 +56,9 @@ import com.musync.app.ui.theme.TextWhite
 
 import androidx.compose.foundation.layout.statusBarsPadding
 
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.MoreVert
+
 @Composable
 fun PlaylistDetailScreen(
     viewModel: PlaylistViewModel,
@@ -69,156 +72,232 @@ fun PlaylistDetailScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
 
     val favoriteIds = favorites.map { it.id }.toSet()
+    val tracks = playlist?.tracks ?: emptyList()
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(BackgroundBlack)
-            .statusBarsPadding()
-            .padding(top = 8.dp)
     ) {
-        // Top Back Row
-        Row(
+        // Ambient background subtle glow
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .height(300.dp)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0x55FA2D48),
+                            Color(0x22181A24),
+                            BackgroundBlack
+                        )
+                    )
+                )
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(top = 8.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // Top Navigation Bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 IconButton(onClick = onNavigateBack) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
                         tint = IconWhite,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                IconButton(onClick = { showDeleteDialog = true }) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete Playlist",
+                        tint = IconGrey,
                         modifier = Modifier.size(22.dp)
                     )
                 }
-                Text(
-                    text = playlist?.name ?: "Playlist",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    ),
-                    color = TextWhite
-                )
             }
 
-            IconButton(onClick = { showDeleteDialog = true }) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete Playlist",
-                    tint = IconGrey,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // Playlist Header Box
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0x351E222D))
-                    .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 140.dp)
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.QueueMusic,
-                    contentDescription = null,
-                    tint = IconWhite,
-                    modifier = Modifier.size(36.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Column {
-                Text(
-                    text = playlist?.name ?: "",
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    ),
-                    color = TextWhite
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "${playlist?.tracks?.size ?: 0} tracks",
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                    color = TextGreySecondary
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                if ((playlist?.tracks?.size ?: 0) > 0) {
-                    Box(
+                // Large Artwork Header
+                item {
+                    Column(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(Color.White)
-                            .clickable { viewModel.playAll() }
-                            .padding(horizontal = 18.dp, vertical = 9.dp),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                tint = Color.Black,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Play All", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Box(
+                            modifier = Modifier
+                                .size(180.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(Color(0xFF1C1C1E))
+                                .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(18.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val firstArtwork = tracks.firstOrNull()?.artworkUrl
+                            if (!firstArtwork.isNullOrBlank()) {
+                                coil.compose.AsyncImage(
+                                    model = firstArtwork,
+                                    contentDescription = playlist?.name,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(64.dp)
+                                )
+                            }
                         }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text(
+                            text = playlist?.name ?: "Playlist",
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 24.sp
+                            ),
+                            color = TextWhite,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = "${tracks.size} songs • Updated recently",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                            color = TextGreySecondary,
+                            textAlign = TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        // Dual Play & Shuffle Buttons (Apple Music style)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // 1. Play Button
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(Color.White)
+                                    .clickable {
+                                        if (tracks.isNotEmpty()) {
+                                            viewModel.playAll()
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        tint = Color.Black,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Play",
+                                        color = Color.Black,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp
+                                    )
+                                }
+                            }
+
+                            // 2. Shuffle Button
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(Color(0xFF242429))
+                                    .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(24.dp))
+                                    .clickable {
+                                        if (tracks.isNotEmpty()) {
+                                            val shuffled = tracks.shuffled()
+                                            viewModel.playTrack(shuffled.first(), shuffled)
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Shuffle,
+                                        contentDescription = null,
+                                        tint = com.musync.app.ui.theme.AppleMusicRed,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Shuffle",
+                                        color = com.musync.app.ui.theme.AppleMusicRed,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                }
+
+                // Track List
+                if (tracks.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(40.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No tracks in this playlist yet.\nAdd songs from Home or Search!",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextGreyMuted,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    items(tracks, key = { it.id }) { track ->
+                        TrackItem(
+                            track = track,
+                            isPlaying = playbackState.currentTrack?.id == track.id,
+                            isFavorite = favoriteIds.contains(track.id),
+                            onClick = { viewModel.playTrack(track, tracks) },
+                            onFavoriteToggle = { viewModel.toggleFavorite(track) },
+                            onPlayNext = { viewModel.playbackManager.playNext(track) },
+                            onAddToQueue = { viewModel.playbackManager.addToQueue(track) },
+                            onRemove = { viewModel.removeTrack(track.id) }
+                        )
                     }
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Track List
-        val tracks = playlist?.tracks ?: emptyList()
-        if (tracks.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "No tracks in this playlist yet. Add songs from Home or Search!",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextGreyMuted,
-                    textAlign = TextAlign.Center
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 120.dp)
-            ) {
-                items(tracks) { track ->
-                    TrackItem(
-                        track = track,
-                        isPlaying = playbackState.currentTrack?.id == track.id,
-                        isFavorite = favoriteIds.contains(track.id),
-                        onClick = { viewModel.playTrack(track, tracks) },
-                        onFavoriteToggle = { viewModel.toggleFavorite(track) },
-                        onPlayNext = { viewModel.playbackManager.playNext(track) },
-                        onAddToQueue = { viewModel.playbackManager.addToQueue(track) },
-                        onRemove = { viewModel.removeTrack(track.id) }
-                    )
-                }
-            }
-        }
     }
+
 
     if (showDeleteDialog) {
         androidx.compose.material3.AlertDialog(

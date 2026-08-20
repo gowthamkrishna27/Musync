@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.home
+package com.musync.app.ui.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -105,94 +105,275 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 130.dp)
                 ) {
-                    // 1. Top App Header: "Musync" Title + Glass Search Bar
+                    // 1. Top App Header: Large "Home" Title + Profile Avatar Button
                     item {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+                                .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(
-                                verticalAlignment = Alignment.Bottom
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Musync",
-                                    style = MaterialTheme.typography.headlineMedium.copy(
+                                    text = "Home",
+                                    style = MaterialTheme.typography.headlineLarge.copy(
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 24.sp
+                                        fontSize = 32.sp
                                     ),
                                     color = TextWhite
                                 )
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
                                 com.musync.app.ui.navigation.NetworkQualityDot(
                                     modifier = Modifier
-                                        .size(7.dp)
-                                        .padding(bottom = 3.dp)
+                                        .size(8.dp)
+                                        .padding(bottom = 6.dp)
                                 )
                             }
 
-                            // Glass Search Pill
+                            // Profile Avatar Icon (Apple Music style)
                             Box(
                                 modifier = Modifier
-                                    .widthIn(min = 150.dp, max = 210.dp)
-                                    .height(38.dp)
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(Color(0x351E222D))
-                                    .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(20.dp))
-                                    .padding(horizontal = 10.dp),
-                                contentAlignment = Alignment.CenterStart
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF242429))
+                                    .border(1.5.dp, Color(0x44FFFFFF), CircleShape)
+                                    .clickable { onNavigateToSearch() },
+                                contentAlignment = Alignment.Center
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxSize()
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Search",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // 2. "Top Picks for You" Hero Showcase Carousel
+                    if (!uiState.isOffline && uiState.searchQuery.isBlank()) {
+                        item {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 10.dp, bottom = 6.dp)
+                            ) {
+                                Text(
+                                    text = "Top Picks for You",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 17.sp
+                                    ),
+                                    color = TextWhite,
+                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+                                )
+
+                                LazyRow(
+                                    contentPadding = PaddingValues(horizontal = 20.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Search,
-                                        contentDescription = "Search",
-                                        tint = IconGrey,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    androidx.compose.foundation.text.BasicTextField(
-                                        value = uiState.searchQuery,
-                                        onValueChange = { viewModel.onSearchQueryChange(it) },
-                                        singleLine = true,
-                                        textStyle = androidx.compose.ui.text.TextStyle(
-                                            color = Color.White,
-                                            fontSize = 12.sp
-                                        ),
-                                        cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.White),
-                                        modifier = Modifier.weight(1f),
-                                        decorationBox = { innerTextField ->
-                                            if (uiState.searchQuery.isEmpty()) {
-                                                Text(
-                                                    text = if (uiState.isOffline) "Search local..." else "Search...",
-                                                    color = TextGreyMuted,
-                                                    fontSize = 12.sp
+                                    // Card 1: Apple Music Replay "All Time" Gradient Card
+                                    item {
+                                        val topArtists = uiState.trendingTracks.take(4).map { it.artist.name }.distinct().joinToString(", ")
+                                        Box(
+                                            modifier = Modifier
+                                                .width(220.dp)
+                                                .height(260.dp)
+                                                .clip(RoundedCornerShape(20.dp))
+                                                .background(
+                                                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                                                        listOf(
+                                                            Color(0xFF00C6FF),
+                                                            Color(0xFFFF007A),
+                                                            Color(0xFFFF7E40)
+                                                        )
+                                                    )
                                                 )
-                                            }
-                                            innerTextField()
-                                        }
-                                    )
-                                    if (uiState.searchQuery.isNotEmpty()) {
-                                        IconButton(
-                                            onClick = { viewModel.clearSearch() },
-                                            modifier = Modifier.size(20.dp)
+                                                .clickable {
+                                                    uiState.trendingTracks.firstOrNull()?.let {
+                                                        viewModel.playTrack(it, uiState.trendingTracks)
+                                                    }
+                                                }
+                                                .padding(18.dp)
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Clear,
-                                                contentDescription = "Clear",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(14.dp)
-                                            )
+                                            Column(
+                                                modifier = Modifier.fillMaxSize(),
+                                                verticalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.End
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .clip(RoundedCornerShape(6.dp))
+                                                            .background(Color(0x35000000))
+                                                            .padding(horizontal = 7.dp, vertical = 3.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "♫ Music",
+                                                            color = Color.White,
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.SemiBold
+                                                        )
+                                                    }
+                                                }
+
+                                                Column {
+                                                    Text(
+                                                        text = "Replay",
+                                                        style = MaterialTheme.typography.titleMedium.copy(
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 20.sp
+                                                        ),
+                                                        color = Color.White
+                                                    )
+                                                    Text(
+                                                        text = "All\nTime",
+                                                        style = MaterialTheme.typography.headlineLarge.copy(
+                                                            fontWeight = FontWeight.ExtraBold,
+                                                            fontSize = 36.sp,
+                                                            lineHeight = 36.sp
+                                                        ),
+                                                        color = Color.White
+                                                    )
+                                                }
+
+                                                Column {
+                                                    Text(
+                                                        text = "Made for You",
+                                                        style = MaterialTheme.typography.labelSmall.copy(
+                                                            fontSize = 11.sp,
+                                                            fontWeight = FontWeight.Bold
+                                                        ),
+                                                        color = Color(0xEEFFFFFF)
+                                                    )
+                                                    Text(
+                                                        text = if (topArtists.isNotBlank()) topArtists else "Curated from your top artists & hits",
+                                                        style = MaterialTheme.typography.bodySmall.copy(
+                                                            fontSize = 11.sp,
+                                                            lineHeight = 14.sp
+                                                        ),
+                                                        color = Color(0xCCFFFFFF),
+                                                        maxLines = 2,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Card 2: "Listen Again" Hero Card
+                                    val listenAgainTrack = uiState.trendingTracks.getOrNull(1) ?: uiState.teluguTracks.firstOrNull()
+                                    if (listenAgainTrack != null) {
+                                        item {
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(220.dp)
+                                                    .height(260.dp)
+                                                    .clip(RoundedCornerShape(20.dp))
+                                                    .background(Color(0xFF18181B))
+                                                    .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(20.dp))
+                                                    .clickable {
+                                                        viewModel.playTrack(listenAgainTrack, uiState.trendingTracks)
+                                                    }
+                                            ) {
+                                                if (!listenAgainTrack.artworkUrl.isNullOrBlank()) {
+                                                    AsyncImage(
+                                                        model = listenAgainTrack.artworkUrl,
+                                                        contentDescription = listenAgainTrack.title,
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentScale = ContentScale.Crop
+                                                    )
+                                                }
+                                                // Dark gradient overlay
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .background(
+                                                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                                                listOf(Color.Transparent, Color(0xE6000000))
+                                                            )
+                                                        )
+                                                )
+
+                                                Column(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .padding(18.dp),
+                                                    verticalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .clip(RoundedCornerShape(6.dp))
+                                                            .background(Color(0x66000000))
+                                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "LISTEN AGAIN",
+                                                            color = Color.White,
+                                                            fontSize = 10.sp,
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                    }
+
+                                                    Column {
+                                                        Text(
+                                                            text = listenAgainTrack.title,
+                                                            style = MaterialTheme.typography.titleLarge.copy(
+                                                                fontWeight = FontWeight.Bold,
+                                                                fontSize = 20.sp
+                                                            ),
+                                                            color = Color.White,
+                                                            maxLines = 2,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                        Spacer(modifier = Modifier.height(2.dp))
+                                                        Text(
+                                                            text = listenAgainTrack.artist.name,
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = Color(0xCCFFFFFF),
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             }
+                            Spacer(modifier = Modifier.height(10.dp))
                         }
                     }
+
+                    // 3. "Recently Played >" Carousel Section
+                    if (!uiState.isOffline && uiState.searchQuery.isBlank() && uiState.trendingTracks.isNotEmpty()) {
+                        item {
+                            SectionHeader(
+                                title = "Recently Played",
+                                actionText = "See all >",
+                                onActionClick = { onNavigateToSearch() }
+                            )
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                items(uiState.trendingTracks.take(8), key = { "recent_${it.id}" }) { track ->
+                                    GlassSongCard(
+                                        track = track,
+                                        isPlaying = playbackState.currentTrack?.id == track.id && playbackState.isPlaying,
+                                        onClick = { viewModel.playTrack(track, uiState.trendingTracks) }
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                    }
+
 
                     // 2. Glassmorphic Language Filter Chips
                     if (!uiState.isOffline && uiState.searchQuery.isBlank()) {
@@ -518,19 +699,16 @@ private fun GlassSongCard(
 
     Column(
         modifier = Modifier
-            .width(132.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0x351E222D))
-            .border(1.dp, if (isPlaying) StatusGreen else Color(0x22FFFFFF), RoundedCornerShape(16.dp))
+            .width(136.dp)
             .clickable(onClick = onClick)
-            .padding(10.dp)
     ) {
-        // Song Artwork Container
+        // Song Artwork Container with Apple Music Tile shape
         Box(
             modifier = Modifier
-                .size(112.dp)
+                .size(136.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0x20FFFFFF)),
+                .background(Color(0xFF18181B))
+                .border(1.dp, if (isPlaying) com.musync.app.ui.theme.AppleMusicRed else Color(0x18FFFFFF), RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center
         ) {
             if (!track.artworkUrl.isNullOrBlank() || track.id.isNotBlank()) {
@@ -549,50 +727,68 @@ private fun GlassSongCard(
                 )
             }
 
-            // Glass Play Circle Button Overlay
+            // Apple Music style badge in top left
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
+                    .align(Alignment.TopStart)
                     .padding(6.dp)
-                    .size(30.dp)
-                    .clip(CircleShape)
-                    .background(if (isPlaying) StatusGreen else Color(0x80000000))
-                    .border(1.dp, Color(0x44FFFFFF), CircleShape),
-                contentAlignment = Alignment.Center
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color(0x77000000))
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Play",
-                    tint = if (isPlaying) Color.Black else Color.White,
-                    modifier = Modifier.size(18.dp)
+                Text(
+                    text = "M",
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold
                 )
+            }
+
+            if (isPlaying) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(com.musync.app.ui.theme.AppleMusicRed),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Playing",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         // Song Title
         Text(
             text = track.title,
             style = MaterialTheme.typography.titleSmall.copy(
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.SemiBold
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium
             ),
-            color = if (isPlaying) StatusGreen else TextWhite,
+            color = if (isPlaying) com.musync.app.ui.theme.AppleMusicRed else TextWhite,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
 
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(1.dp))
 
         // Artist Name
         Text(
             text = track.artist.name,
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
             color = TextGreySecondary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
     }
 }
+
 
