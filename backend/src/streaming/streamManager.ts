@@ -50,7 +50,7 @@ export class StreamManager {
   private static readonly MAX_CONCURRENT_RESOLVES = 8;
   private static resolveQueue: Array<() => void> = [];
 
-  private static acquireResolveSlot(timeoutMs: number = 20000): Promise<void> {
+  private static acquireResolveSlot(timeoutMs: number = 20000, highPriority: boolean = false): Promise<void> {
     return new Promise((resolve, reject) => {
       if (StreamManager.activeResolves < StreamManager.MAX_CONCURRENT_RESOLVES) {
         StreamManager.activeResolves++;
@@ -76,7 +76,12 @@ export class StreamManager {
             resolve();
           }
         };
-        StreamManager.resolveQueue.push(waiter);
+
+        if (highPriority) {
+          StreamManager.resolveQueue.unshift(waiter);
+        } else {
+          StreamManager.resolveQueue.push(waiter);
+        }
       }
     });
   }
@@ -101,11 +106,10 @@ export class StreamManager {
       const popularIds = await cacheService.getPopularTracks(topN);
       if (popularIds.length === 0) return;
       console.log(`[PreWarm] Warming ${popularIds.length} popular tracks...`);
-      const results = await Promise.allSettled(
-        popularIds.map((id) => StreamManager.resolveStream(id, "low"))
-      );
-      const succeeded = results.filter((r) => r.status === "fulfilled" && (r as any).value?.entry).length;
-      console.log(`[PreWarm] ✓ ${succeeded}/${popularIds.length} tracks pre-warmed in L1 cache.`);
+      for (const id of popularIds) {
+        await StreamManager.resolveStream(id, "low", false);
+      }
+      console.log(`[PreWarm] ✓ Tracks pre-warmed in L1 cache.`);
     } catch (err: any) {
       console.warn("[PreWarm] Failed to pre-warm popular tracks:", err.message);
     }
@@ -114,7 +118,7 @@ export class StreamManager {
   /**
    * Universal Audio Stream Resolver with L1/L2 Shared Caching and Single-Flight Coalescing.
    */
-  static async resolveStream(videoId: string, quality: string = "low"): Promise<StreamResolutionResult> {
+  static async resolveStream(videoId: string, quality: string = "low", highPriority: boolean = false): Promise<StreamResolutionResult> {
     if (!videoId || videoId.length < 3) {
       return { entry: null, error: "Invalid videoId parameter" };
     }
@@ -150,7 +154,7 @@ export class StreamManager {
         // acquireResolveSlot may reject with a timeout error; if it does, we do NOT hold
         // a slot, so releaseResolveSlot must NOT be called in that case.
         let slotAcquired = false;
-        await StreamManager.acquireResolveSlot();
+        await StreamManager.acquireResolveSlot(20000, highPriority);
         slotAcquired = true;
         let stdout: string, stderr: string;
         try {
@@ -274,8 +278,8 @@ export class StreamManager {
 
     const cacheKey = `stream:v3:audio:${videoId}:${quality.toLowerCase()}`;
 
-    // 1. Resolve Audio Source
-    let resolution = await StreamManager.resolveStream(videoId, quality);
+    // 1. Resolve Audio Source (High Priority for active playback)
+    let resolution = await StreamManager.resolveStream(videoId, quality, true);
     let streamEntry = resolution.entry;
 
     if (!streamEntry) {

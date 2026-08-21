@@ -368,22 +368,24 @@ app.get(["/search", "/result/"], apiLimiter, async (req: Request, res: Response)
   }
 });
 
-/** Pre-warms the top N stream URLs after a search/trending response, non-blocking. */
-function prewarmSearchResults(tracks: any[], topN: number = 5): void {
+/** Pre-warms the top 2 stream URLs gently after a search/trending response, non-blocking. */
+function prewarmSearchResults(tracks: any[], topN: number = 2): void {
   const ids = tracks
     .slice(0, topN)
     .map((t: any) => (t.videoId || t.id || "").toString().trim())
     .filter((id: string) => id.length >= 3);
 
   if (ids.length === 0) return;
-  console.log(`[SearchPrewarm] Pre-warming ${ids.length} track(s): ${ids.join(", ")}`);
 
-  Promise.allSettled(
-    ids.map((id: string) => StreamManager.resolveStream(id, "low"))
-  ).then((results) => {
-    const ok = results.filter(r => r.status === "fulfilled" && (r as any).value?.entry).length;
-    console.log(`[SearchPrewarm] ✓ ${ok}/${ids.length} stream(s) pre-warmed.`);
-  }).catch(() => {});
+  (async () => {
+    for (const id of ids) {
+      try {
+        await StreamManager.resolveStream(id, "low", false);
+        // Small 250ms spacing between background prewarms to keep event loop free
+        await new Promise((r) => setTimeout(r, 250));
+      } catch (_e) {}
+    }
+  })().catch(() => {});
 }
 
 

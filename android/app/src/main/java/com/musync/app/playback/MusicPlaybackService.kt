@@ -77,8 +77,9 @@ class MusicPlaybackService : MediaLibraryService() {
             .setDataSourceFactory(dataSourceFactory)
 
         // Resilient Buffer Tuning for Anti-Stutter and Seamless Playback:
-        // - 2.0s initial playback buffer: ensures smooth start without immediate underrun/rebuffer on new songs
-        // - 3.5s rebuffer recovery threshold: sufficient headroom to recover from network fluctuations
+        // - 4.0s initial playback buffer: gives the streaming proxy enough time to resolve
+        //   and begin piping the stream before ExoPlayer starves and rebuffers immediately
+        // - 6.0s rebuffer recovery threshold: sufficient headroom to recover on cold streams
         // - 15s minBufferMs: stays well ahead of decoding bitrate to eliminate stuttering
         // - 90s maxBufferMs: large buffer window for stable long-session background playback
         // - 15s back-buffer for instant back-seeking
@@ -86,8 +87,8 @@ class MusicPlaybackService : MediaLibraryService() {
             .setBufferDurationsMs(
                 15000, // minBufferMs (15s — ensures robust cushion against cellular/WiFi latency)
                 90000, // maxBufferMs (90s)
-                2000,  // bufferForPlaybackMs (2.0s initial cushion — prevents immediate rebuffer loop on un-cached tracks)
-                3500   // bufferForPlaybackAfterRebufferMs (3.5s rebuffer recovery)
+                4000,  // bufferForPlaybackMs (4.0s — prevents rebuffer loop on cold un-cached streams)
+                6000   // bufferForPlaybackAfterRebufferMs (6.0s rebuffer recovery)
             )
             .setBackBuffer(15000, true) // 15s retention for instant backward seeking
             .setPrioritizeTimeOverSizeThresholds(true)

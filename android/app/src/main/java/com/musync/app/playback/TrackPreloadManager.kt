@@ -117,7 +117,8 @@ class TrackPreloadManager(
         val uri = Uri.parse(streamUrl)
         val dataSource = cacheDataSourceFactory.createDataSource()
 
-        val chunkSize = PRELOAD_CHUNK_SIZE_WIFI
+        val isWifi = com.musync.app.core.network.NetworkQualityHelper.isWifiConnected(context)
+        val chunkSize = if (isWifi) PRELOAD_CHUNK_SIZE_WIFI else PRELOAD_CHUNK_SIZE_MOBILE
         val dataSpec = DataSpec.Builder()
             .setUri(uri)
             .setPosition(0L)

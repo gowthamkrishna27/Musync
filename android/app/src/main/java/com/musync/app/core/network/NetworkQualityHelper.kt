@@ -20,6 +20,13 @@ object NetworkQualityHelper {
 
     private const val TAG = "NetworkQualityHelper"
 
+    fun isWifiConnected(context: Context): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+        val network = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(network) ?: return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+    }
+
     /**
      * Returns the recommended stream quality string based on current network conditions.
      * Falls back to "low" when network type cannot be determined.
@@ -28,7 +35,7 @@ object NetworkQualityHelper {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
         val network = cm.activeNetwork ?: run {
-            Log.d(TAG, "No active network — falling back to saver quality")
+            Log.d(TAG, "No active network - falling back to saver quality")
             return "saver"
         }
 
@@ -38,7 +45,7 @@ object NetworkQualityHelper {
             // Wi-Fi or Ethernet: respect user setting
             caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
             caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> {
-                Log.d(TAG, "Wi-Fi/Ethernet detected — using user preferred quality: $userPreferredQuality")
+                Log.d(TAG, "Wi-Fi/Ethernet detected - using user preferred quality: $userPreferredQuality")
                 userPreferredQuality
             }
 
@@ -47,7 +54,7 @@ object NetworkQualityHelper {
                 val cellQuality = getCellularQuality(context)
                 // Never exceed the user's preference
                 val resolved = minQuality(cellQuality, userPreferredQuality)
-                Log.d(TAG, "Cellular — cell tier: $cellQuality, user pref: $userPreferredQuality -> resolved: $resolved")
+                Log.d(TAG, "Cellular - cell tier: $cellQuality, user pref: $userPreferredQuality -> resolved: $resolved")
                 resolved
             }
 
@@ -88,7 +95,7 @@ object NetworkQualityHelper {
                 else -> "low"
             }
         } catch (e: SecurityException) {
-            Log.w(TAG, "READ_PHONE_STATE not granted — falling back to low")
+            Log.w(TAG, "READ_PHONE_STATE not granted - falling back to low")
             "low"
         } catch (e: Exception) {
             Log.w(TAG, "Could not determine cellular type: ${e.message}")
