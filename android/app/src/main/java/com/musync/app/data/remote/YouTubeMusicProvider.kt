@@ -258,7 +258,7 @@ class YouTubeMusicProvider(
 
     override suspend fun getStreamUrl(track: Track): String? = withContext(Dispatchers.IO) {
         val videoId = track.id.removePrefix("yt_")
-        val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
+        val targetRenderUrl = getActiveBaseUrl()
 
         // 1. Query Render /song endpoint with 3s fast timeout
         try {
@@ -437,7 +437,7 @@ class YouTubeMusicProvider(
 
     suspend fun getLyrics(id: String): String? = withContext(Dispatchers.IO) {
         val videoId = id.removePrefix("yt_")
-        val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
+        val targetRenderUrl = getActiveBaseUrl()
         try {
             val url = "$targetRenderUrl/lyrics?id=$videoId"
             val reqBuilder = Request.Builder().url(url).header("User-Agent", "Musync-Android/1.0")

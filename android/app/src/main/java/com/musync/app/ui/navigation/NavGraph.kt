@@ -356,7 +356,9 @@ fun MainApp(
                         playlistId,
                         container.playlistRepository,
                         container.favoritesRepository,
-                        container.playbackManager
+                        container.playbackManager,
+                        container.musicRepository,
+                        container.realTimeRecommendationEngine
                     )
                 )
                 PlaylistDetailScreen(

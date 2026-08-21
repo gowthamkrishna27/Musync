@@ -1,4 +1,5 @@
 import YTMusic from "ytmusic-api";
+import axios from "axios";
 import { cacheService } from "../cache/cacheService";
 import { metricsService } from "../metrics/metricsService";
 import {
@@ -105,16 +106,16 @@ export class RecommendationEngine {
   }
 
   /**
-   * Fetch current track metadata from cache or ytmusic
+   * Fetch current track metadata from cache, ytmusic, or oEmbed fallback
    */
   private async getTrackMetadata(videoId: string): Promise<TrackMetadata> {
     const metaCacheKey = `song_meta:${videoId}`;
     const cached = await cacheService.get<any>(metaCacheKey);
-    if (cached && cached.title) {
+    if (cached && cached.title && cached.title !== "Unknown Track" && cached.title !== "YouTube Track") {
       return {
         videoId,
         title: cached.title,
-        artistName: cached.artist || "YouTube Artist",
+        artistName: cached.artist || cached.singers || "YouTube Artist",
         albumName: cached.album || cached.title,
         duration: cached.duration || 180
       };
@@ -122,15 +123,15 @@ export class RecommendationEngine {
 
     try {
       const songData: any = await this.ytmusic.getSong(videoId);
-      if (songData) {
-        const title = songData.name || songData.title || "Unknown Title";
+      if (songData && (songData.name || songData.title)) {
+        const title = songData.name || songData.title;
         const artistName =
           songData.artist?.name ||
           (Array.isArray(songData.artists) ? songData.artists.map((a: any) => a.name).join(", ") : "YouTube Artist");
         const albumName = songData.album?.name || title;
         const duration = songData.duration || 180;
 
-        return {
+        const meta: TrackMetadata = {
           videoId,
           title,
           artistName,
@@ -138,16 +139,48 @@ export class RecommendationEngine {
           duration,
           thumbnails: songData.thumbnails
         };
+        await cacheService.set(metaCacheKey, meta, 86400);
+        return meta;
       }
     } catch (_e) {
-      // Fallback
+      // Fallback to oEmbed
     }
+
+    // Fast oEmbed Fallback for YouTube Video IDs
+    try {
+      const oembedRes = await axios.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, {
+        timeout: 4000
+      });
+      if (oembedRes.data && oembedRes.data.title) {
+        const rawTitle = oembedRes.data.title as string;
+        const authorName = (oembedRes.data.author_name as string) || "YouTube Artist";
+
+        // Try extracting "Artist - Title" format
+        let parsedArtist = authorName.replace(/ - Topic|VEVO/gi, "").trim();
+        let parsedTitle = rawTitle;
+        if (rawTitle.includes(" - ")) {
+          const parts = rawTitle.split(" - ");
+          parsedArtist = parts[0].trim();
+          parsedTitle = parts.slice(1).join(" - ").trim();
+        }
+
+        const meta: TrackMetadata = {
+          videoId,
+          title: parsedTitle,
+          artistName: parsedArtist,
+          albumName: parsedTitle,
+          duration: 180
+        };
+        await cacheService.set(metaCacheKey, meta, 86400);
+        return meta;
+      }
+    } catch (_oembedErr) {}
 
     return {
       videoId,
-      title: "Unknown Track",
-      artistName: "YouTube Artist",
-      albumName: "Unknown Album"
+      title: "Trending Music",
+      artistName: "Popular Artist",
+      albumName: "Single"
     };
   }
 
@@ -197,21 +230,21 @@ export class RecommendationEngine {
 
         // B. Multi-Source Candidate Generation in Parallel
         const artistQuery = currentMeta.artistName.replace(/ - Topic|VEVO/gi, "").trim();
-        const titleQuery = currentMeta.title.replace(/\(.*\)|\[.*\]/g, "").trim();
+        const titleQuery = currentMeta.title.replace(/(\(.*\)|\[.*\])/g, "").trim();
 
         const [artistSongsRes, relatedSearchRes, titleSearchRes] = await Promise.allSettled([
           // Source A: Same Artist
-          artistQuery && artistQuery !== "YouTube Artist"
+          artistQuery && artistQuery !== "YouTube Artist" && artistQuery !== "Popular Artist"
             ? this.ytmusic.searchSongs(artistQuery)
             : Promise.resolve([]),
 
           // Source B & D: Related Artist / Genre / Similar tracks
-          artistQuery && artistQuery !== "YouTube Artist"
-            ? this.ytmusic.searchSongs(`${artistQuery} mix`)
+          artistQuery && artistQuery !== "YouTube Artist" && artistQuery !== "Popular Artist"
+            ? this.ytmusic.searchSongs(`${artistQuery} songs`)
             : Promise.resolve([]),
 
           // Source E: Title & Metadata Similarity
-          titleQuery && titleQuery !== "Unknown Track"
+          titleQuery && titleQuery !== "Trending Music" && titleQuery !== "Unknown Track"
             ? this.ytmusic.searchSongs(`${titleQuery} ${artistQuery}`)
             : Promise.resolve([])
         ]);
@@ -221,7 +254,7 @@ export class RecommendationEngine {
           for (const raw of artistSongsRes.value) {
             const item = raw as any;
             const vId = item.videoId || item.id;
-            if (!vId) continue;
+            if (!vId || vId === cleanId) continue;
             candidates.push({
               track: {
                 videoId: vId,
@@ -243,7 +276,7 @@ export class RecommendationEngine {
           for (const raw of relatedSearchRes.value) {
             const item = raw as any;
             const vId = item.videoId || item.id;
-            if (!vId) continue;
+            if (!vId || vId === cleanId) continue;
             candidates.push({
               track: {
                 videoId: vId,
@@ -265,7 +298,7 @@ export class RecommendationEngine {
           for (const raw of titleSearchRes.value) {
             const item = raw as any;
             const vId = item.videoId || item.id;
-            if (!vId) continue;
+            if (!vId || vId === cleanId) continue;
             candidates.push({
               track: {
                 videoId: vId,
@@ -280,6 +313,32 @@ export class RecommendationEngine {
               popularityScore: 0.6
             });
           }
+        }
+
+        // Fallback: If candidates are scarce, fetch top trending songs
+        if (candidates.length < clampedLimit) {
+          try {
+            const trendingItems = await this.ytmusic.searchSongs("Trending Global Hits 2026");
+            if (Array.isArray(trendingItems)) {
+              for (const item of trendingItems) {
+                const vId = (item as any).videoId || (item as any).id;
+                if (!vId || vId === cleanId) continue;
+                candidates.push({
+                  track: {
+                    videoId: vId,
+                    title: (item as any).name || (item as any).title || "",
+                    artistName: (item as any).artist?.name || ((item as any).artists?.[0]?.name) || "Trending Artist",
+                    albumName: (item as any).album?.name,
+                    duration: (item as any).duration || undefined,
+                    thumbnails: (item as any).thumbnails,
+                    raw: item
+                  },
+                  source: "trending",
+                  popularityScore: 0.75
+                });
+              }
+            }
+          } catch (_trendErr) {}
         }
 
         // C. Centralized Scoring, Filtering, Deduplication & Diversity Balancing
@@ -397,6 +456,32 @@ export class RecommendationEngine {
       ingestResults(artistSongsRes, "same_artist", 0.8);
       ingestResults(relatedSearchRes, "related_artist", 0.7);
       ingestResults(titleSearchRes, "search_sim", 0.6);
+
+      // Fallback: If candidates are scarce, fetch top trending songs
+      if (candidates.length < clampedLimit) {
+        try {
+          const trendingItems = await this.ytmusic.searchSongs("Trending Global Hits 2026");
+          if (Array.isArray(trendingItems)) {
+            for (const item of trendingItems) {
+              const vId = (item as any).videoId || (item as any).id;
+              if (!vId || vId === cleanId) continue;
+              candidates.push({
+                track: {
+                  videoId: vId,
+                  title: (item as any).name || (item as any).title || "",
+                  artistName: (item as any).artist?.name || ((item as any).artists?.[0]?.name) || "Trending Artist",
+                  albumName: (item as any).album?.name,
+                  duration: (item as any).duration || undefined,
+                  thumbnails: (item as any).thumbnails,
+                  raw: item
+                },
+                source: "trending",
+                popularityScore: 0.75
+              });
+            }
+          }
+        } catch (_trendErr) {}
+      }
 
       const scoredCandidates = RecommendationScorer.rankAndFilter(
         currentMeta,

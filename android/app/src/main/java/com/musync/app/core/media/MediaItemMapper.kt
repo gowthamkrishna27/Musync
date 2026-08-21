@@ -25,8 +25,11 @@ object MediaItemMapper {
             track.id
         } else if (!track.streamUrl.isNullOrBlank() && !track.streamUrl.contains("/stream?id=")) {
             track.streamUrl
+        } else if (!track.streamUrl.isNullOrBlank() && track.streamUrl.contains("/stream?id=")) {
+            if (track.streamUrl.contains("&quality=")) track.streamUrl else "${track.streamUrl}&quality=$quality"
         } else {
-            "$baseUrl/stream?id=$cleanId&quality=$quality"
+            val safeBase = if (baseUrl.isNotBlank()) baseUrl.trimEnd('/') else DEFAULT_BASE_URL
+            "$safeBase/stream?id=$cleanId&quality=$quality"
         }
 
         val streamUri = Uri.parse(targetStreamUrl)

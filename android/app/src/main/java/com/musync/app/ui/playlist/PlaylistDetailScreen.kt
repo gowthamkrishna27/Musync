@@ -60,6 +60,10 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.MoreVert
 
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Refresh
+
 @Composable
 fun PlaylistDetailScreen(
     viewModel: PlaylistViewModel,
@@ -69,6 +73,8 @@ fun PlaylistDetailScreen(
     val playlist by viewModel.playlist.collectAsState()
     val favorites by viewModel.favorites.collectAsState()
     val playbackState by viewModel.playbackManager.playbackState.collectAsState()
+    val recommendations by viewModel.recommendations.collectAsState()
+    val isLoadingRecommendations by viewModel.isLoadingRecommendations.collectAsState()
 
     var showDeleteDialog by remember { mutableStateOf(false) }
 
@@ -226,7 +232,7 @@ fun PlaylistDetailScreen(
                                 }
                             }
 
-                            // 2. Shuffle Button
+                            // 2. Intelligent Shuffle Button
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -236,8 +242,7 @@ fun PlaylistDetailScreen(
                                     .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(24.dp))
                                     .clickable {
                                         if (tracks.isNotEmpty()) {
-                                            val shuffled = tracks.shuffled()
-                                            viewModel.playTrack(shuffled.first(), shuffled)
+                                            viewModel.playIntelligentShuffle()
                                         }
                                     },
                                 contentAlignment = Alignment.Center
@@ -270,11 +275,11 @@ fun PlaylistDetailScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(40.dp),
+                                .padding(32.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "No tracks in this playlist yet.\nAdd songs from Home or Search!",
+                                text = "No tracks in this playlist yet.\nAdd recommendations below or from search!",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = TextGreyMuted,
                                 textAlign = TextAlign.Center
@@ -292,6 +297,81 @@ fun PlaylistDetailScreen(
                             onPlayNext = { viewModel.playbackManager.playNext(track) },
                             onAddToQueue = { viewModel.playbackManager.addToQueue(track) },
                             onRemove = { viewModel.removeTrack(track.id) }
+                        )
+                    }
+                }
+
+                // Recommended Songs Section for Playlist
+                item {
+                    Spacer(modifier = Modifier.height(28.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = com.musync.app.ui.theme.AppleMusicRed,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Recommended Songs",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 18.sp
+                                    ),
+                                    color = TextWhite
+                                )
+                            }
+                            Text(
+                                text = "Based on what's in this playlist",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                                color = TextGreySecondary
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { viewModel.refreshRecommendations() },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Refresh Recommendations",
+                                tint = TextGreySecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+
+                if (isLoadingRecommendations && recommendations.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = com.musync.app.ui.theme.AppleMusicRed,
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
+                } else if (recommendations.isNotEmpty()) {
+                    items(recommendations, key = { "rec_${it.id}" }) { recTrack ->
+                        PlaylistRecommendationItem(
+                            track = recTrack,
+                            isPlaying = playbackState.currentTrack?.id == recTrack.id,
+                            onPlay = { viewModel.playbackManager.play(recTrack) },
+                            onAdd = { viewModel.addTrackToPlaylist(recTrack) }
                         )
                     }
                 }
@@ -343,6 +423,107 @@ fun PlaylistDetailScreen(
             containerColor = com.musync.app.ui.theme.SurfaceBlack,
             shape = RoundedCornerShape(14.dp)
         )
+    }
+}
+
+@Composable
+private fun PlaylistRecommendationItem(
+    track: com.musync.app.domain.model.Track,
+    isPlaying: Boolean,
+    onPlay: () -> Unit,
+    onAdd: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onPlay() }
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color(0xFF1E1E24)),
+            contentAlignment = Alignment.Center
+        ) {
+            val art = track.artworkUrl
+            if (!art.isNullOrBlank()) {
+                coil.compose.AsyncImage(
+                    model = art,
+                    contentDescription = track.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                    contentDescription = null,
+                    tint = IconGrey,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            if (isPlaying) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0x80000000)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Playing",
+                        tint = com.musync.app.ui.theme.AppleMusicRed,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = track.title,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp
+                ),
+                color = if (isPlaying) com.musync.app.ui.theme.AppleMusicRed else TextWhite,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = track.artist.name,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                color = TextGreySecondary,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // Quick 1-tap "+" Add to Playlist Button
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(Color(0xFF242429))
+                .border(1.dp, Color(0x33FFFFFF), androidx.compose.foundation.shape.CircleShape)
+                .clickable { onAdd() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "Add to playlist",
+                tint = Color.White,
+                modifier = Modifier.size(18.dp)
+            )
+        }
     }
 }
 

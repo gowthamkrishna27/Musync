@@ -47,6 +47,9 @@ class MusyncDownloadManager(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val httpClient = OkHttpClient.Builder()
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .retryOnConnectionFailure(true)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .build()
@@ -112,10 +115,15 @@ class MusyncDownloadManager(
 
                 updateState(trackId, "QUEUED", 0f)
 
-                // 3. Resolve Stream URL
-                val streamUrl = universalMusicProvider.getStreamUrl(track)
+                // 3. Resolve Stream URL with Download Quality
+                val downloadQuality = preferencesManager.getDownloadQuality()
+                var streamUrl = universalMusicProvider.getStreamUrl(track)
                 if (streamUrl.isNullOrBlank()) {
-                    throw IllegalStateException("Download unavailable for this audio track")
+                    val cleanVideoId = trackId.removePrefix("yt_")
+                    val baseUrl = preferencesManager.getBaseUrl()
+                    streamUrl = "$baseUrl/stream?id=$cleanVideoId&quality=$downloadQuality"
+                } else if (streamUrl.contains("/stream?id=") && !streamUrl.contains("&quality=")) {
+                    streamUrl = "$streamUrl&quality=$downloadQuality"
                 }
 
                 updateState(trackId, "DOWNLOADING", 0.05f)
@@ -146,73 +154,105 @@ class MusyncDownloadManager(
                     }
                 }
 
-                // 5. Download MP4 Audio Stream with Real Byte Progress
-                val request = Request.Builder()
-                    .url(streamUrl)
-                    .header("User-Agent", "Musync-Android/1.0")
-                    .build()
+                // 5. Download MP4 Audio Stream with Real Byte Progress and Auto-Retry
+                var lastErr: Exception? = null
+                var downloadSuccess = false
 
-                httpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        throw IllegalStateException("Server returned HTTP ${response.code}")
-                    }
-                    val body = response.body ?: throw IllegalStateException("Empty audio response body")
-                    val totalBytes = body.contentLength().takeIf { it > 0 } ?: (track.durationMs?.let { it * 16L } ?: 5_000_000L)
-                    var bytesDownloaded = 0L
+                for (attempt in 1..2) {
+                    try {
+                        val currentTargetUrl = streamUrl ?: run {
+                            val cleanVideoId = trackId.removePrefix("yt_")
+                            val baseUrl = preferencesManager.getBaseUrl()
+                            "$baseUrl/stream?id=$cleanVideoId&quality=$downloadQuality"
+                        }
 
-                    body.byteStream().use { input ->
-                        FileOutputStream(localFile).use { output ->
-                            val buffer = ByteArray(8 * 1024)
-                            var read: Int
-                            var lastProgressTime = System.currentTimeMillis()
+                        val request = Request.Builder()
+                            .url(currentTargetUrl)
+                            .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
+                            .header("Accept", "*/*")
+                            .build()
 
-                            while (input.read(buffer).also { read = it } != -1) {
-                                output.write(buffer, 0, read)
-                                bytesDownloaded += read
+                        httpClient.newCall(request).execute().use { response ->
+                            if (!response.isSuccessful) {
+                                throw IllegalStateException("Server returned HTTP ${response.code}")
+                            }
+                            val body = response.body ?: throw IllegalStateException("Empty audio response body")
+                            val totalBytes = body.contentLength().takeIf { it > 0 } ?: (track.durationMs?.let { it * 16L } ?: 5_000_000L)
+                            var bytesDownloaded = 0L
 
-                                val now = System.currentTimeMillis()
-                                if (now - lastProgressTime > 150) { // Throttle state emissions
-                                    lastProgressTime = now
-                                    val progress = (bytesDownloaded.toFloat() / totalBytes.toFloat()).coerceIn(0.05f, 0.99f)
-                                    updateState(trackId, "DOWNLOADING", progress, bytesDownloaded, totalBytes)
+                            body.byteStream().use { input ->
+                                FileOutputStream(localFile).use { output ->
+                                    val buffer = ByteArray(32 * 1024)
+                                    var read: Int
+                                    var lastProgressTime = System.currentTimeMillis()
+
+                                    while (input.read(buffer).also { read = it } != -1) {
+                                        output.write(buffer, 0, read)
+                                        bytesDownloaded += read
+
+                                        val now = System.currentTimeMillis()
+                                        if (now - lastProgressTime > 120) {
+                                            lastProgressTime = now
+                                            val progress = (bytesDownloaded.toFloat() / totalBytes.toFloat()).coerceIn(0.05f, 0.99f)
+                                            updateState(trackId, "DOWNLOADING", progress, bytesDownloaded, totalBytes)
+                                        }
+                                    }
+                                    output.flush()
                                 }
                             }
-                            output.flush()
+
+                            // 6. Validation: verify file exists and is non-empty
+                            if (!localFile.exists() || localFile.length() < 10_000) {
+                                localFile.delete()
+                                throw IllegalStateException("Downloaded file validation failed (corrupted or incomplete)")
+                            }
+
+                            downloadSuccess = true
+                        }
+
+                        if (downloadSuccess) {
+                            break
+                        }
+                    } catch (e: Exception) {
+                        lastErr = e
+                        if (attempt < 2) {
+                            kotlinx.coroutines.delay(1000)
+                            val cleanVideoId = trackId.removePrefix("yt_")
+                            val baseUrl = preferencesManager.getBaseUrl()
+                            streamUrl = "$baseUrl/stream?id=$cleanVideoId&quality=$downloadQuality"
                         }
                     }
-
-                    // 6. Validation: verify file exists and is non-empty
-                    if (!localFile.exists() || localFile.length() < 10_000) {
-                        localFile.delete()
-                        throw IllegalStateException("Downloaded file validation failed (corrupted or incomplete)")
-                    }
-
-                    val finalSize = localFile.length()
-
-                    // 7. Save metadata into Room Database
-                    val downloadEntity = DownloadEntity(
-                        id = trackId,
-                        title = track.title,
-                        artistName = track.artist.name,
-                        artistId = track.artist.id,
-                        albumName = track.album?.name,
-                        albumId = track.album?.id,
-                        artworkUrl = track.artworkUrl,
-                        localArtworkPath = localArtworkPath,
-                        localFilePath = localFile.absolutePath,
-                        fileSizeBytes = finalSize,
-                        durationMs = track.durationMs ?: 0L,
-                        format = "mp4",
-                        downloadedAt = System.currentTimeMillis(),
-                        status = "COMPLETED",
-                        progress = 1.0f,
-                        errorMessage = null
-                    )
-                    downloadDao.insertOrUpdate(downloadEntity)
-
-                    updateState(trackId, "COMPLETED", 1.0f, finalSize, finalSize)
-                    Log.i(TAG, "✓ Download completed: '${track.title}' ($finalSize bytes) at ${localFile.absolutePath}")
                 }
+
+                if (!downloadSuccess) {
+                    throw lastErr ?: IllegalStateException("Download failed")
+                }
+
+                val finalSize = localFile.length()
+
+                // 7. Save metadata into Room Database
+                val downloadEntity = DownloadEntity(
+                    id = trackId,
+                    title = track.title,
+                    artistName = track.artist.name,
+                    artistId = track.artist.id,
+                    albumName = track.album?.name,
+                    albumId = track.album?.id,
+                    artworkUrl = track.artworkUrl,
+                    localArtworkPath = localArtworkPath,
+                    localFilePath = localFile.absolutePath,
+                    fileSizeBytes = finalSize,
+                    durationMs = track.durationMs ?: 0L,
+                    format = "mp4",
+                    downloadedAt = System.currentTimeMillis(),
+                    status = "COMPLETED",
+                    progress = 1.0f,
+                    errorMessage = null
+                )
+                downloadDao.insertOrUpdate(downloadEntity)
+
+                updateState(trackId, "COMPLETED", 1.0f, finalSize, finalSize)
+                Log.i(TAG, "✓ Download completed: '${track.title}' ($finalSize bytes) at ${localFile.absolutePath}")
 
             } catch (e: Exception) {
                 Log.e(TAG, "Download failed for track $trackId: ${e.message}", e)

@@ -76,18 +76,18 @@ class MusicPlaybackService : MediaLibraryService() {
         val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(this)
             .setDataSourceFactory(dataSourceFactory)
 
-        // Resilient Low-Latency & Anti-Stutter Buffer Tuning:
-        // - 0.8s initial buffer: start playing as soon as 0.8s of audio is ready.
-        //   At 48kbps that's ~5KB — arrives in <100ms once the stream proxy connects.
-        // - 1.5s rebuffer recovery threshold (enough headroom without perceptible delay)
-        // - 8s-60s adaptive safety buffer (8s min avoids stutter; 60s max for long sessions)
+        // Resilient Buffer Tuning for Anti-Stutter and Seamless Playback:
+        // - 2.0s initial playback buffer: ensures smooth start without immediate underrun/rebuffer on new songs
+        // - 3.5s rebuffer recovery threshold: sufficient headroom to recover from network fluctuations
+        // - 15s minBufferMs: stays well ahead of decoding bitrate to eliminate stuttering
+        // - 90s maxBufferMs: large buffer window for stable long-session background playback
         // - 15s back-buffer for instant back-seeking
         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                8000,  // minBufferMs (8s — enough to stay ahead of the bitrate)
-                60000, // maxBufferMs (60s)
-                800,   // bufferForPlaybackMs (0.8s startup — fast first-audio without stutter risk)
-                1500   // bufferForPlaybackAfterRebufferMs (1.5s rebuffer recovery)
+                15000, // minBufferMs (15s — ensures robust cushion against cellular/WiFi latency)
+                90000, // maxBufferMs (90s)
+                2000,  // bufferForPlaybackMs (2.0s initial cushion — prevents immediate rebuffer loop on un-cached tracks)
+                3500   // bufferForPlaybackAfterRebufferMs (3.5s rebuffer recovery)
             )
             .setBackBuffer(15000, true) // 15s retention for instant backward seeking
             .setPrioritizeTimeOverSizeThresholds(true)
