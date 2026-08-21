@@ -49,6 +49,10 @@ import com.musync.app.ui.theme.BackgroundBlack
 import com.musync.app.ui.theme.TextGreySecondary
 import com.musync.app.ui.theme.TextWhite
 
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewScreen(
     viewModel: HomeViewModel,
@@ -74,16 +78,20 @@ fun NewScreen(
     val genreChips = listOf("All", "Pop", "Hip-Hop", "Electronic", "R&B", "Rock", "Bollywood", "Tollywood", "Acoustic")
     var selectedGenre by remember { mutableStateOf("All") }
 
-    LazyColumn(
+    PullToRefreshBox(
+        isRefreshing = uiState.isLoading,
+        onRefresh = { viewModel.loadHomeData() },
         modifier = modifier
             .fillMaxSize()
             .background(BackgroundBlack)
-            .statusBarsPadding(),
-        contentPadding = PaddingValues(top = 16.dp, bottom = 160.dp)
+            .statusBarsPadding()
     ) {
-        // 1. Header: "New"
-        // 1. Header: Logo + "New"
-        item {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 160.dp)
+        ) {
+            // 1. Header: Logo + "New"
+            item {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -235,6 +243,7 @@ fun NewScreen(
             )
         }
     }
+}
 
     val currentTrackForPlaylist = trackForPlaylist
     if (currentTrackForPlaylist != null) {

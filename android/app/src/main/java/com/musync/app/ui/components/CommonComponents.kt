@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.components
+package com.musync.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -169,35 +169,18 @@ fun DefaultArtworkView(
     Box(
         modifier = modifier
             .clip(shape)
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF2A2B36),
-                        Color(0xFF1B1C24),
-                        Color(0xFF12131A)
-                    )
-                )
-            )
-            .border(1.dp, Color(0x33FFFFFF), shape),
+            .background(Color(0xFF0A0A0C))
+            .border(1.dp, Color(0x22FFFFFF), shape),
         contentAlignment = Alignment.Center
     ) {
-        // Inner Concentric Vinyl Grooves
-        Box(
-            modifier = Modifier
-                .fillMaxSize(0.72f)
-                .clip(CircleShape)
-                .background(Color(0xFF14151C))
-                .border(1.dp, Color(0x22FFFFFF), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.MusicNote,
-                contentDescription = "Music",
-                tint = Color(0xFFB8BAC6),
-                modifier = Modifier.size(iconSize)
-            )
-        }
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(id = com.musync.app.R.drawable.ic_musync_logo),
+            contentDescription = "Musync Logo",
+            modifier = Modifier.size(iconSize),
+            contentScale = androidx.compose.ui.layout.ContentScale.Fit
+        )
     }
 }
+
 
 

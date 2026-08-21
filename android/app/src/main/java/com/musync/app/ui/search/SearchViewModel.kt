@@ -21,6 +21,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+import com.musync.app.data.local.scanner.LocalAudioScanner
+import com.musync.app.domain.repository.DownloadRepository
+import kotlinx.coroutines.flow.first
+
 enum class SearchFilter {
     ALL, TRACKS, ARTISTS, PLAYLISTS
 }
@@ -30,6 +34,7 @@ data class SearchUiState(
     val filter: SearchFilter = SearchFilter.ALL,
     val isSearching: Boolean = false,
     val tracks: List<Track> = emptyList(),
+    val offlineTracks: List<Track> = emptyList(),
     val artists: List<Artist> = emptyList(),
     val playlists: List<Playlist> = emptyList(),
     val errorMessage: String? = null
@@ -38,6 +43,8 @@ data class SearchUiState(
 class SearchViewModel(
     private val musicRepository: MusicRepository,
     private val favoritesRepository: FavoritesRepository,
+    private val downloadRepository: DownloadRepository,
+    private val localAudioScanner: LocalAudioScanner,
     val playbackManager: PlaybackManager
 ) : ViewModel() {
 
@@ -54,12 +61,12 @@ class SearchViewModel(
         searchJob?.cancel()
 
         if (newQuery.isBlank()) {
-            _uiState.update { it.copy(isSearching = false, tracks = emptyList(), artists = emptyList(), playlists = emptyList()) }
+            _uiState.update { it.copy(isSearching = false, tracks = emptyList(), offlineTracks = emptyList(), artists = emptyList(), playlists = emptyList()) }
             return
         }
 
         searchJob = viewModelScope.launch {
-            delay(200) // Fast snappy 200ms debounce
+            delay(150) // Ultra fast snappy 150ms debounce
             performSearch(newQuery, _uiState.value.filter)
         }
     }
@@ -78,40 +85,86 @@ class SearchViewModel(
     private suspend fun performSearch(query: String, filter: SearchFilter) = kotlinx.coroutines.coroutineScope {
         _uiState.update { it.copy(isSearching = true, errorMessage = null) }
         try {
+            val q = query.trim().lowercase()
+
+            // 1. Search Offline Downloads & Local Device Storage
+            val downloadedMatches: List<Track> = try {
+                downloadRepository.getDownloadedTracks().first().filter {
+                    it.title.lowercase().contains(q) || it.artist.name.lowercase().contains(q)
+                }
+            } catch (_: Exception) { emptyList() }
+
+            val localMatches: List<Track> = try {
+                localAudioScanner.scanLocalAudio().filter {
+                    it.title.lowercase().contains(q) || it.artist.name.lowercase().contains(q)
+                }
+            } catch (_: Exception) { emptyList() }
+
+            val localAndOffline: List<Track> = (downloadedMatches + localMatches).distinctBy { it.id }
+
             when (filter) {
                 SearchFilter.ALL -> {
                     val tracksDef = async { musicRepository.search(query).getOrDefault(emptyList()) }
                     val artistsDef = async { musicRepository.searchArtists(query).getOrDefault(emptyList()) }
                     val playlistsDef = async { musicRepository.searchPlaylists(query).getOrDefault(emptyList()) }
 
-                    val tracks = tracksDef.await()
+                    val onlineTracks = tracksDef.await()
                     val artists = artistsDef.await()
                     val playlists = playlistsDef.await()
+
+                    val combinedTracks = (localAndOffline + onlineTracks).distinctBy { it.id }
 
                     _uiState.update {
                         it.copy(
                             isSearching = false,
-                            tracks = tracks,
+                            tracks = combinedTracks,
+                            offlineTracks = localAndOffline,
                             artists = artists,
                             playlists = playlists
                         )
                     }
                 }
                 SearchFilter.TRACKS -> {
-                    val tracks = musicRepository.search(query).getOrDefault(emptyList())
-                    _uiState.update { it.copy(isSearching = false, tracks = tracks, artists = emptyList(), playlists = emptyList()) }
+                    val onlineTracks = musicRepository.search(query).getOrDefault(emptyList())
+                    val combinedTracks = (localAndOffline + onlineTracks).distinctBy { it.id }
+                    _uiState.update {
+                        it.copy(
+                            isSearching = false,
+                            tracks = combinedTracks,
+                            offlineTracks = localAndOffline
+                        )
+                    }
                 }
                 SearchFilter.ARTISTS -> {
                     val artists = musicRepository.searchArtists(query).getOrDefault(emptyList())
-                    _uiState.update { it.copy(isSearching = false, tracks = emptyList(), artists = artists, playlists = emptyList()) }
+                    _uiState.update { it.copy(isSearching = false, artists = artists) }
                 }
                 SearchFilter.PLAYLISTS -> {
                     val playlists = musicRepository.searchPlaylists(query).getOrDefault(emptyList())
-                    _uiState.update { it.copy(isSearching = false, tracks = emptyList(), artists = emptyList(), playlists = playlists) }
+                    _uiState.update { it.copy(isSearching = false, playlists = playlists) }
                 }
             }
         } catch (e: Exception) {
-            _uiState.update { it.copy(isSearching = false, errorMessage = "Search failed: ${e.localizedMessage}") }
+            // Even if network fails or offline, return local/downloaded matches!
+            val q = query.trim().lowercase()
+            val offlineFallback: List<Track> = try {
+                val dls = downloadRepository.getDownloadedTracks().first().filter {
+                    it.title.lowercase().contains(q) || it.artist.name.lowercase().contains(q)
+                }
+                val locs = localAudioScanner.scanLocalAudio().filter {
+                    it.title.lowercase().contains(q) || it.artist.name.lowercase().contains(q)
+                }
+                (dls + locs).distinctBy { it.id }
+            } catch (_: Exception) { emptyList() }
+
+            _uiState.update {
+                it.copy(
+                    isSearching = false,
+                    tracks = offlineFallback,
+                    offlineTracks = offlineFallback,
+                    errorMessage = if (offlineFallback.isEmpty()) e.message else null
+                )
+            }
         }
     }
 
@@ -134,12 +187,19 @@ class SearchViewModel(
     class Factory(
         private val musicRepository: MusicRepository,
         private val favoritesRepository: FavoritesRepository,
+        private val downloadRepository: DownloadRepository,
+        private val localAudioScanner: LocalAudioScanner,
         private val playbackManager: PlaybackManager
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return SearchViewModel(musicRepository, favoritesRepository, playbackManager) as T
+            return SearchViewModel(
+                musicRepository,
+                favoritesRepository,
+                downloadRepository,
+                localAudioScanner,
+                playbackManager
+            ) as T
         }
     }
 }
-

@@ -33,8 +33,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.sp
 import com.musync.app.domain.model.Playlist
 import com.musync.app.ui.components.SectionHeader
 import com.musync.app.ui.components.TrackItem
+import com.musync.app.ui.theme.AppleMusicPink
 import com.musync.app.ui.theme.BackgroundBlack
 import com.musync.app.ui.theme.BorderStroke
 import com.musync.app.ui.theme.CardElevated
@@ -119,11 +120,11 @@ fun LibraryScreen(
             .statusBarsPadding()
             .padding(top = 8.dp)
     ) {
-        // Title: "Musync"
+        // Top App Header: Logo + "Library" + Action button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 6.dp),
+                .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -138,12 +139,13 @@ fun LibraryScreen(
                         .clip(RoundedCornerShape(8.dp)),
                     contentScale = androidx.compose.ui.layout.ContentScale.Fit
                 )
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     text = "Library",
                     style = MaterialTheme.typography.headlineLarge.copy(
                         fontWeight = FontWeight.Bold,
-                        fontSize = 28.sp
+                        fontSize = 28.sp,
+                        letterSpacing = (-0.5).sp
                     ),
                     color = TextWhite
                 )
@@ -161,38 +163,33 @@ fun LibraryScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
-        // Tabs: Favorites, Playlists, History, Local
-        TabRow(
-            selectedTabIndex = selectedTab.ordinal,
-            containerColor = BackgroundBlack,
-            contentColor = TextWhite,
-            indicator = { tabPositions ->
-                TabRowDefaults.SecondaryIndicator(
-                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab.ordinal]),
-                    color = TextWhite,
-                    height = 2.dp
-                )
-            },
-            divider = {
-                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(BorderStroke))
-            }
+        // Home-Lite Filter Chips: Favorites, Playlists, Downloads, History, Local
+        androidx.compose.foundation.lazy.LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            tabs.forEach { (tab, label) ->
+            items(tabs) { (tab, label) ->
                 val isSelected = selectedTab == tab
-                Tab(
-                    selected = isSelected,
-                    onClick = { selectedTab = tab },
-                    text = {
-                        Text(
-                            label,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            fontSize = 13.sp,
-                            color = if (isSelected) TextWhite else TextGreySecondary
-                        )
-                    }
-                )
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (isSelected) Color(0xFF2E2E36) else Color(0xFF1B1B20))
+                        .border(1.dp, if (isSelected) Color(0x66FFFFFF) else Color(0x1AFFFFFF), RoundedCornerShape(20.dp))
+                        .clickable { selectedTab = tab }
+                        .padding(horizontal = 14.dp, vertical = 7.dp)
+                ) {
+                    Text(
+                        text = label,
+                        color = if (isSelected) Color.White else Color(0xFFB0B0B8),
+                        fontSize = 12.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
             }
         }
 

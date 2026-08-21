@@ -69,6 +69,10 @@ import com.musync.app.ui.theme.TextGreyMuted
 import com.musync.app.ui.theme.TextGreySecondary
 import com.musync.app.ui.theme.TextWhite
 
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
@@ -123,16 +127,21 @@ fun HomeScreen(
                 )
             }
             else -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 160.dp)
+                PullToRefreshBox(
+                    isRefreshing = uiState.isLoading,
+                    onRefresh = { viewModel.loadHomeData() },
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    // 1. Top App Header: Logo + Page Name ("Home") + Profile Avatar Button
-                    item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 4.dp),
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 160.dp)
+                    ) {
+                        // 1. Top App Header: Logo + Page Name ("Home") + Profile Avatar Button
+                        item {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -630,6 +639,7 @@ fun HomeScreen(
                 }
             }
         }
+    }
 
         // Add to Playlist Dialog
         val currentTrackForPlaylist = trackForPlaylist
@@ -668,7 +678,7 @@ private fun GlassSongCard(
             modifier = Modifier
                 .size(136.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF18181B))
+                .background(Color(0xFF0A0A0C))
                 .border(1.dp, if (isPlaying) com.musync.app.ui.theme.AppleMusicRed else Color(0x18FFFFFF), RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center
         ) {
@@ -680,11 +690,11 @@ private fun GlassSongCard(
                     contentScale = ContentScale.Crop
                 )
             } else {
-                Icon(
-                    imageVector = Icons.Default.MusicNote,
-                    contentDescription = null,
-                    tint = IconGrey,
-                    modifier = Modifier.size(36.dp)
+                Image(
+                    painter = painterResource(id = R.drawable.ic_musync_logo),
+                    contentDescription = "Musync Logo",
+                    modifier = Modifier.size(48.dp),
+                    contentScale = ContentScale.Fit
                 )
             }
 
