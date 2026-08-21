@@ -385,6 +385,65 @@ class AudioEffectManager(
         selectEngine(engine)
     }
 
+    fun setAudioNormalization(enabled: Boolean) {
+        try {
+            loudnessEnhancer?.enabled = enabled && _state.value.isEnabled
+            if (enabled) {
+                loudnessEnhancer?.setTargetGain(_state.value.loudnessGainMb.coerceAtLeast(80))
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error setting audio normalization: ${e.message}")
+        }
+        scope.launch {
+            preferencesManager.setAudioNormalization(enabled)
+        }
+    }
+
+    fun applyEqualizerPreset(preset: String) {
+        val bandGains = when (preset) {
+            "Off", "Flat" -> listOf<Short>(0, 0, 0, 0, 0)
+            "Bass Boost" -> listOf<Short>(500, 300, 0, 0, 0)
+            "Treble Boost" -> listOf<Short>(0, 0, 100, 350, 500)
+            "Vocal Boost" -> listOf<Short>(-100, 200, 450, 300, -100)
+            "Acoustic" -> listOf<Short>(300, 150, 100, 250, 300)
+            "Rock" -> listOf<Short>(450, 200, -100, 200, 400)
+            "Electronic" -> listOf<Short>(400, 250, 0, 200, 350)
+            else -> listOf<Short>(350, 150, 0, 250, 350)
+        }
+
+        try {
+            equalizer?.let { eq ->
+                val numBands = eq.numberOfBands.toInt()
+                val minLevel = eq.bandLevelRange?.getOrNull(0) ?: -1500
+                val maxLevel = eq.bandLevelRange?.getOrNull(1) ?: 1500
+                for (i in 0 until minOf(numBands, bandGains.size)) {
+                    val gain = bandGains[i].coerceIn(minLevel, maxLevel)
+                    eq.setBandLevel(i.toShort(), gain)
+                }
+            }
+            if (preset == "Bass Boost") {
+                bassBoost?.setStrength(600.toShort())
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error applying eq preset $preset: ${e.message}")
+        }
+
+        _state.update { curr ->
+            val updatedBands = curr.bands.mapIndexed { idx, band ->
+                val gain = bandGains.getOrNull(idx) ?: 0
+                band.copy(levelMb = gain)
+            }
+            curr.copy(
+                activePreset = preset,
+                bands = if (updatedBands.isNotEmpty()) updatedBands else curr.bands
+            )
+        }
+
+        scope.launch {
+            preferencesManager.saveEqualizerPreset(preset)
+        }
+    }
+
     private fun applyEngineModeInternal(mode: EngineMode) {
         val numBands = equalizer?.numberOfBands?.toInt() ?: _state.value.bands.size.takeIf { it > 0 } ?: 5
         val minLevel = equalizer?.bandLevelRange?.getOrNull(0) ?: -1500

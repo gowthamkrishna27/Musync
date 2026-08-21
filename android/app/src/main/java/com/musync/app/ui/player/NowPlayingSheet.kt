@@ -1,6 +1,11 @@
 package com.musync.app.ui.player
 
+import android.app.DownloadManager
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Environment
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -51,6 +56,8 @@ import com.musync.app.ui.components.AddToPlaylistDialog
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Headphones
@@ -73,6 +80,10 @@ import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -139,6 +150,7 @@ fun NowPlayingSheet(
 ) {
     val track = playbackState.currentTrack ?: return
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val app = context.applicationContext as com.musync.app.MusyncApplication
     val playbackManager = app.container.playbackManager
     val audioEffectManager = app.container.audioEffectManager
@@ -148,6 +160,9 @@ fun NowPlayingSheet(
 
     var isDraggingSlider by remember { mutableStateOf(false) }
     var sliderDragPosition by remember { mutableFloatStateOf(0f) }
+
+    var isDownloading by remember(track.id) { mutableStateOf(false) }
+    var isDownloaded by remember(track.id) { mutableStateOf(false) }
 
     var showEqualizerSheet by remember { mutableStateOf(false) }
     var showDeviceDialog by remember { mutableStateOf(false) }
@@ -595,13 +610,68 @@ fun NowPlayingSheet(
                     )
                 }
 
-                IconButton(onClick = { showEqualizerSheet = true }) {
-                    Icon(
-                        imageVector = Icons.Default.Tune,
-                        contentDescription = "Equalizer",
-                        tint = if (showEqualizerSheet) IconWhite else IconGrey,
-                        modifier = Modifier.size(22.dp)
-                    )
+                IconButton(
+                    onClick = {
+                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                        if (isDownloading) return@IconButton
+                        isDownloading = true
+                        scope.launch(Dispatchers.IO) {
+                            try {
+                                val streamUrl = app.container.universalMusicProvider.getStreamUrl(track)
+                                if (!streamUrl.isNullOrBlank()) {
+                                    val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
+                                    if (dm != null) {
+                                        val cleanTitle = track.title.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
+                                        val cleanArtist = track.artist.name.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
+                                        val fileName = "${cleanTitle} - ${cleanArtist}.mp3"
+                                        val request = DownloadManager.Request(Uri.parse(streamUrl))
+                                            .setTitle(track.title)
+                                            .setDescription(track.artist.name)
+                                            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                                            .setDestinationInExternalPublicDir(Environment.DIRECTORY_MUSIC, "Musync/$fileName")
+                                            .setAllowedOverMetered(true)
+                                            .setAllowedOverRoaming(true)
+                                        dm.enqueue(request)
+                                        withContext(Dispatchers.Main) {
+                                            isDownloading = false
+                                            isDownloaded = true
+                                            Toast.makeText(context, "Downloading \"${track.title}\"", Toast.LENGTH_SHORT).show()
+                                        }
+                                    } else {
+                                        withContext(Dispatchers.Main) {
+                                            isDownloading = false
+                                            Toast.makeText(context, "Download manager unavailable", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                } else {
+                                    withContext(Dispatchers.Main) {
+                                        isDownloading = false
+                                        Toast.makeText(context, "Audio source unavailable for download", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                withContext(Dispatchers.Main) {
+                                    isDownloading = false
+                                    Toast.makeText(context, "Download failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    }
+                ) {
+                    if (isDownloading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = IconWhite,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = if (isDownloaded) Icons.Default.DownloadDone else Icons.Default.Download,
+                            contentDescription = "Download Song",
+                            tint = if (isDownloaded) StatusGreen else IconGrey,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
 
                 IconButton(onClick = { showDeviceDialog = true }) {
@@ -1074,14 +1144,47 @@ fun NowPlayingSheet(
                         .fillMaxWidth()
                         .clickable {
                             showOptionsSheet = false
-                            showEqualizerSheet = true
+                            if (!isDownloading) {
+                                isDownloading = true
+                                scope.launch(Dispatchers.IO) {
+                                    try {
+                                        val streamUrl = app.container.universalMusicProvider.getStreamUrl(track)
+                                        if (!streamUrl.isNullOrBlank()) {
+                                            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
+                                            if (dm != null) {
+                                                val cleanTitle = track.title.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
+                                                val cleanArtist = track.artist.name.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
+                                                val fileName = "${cleanTitle} - ${cleanArtist}.mp3"
+                                                val request = DownloadManager.Request(Uri.parse(streamUrl))
+                                                    .setTitle(track.title)
+                                                    .setDescription(track.artist.name)
+                                                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                                                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_MUSIC, "Musync/$fileName")
+                                                    .setAllowedOverMetered(true)
+                                                    .setAllowedOverRoaming(true)
+                                                dm.enqueue(request)
+                                                withContext(Dispatchers.Main) {
+                                                    isDownloading = false
+                                                    isDownloaded = true
+                                                    Toast.makeText(context, "Downloading \"${track.title}\"", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        withContext(Dispatchers.Main) {
+                                            isDownloading = false
+                                            Toast.makeText(context, "Download failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            }
                         }
                         .padding(vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Speaker, null, tint = IconWhite, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.Download, null, tint = IconWhite, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(14.dp))
-                    Text("Sound Profile & EQ", color = TextWhite)
+                    Text(if (isDownloaded) "Download Again" else "Download Song", color = TextWhite)
                 }
             }
         }

@@ -10,6 +10,7 @@ import com.musync.app.domain.model.Track
 import com.musync.app.domain.repository.FavoritesRepository
 import com.musync.app.domain.repository.MusicRepository
 import com.musync.app.domain.repository.PlaylistRepository
+import com.musync.app.domain.repository.RecentlyPlayedRepository
 import com.musync.app.playback.PlaybackManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -37,6 +38,7 @@ data class HomeUiState(
     val trendingTracks: List<Track> = emptyList(),
     val undergroundTracks: List<Track> = emptyList(),
     val localTracks: List<Track> = emptyList(),
+    val recentlyPlayedTracks: List<Track> = emptyList(),
     val featuredArtists: List<Artist> = emptyList(),
     val customPlaylists: List<Playlist> = emptyList(),
     val errorMessage: String? = null
@@ -46,6 +48,7 @@ class HomeViewModel(
     private val musicRepository: MusicRepository,
     private val favoritesRepository: FavoritesRepository,
     private val playlistRepository: PlaylistRepository,
+    private val recentlyPlayedRepository: RecentlyPlayedRepository,
     private val localAudioScanner: LocalAudioScanner,
     val playbackManager: PlaybackManager
 ) : ViewModel() {
@@ -62,6 +65,11 @@ class HomeViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
+        viewModelScope.launch {
+            recentlyPlayedRepository.getRecentlyPlayed(20).collect { recents ->
+                _uiState.update { it.copy(recentlyPlayedTracks = recents) }
+            }
+        }
         loadHomeData()
     }
 
@@ -227,6 +235,7 @@ class HomeViewModel(
         private val musicRepository: MusicRepository,
         private val favoritesRepository: FavoritesRepository,
         private val playlistRepository: PlaylistRepository,
+        private val recentlyPlayedRepository: RecentlyPlayedRepository,
         private val localAudioScanner: LocalAudioScanner,
         private val playbackManager: PlaybackManager
     ) : ViewModelProvider.Factory {
@@ -236,6 +245,7 @@ class HomeViewModel(
                 musicRepository,
                 favoritesRepository,
                 playlistRepository,
+                recentlyPlayedRepository,
                 localAudioScanner,
                 playbackManager
             ) as T

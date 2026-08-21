@@ -3,6 +3,7 @@ package com.musync.app.ui.settings
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -28,6 +29,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -58,6 +61,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.musync.app.BuildConfig
 import com.musync.app.MusyncApplication
+import com.musync.app.playback.HapticIntensity
+import com.musync.app.playback.SoundEngine
+import com.musync.app.playback.SoundEngineRegistry
 import com.musync.app.ui.theme.AppleMusicPink
 import com.musync.app.ui.theme.AppleMusicRed
 import com.musync.app.ui.theme.BackgroundBlack
@@ -76,6 +82,7 @@ enum class SettingsSection(val title: String) {
     MUSIC_DISCOVERY("Music & Discovery"),
     LIBRARY("Library"),
     NOTIFICATIONS("Notifications"),
+    APPEARANCE("Appearance"),
     PRIVACY_SECURITY("Privacy & Security"),
     STORAGE_DATA("Storage & Data"),
     APP_UPDATES("App Updates"),
@@ -94,7 +101,6 @@ fun SettingsScreen(
     val updateState by appUpdateManager.updateState.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
     val currentUser by viewModel.authManager.currentUser.collectAsState()
-    val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
 
     var selectedSection by remember { mutableStateOf<SettingsSection?>(null) }
@@ -184,7 +190,7 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = currentUser?.displayName ?: "Gowtham Krishna",
+                                text = currentUser?.displayName ?: "Musync Listener",
                                 style = MaterialTheme.typography.bodyLarge.copy(
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Medium
@@ -213,7 +219,7 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                     }
 
-                    // The Core Sections (Pure text navigation, zero icons)
+                    // The 12 Core Sections (Pure text navigation, zero icons)
                     items(SettingsSection.values().size) { index ->
                         val section = SettingsSection.values()[index]
                         Column(
@@ -308,6 +314,14 @@ private fun SettingsDetailView(
     val scope = rememberCoroutineScope()
     val currentUser by viewModel.authManager.currentUser.collectAsState()
 
+    // Dialog state variables
+    var showEditNameDialog by remember { mutableStateOf(false) }
+    var showChangePasswordDialog by remember { mutableStateOf(false) }
+    var showDeleteAccountDialog by remember { mutableStateOf(false) }
+    var showMusicLanguagesDialog by remember { mutableStateOf(false) }
+    var showSingleChoiceDialog by remember { mutableStateOf<SingleChoiceConfig?>(null) }
+    var showLegalDialog by remember { mutableStateOf<LegalDialogConfig?>(null) }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 24.dp, vertical = 20.dp)
@@ -352,26 +366,106 @@ private fun SettingsDetailView(
         when (section) {
             SettingsSection.GENERAL -> {
                 item {
-                    SettingsGroupHeader(title = "Settings")
-                    SettingsRow(title = "Name", value = currentUser?.displayName ?: "Gowtham Krishna")
+                    SettingsGroupHeader(title = "Profile & Region")
+                    SettingsActionRow(
+                        title = "Name",
+                        value = currentUser?.displayName ?: "Musync Listener",
+                        onClick = { showEditNameDialog = true }
+                    )
                     SettingsRow(title = "Email", value = currentUser?.email ?: "email@example.com")
-                    SettingsRow(title = "Language", value = "English")
-                    SettingsRow(title = "Region", value = "India")
-                    SettingsRow(title = "Preferred Music Languages", value = "Telugu, Hindi, English")
+                    SettingsActionRow(
+                        title = "Language",
+                        value = uiState.appLanguage,
+                        onClick = {
+                            showSingleChoiceDialog = SingleChoiceConfig(
+                                title = "Select App Language",
+                                options = listOf("English", "Telugu", "Hindi", "Tamil", "Kannada", "Malayalam"),
+                                selected = uiState.appLanguage,
+                                onSelect = { viewModel.onAppLanguageChange(it) }
+                            )
+                        }
+                    )
+                    SettingsActionRow(
+                        title = "Region",
+                        value = uiState.region,
+                        onClick = {
+                            showSingleChoiceDialog = SingleChoiceConfig(
+                                title = "Select Region",
+                                options = listOf("India", "Global", "United States", "United Kingdom"),
+                                selected = uiState.region,
+                                onSelect = { viewModel.onRegionChange(it) }
+                            )
+                        }
+                    )
+                    SettingsActionRow(
+                        title = "Preferred Music Languages",
+                        value = uiState.preferredMusicLanguages.joinToString(", "),
+                        onClick = { showMusicLanguagesDialog = true }
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+                    SettingsGroupHeader(title = "Content & Startup")
+                    SettingsToggleRow(
+                        title = "Allow Explicit Content",
+                        subtitle = "Include explicit tracks in discovery and search results",
+                        checked = uiState.allowExplicitContent,
+                        onCheckedChange = { viewModel.onExplicitContentToggle(it) }
+                    )
+                    SettingsOptionSelector(
+                        title = "Default Landing Page",
+                        options = listOf("Home", "Discover", "Library", "Radio"),
+                        selected = uiState.defaultLandingPage,
+                        onSelect = { viewModel.onDefaultLandingPageChange(it) }
+                    )
+                    SettingsOptionSelector(
+                        title = "Default Playback Behavior",
+                        options = listOf("Resume", "Start from beginning", "Ask"),
+                        selected = uiState.defaultPlaybackBehavior,
+                        onSelect = { viewModel.onDefaultPlaybackBehaviorChange(it) }
+                    )
                 }
             }
 
             SettingsSection.ACCOUNT -> {
                 item {
                     SettingsGroupHeader(title = "Personal Information")
-                    SettingsRow(title = "Name", value = currentUser?.displayName ?: "Gowtham Krishna")
+                    SettingsActionRow(
+                        title = "Name",
+                        value = currentUser?.displayName ?: "Musync Listener",
+                        onClick = { showEditNameDialog = true }
+                    )
                     SettingsRow(title = "Email", value = currentUser?.email ?: "email@example.com")
-                    SettingsActionRow(title = "Change Password", onClick = {
-                        currentUser?.email?.let { email ->
-                            scope.launch { viewModel.authManager.sendPasswordReset(email) }
+                    SettingsActionRow(
+                        title = "Change Password",
+                        onClick = {
+                            if (currentUser != null) {
+                                showChangePasswordDialog = true
+                            } else {
+                                onOpenAuth()
+                            }
                         }
-                    })
-                    SettingsRow(title = "Active Sessions", value = "1 Device Active")
+                    )
+                    SettingsActionRow(
+                        title = "Reset Password via Email",
+                        onClick = {
+                            currentUser?.email?.let { email ->
+                                scope.launch {
+                                    val res = viewModel.authManager.sendPasswordReset(email)
+                                    if (res.isSuccess) {
+                                        viewModel.showToast("Password reset email sent to $email")
+                                    }
+                                }
+                            }
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+                    SettingsGroupHeader(title = "Active Sessions")
+                    val deviceName = "${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL}"
+                    SettingsRow(
+                        title = deviceName,
+                        value = "Android ${Build.VERSION.RELEASE} · Active Now"
+                    )
 
                     Spacer(modifier = Modifier.height(24.dp))
                     SettingsGroupHeader(title = "Account Actions")
@@ -384,7 +478,7 @@ private fun SettingsDetailView(
                         SettingsActionRow(
                             title = "Delete Account",
                             textColor = DeleteRed,
-                            onClick = { scope.launch { viewModel.authManager.deleteAccount() } }
+                            onClick = { showDeleteAccountDialog = true }
                         )
                     } else {
                         SettingsActionRow(
@@ -401,28 +495,48 @@ private fun SettingsDetailView(
                     SettingsGroupHeader(title = "Playback Controls")
                     SettingsToggleRow(
                         title = "Autoplay",
-                        subtitle = "Keep music playing when queue finishes",
+                        subtitle = "Automatically fetch and play recommended songs when queue ends",
                         checked = uiState.autoplay,
                         onCheckedChange = { viewModel.onAutoplayToggle(it) }
                     )
                     SettingsToggleRow(
                         title = "Intelligent Shuffle",
-                        subtitle = "Session-aware probabilistic queue ordering",
+                        subtitle = "Session-aware probabilistic queue ordering based on affinities",
                         checked = uiState.intelligentShuffle,
                         onCheckedChange = { viewModel.onIntelligentShuffleToggle(it) }
                     )
                     SettingsToggleRow(
                         title = "Gapless Playback",
-                        subtitle = "Eliminate pauses between consecutive tracks",
+                        subtitle = "Eliminate pauses between consecutive audio tracks",
                         checked = uiState.gaplessPlayback,
                         onCheckedChange = { viewModel.onGaplessPlaybackToggle(it) }
                     )
-                    SettingsRow(title = "Crossfade", value = if (uiState.crossfadeSeconds > 0) "${uiState.crossfadeSeconds}s" else "Off")
+                    SettingsOptionSelector(
+                        title = "Crossfade",
+                        options = listOf("Off", "2s", "4s", "6s", "8s", "10s"),
+                        selected = if (uiState.crossfadeSeconds > 0) "${uiState.crossfadeSeconds}s" else "Off",
+                        onSelect = { opt ->
+                            val secs = opt.replace("s", "").toIntOrNull() ?: 0
+                            viewModel.onCrossfadeSecondsChange(secs)
+                        }
+                    )
                     SettingsToggleRow(
                         title = "Continue Playing",
                         subtitle = "Remember last played track position across sessions",
                         checked = uiState.continuePlaying,
-                        onCheckedChange = {}
+                        onCheckedChange = { viewModel.onContinuePlayingToggle(it) }
+                    )
+                    SettingsOptionSelector(
+                        title = "Queue Behavior",
+                        options = listOf("Play Next", "Add to Queue", "Replace Queue"),
+                        selected = uiState.queueBehavior,
+                        onSelect = { viewModel.onQueueBehaviorChange(it) }
+                    )
+                    SettingsToggleRow(
+                        title = "Record Playback History",
+                        subtitle = "Save played songs to Recent History and feed personalization",
+                        checked = uiState.recordListeningHistory,
+                        onCheckedChange = { viewModel.onRecordHistoryToggle(it) }
                     )
                 }
             }
@@ -444,16 +558,43 @@ private fun SettingsDetailView(
                     )
 
                     Spacer(modifier = Modifier.height(20.dp))
-                    SettingsGroupHeader(title = "Sound Enhancements")
-                    SettingsRow(title = "Equalizer", value = "Bass Boost")
-                    SettingsRow(title = "Dolby Atmos", value = "Spatial Audio (Dolby Atmos)")
+                    SettingsGroupHeader(title = "Hardware Sound Engine & Equalizer")
+                    SettingsOptionSelector(
+                        title = "Equalizer Preset",
+                        options = listOf("Off", "Bass Boost", "Treble Boost", "Vocal Boost", "Acoustic", "Rock", "Electronic"),
+                        selected = uiState.equalizerPreset,
+                        onSelect = { viewModel.onEqualizerPresetChange(it) }
+                    )
+                    SettingsActionRow(
+                        title = "Dolby Atmos / Spatial Engine",
+                        value = uiState.soundEngineTitle,
+                        onClick = {
+                            showSingleChoiceDialog = SingleChoiceConfig(
+                                title = "Select Spatial Audio Engine",
+                                options = SoundEngineRegistry.signatureEngines.map { it.title },
+                                selected = uiState.soundEngineTitle,
+                                onSelect = { title ->
+                                    val mode = SoundEngineRegistry.signatureEngines.find { it.title == title }
+                                    if (mode != null) viewModel.onSoundEngineChange(mode.engine)
+                                }
+                            )
+                        }
+                    )
                     SettingsToggleRow(
                         title = "Audio Normalization",
-                        subtitle = "Maintain consistent volume levels across songs",
+                        subtitle = "Maintain consistent volume levels across songs with LoudnessEnhancer",
                         checked = uiState.audioNormalization,
-                        onCheckedChange = {}
+                        onCheckedChange = { viewModel.onAudioNormalizationToggle(it) }
                     )
-                    SettingsRow(title = "Audio Effects", value = "Dolby Music Dynamic")
+                    SettingsOptionSelector(
+                        title = "Haptic Intensity",
+                        options = listOf("OFF", "LOW", "MEDIUM", "HIGH"),
+                        selected = uiState.hapticIntensity.name,
+                        onSelect = {
+                            val intensity = try { HapticIntensity.valueOf(it) } catch (_: Exception) { HapticIntensity.OFF }
+                            viewModel.onHapticIntensityChange(intensity)
+                        }
+                    )
                 }
             }
 
@@ -467,6 +608,12 @@ private fun SettingsDetailView(
                         onCheckedChange = { viewModel.onPersonalizedRecommendationsToggle(it) }
                     )
                     SettingsOptionSelector(
+                        title = "Recommendation Personalization Level",
+                        options = listOf("High", "Balanced", "Low", "Off"),
+                        selected = uiState.personalizationLevel,
+                        onSelect = { viewModel.onPersonalizationLevelChange(it) }
+                    )
+                    SettingsOptionSelector(
                         title = "Trending Region",
                         options = listOf("India", "Global"),
                         selected = uiState.trendingRegion,
@@ -478,11 +625,26 @@ private fun SettingsDetailView(
                         selected = uiState.newReleaseLanguage,
                         onSelect = { viewModel.onNewReleaseLanguageChange(it) }
                     )
-                    SettingsOptionSelector(
-                        title = "Recommendation Personalization",
-                        options = listOf("High", "Balanced", "Low", "Off"),
-                        selected = uiState.personalizationLevel,
-                        onSelect = { viewModel.onPersonalizationLevelChange(it) }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+                    SettingsGroupHeader(title = "Discovery Feeds")
+                    SettingsToggleRow(
+                        title = "Trending Music",
+                        subtitle = "Display live breakout and viral charts",
+                        checked = uiState.trendingEnabled,
+                        onCheckedChange = { viewModel.onTrendingToggle(it) }
+                    )
+                    SettingsToggleRow(
+                        title = "New Releases",
+                        subtitle = "Display latest album drops and singles",
+                        checked = uiState.newReleasesEnabled,
+                        onCheckedChange = { viewModel.onNewReleasesToggle(it) }
+                    )
+                    SettingsToggleRow(
+                        title = "Exploration Radar",
+                        subtitle = "Include rising indie hits and fresh sounds",
+                        checked = uiState.discoveryEnabled,
+                        onCheckedChange = { viewModel.onDiscoveryToggle(it) }
                     )
                 }
             }
@@ -494,7 +656,7 @@ private fun SettingsDetailView(
                     SettingsRow(title = "Playlists", value = "Custom Playlists")
                     SettingsRow(title = "Albums", value = "Saved Albums")
                     SettingsRow(title = "Artists", value = "Followed Artists")
-                    SettingsRow(title = "Recently Played", value = "History Enabled")
+                    SettingsRow(title = "Recently Played", value = if (uiState.recordListeningHistory) "History Active" else "Paused")
                     SettingsRow(title = "Downloads", value = "Device Storage")
                 }
             }
@@ -521,10 +683,42 @@ private fun SettingsDetailView(
                         onCheckedChange = { viewModel.onRecommendationNotificationsToggle(it) }
                     )
                     SettingsToggleRow(
+                        title = "Playlist Activity",
+                        subtitle = "Sync and playlist modification notifications",
+                        checked = uiState.playlistActivityNotifications,
+                        onCheckedChange = { viewModel.onPlaylistActivityNotificationsToggle(it) }
+                    )
+                    SettingsToggleRow(
                         title = "System Updates",
                         subtitle = "App improvement and release alerts",
-                        checked = true,
-                        onCheckedChange = {}
+                        checked = uiState.systemUpdateNotifications,
+                        onCheckedChange = { viewModel.onSystemUpdateNotificationsToggle(it) }
+                    )
+                }
+            }
+
+            SettingsSection.APPEARANCE -> {
+                item {
+                    SettingsGroupHeader(title = "Theme & Visual Style")
+                    SettingsOptionSelector(
+                        title = "Theme Mode",
+                        options = listOf("Dark", "System", "Light", "AMOLED"),
+                        selected = uiState.themeMode,
+                        onSelect = { viewModel.onThemeModeChange(it) }
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    SettingsGroupHeader(title = "Motion & Visual Effects")
+                    SettingsToggleRow(
+                        title = "Reduce Motion",
+                        subtitle = "Minimize 3D carousel parallax and screen transitions",
+                        checked = uiState.reduceMotion,
+                        onCheckedChange = { viewModel.onReduceMotionToggle(it) }
+                    )
+                    SettingsOptionSelector(
+                        title = "Interface Effects",
+                        options = listOf("Subtle Frosted Glass", "Opaque Minimal", "Solid Dark"),
+                        selected = uiState.interfaceEffects,
+                        onSelect = { viewModel.onInterfaceEffectsChange(it) }
                     )
                 }
             }
@@ -532,15 +726,20 @@ private fun SettingsDetailView(
             SettingsSection.PRIVACY_SECURITY -> {
                 item {
                     SettingsGroupHeader(title = "Data & Privacy")
-                    SettingsRow(title = "Listening History", value = "Stored Privately On-Device")
-                    SettingsRow(title = "Personalized Recommendations", value = "Encrypted Session Profile")
-                    SettingsRow(title = "Data Usage", value = "Streaming Audio Only")
+                    SettingsRow(title = "Listening History", value = if (uiState.recordListeningHistory) "Stored Privately On-Device" else "Paused")
+                    SettingsRow(title = "Personalized Recommendations", value = if (uiState.personalizedRecommendations) "Encrypted Session Profile" else "Disabled")
+                    SettingsRow(title = "Data Usage", value = "Streaming Audio & Cached Metadata")
                     SettingsRow(title = "Active Sessions", value = "1 Active Session")
                     Spacer(modifier = Modifier.height(20.dp))
                     SettingsActionRow(
                         title = "Sign Out Everywhere",
                         textColor = AppleMusicRed,
                         onClick = { viewModel.authManager.signOut() }
+                    )
+                    SettingsActionRow(
+                        title = "Delete Account",
+                        textColor = DeleteRed,
+                        onClick = { showDeleteAccountDialog = true }
                     )
                 }
             }
@@ -552,7 +751,12 @@ private fun SettingsDetailView(
                     SettingsRow(title = "Cache Size", value = "$cacheMb MB")
                     SettingsRow(title = "Downloaded Music", value = "0 MB")
                     SettingsRow(title = "Offline Data", value = "Catalog & Session DB")
-                    SettingsRow(title = "Network Usage", value = "Wi-Fi & Mobile Data")
+                    SettingsOptionSelector(
+                        title = "Network Usage",
+                        options = listOf("Allow Mobile Data", "Wi-Fi Only"),
+                        selected = uiState.networkUsage,
+                        onSelect = { viewModel.onNetworkUsageChange(it) }
+                    )
 
                     Spacer(modifier = Modifier.height(24.dp))
                     if (uiState.isClearingCache) {
@@ -694,15 +898,500 @@ private fun SettingsDetailView(
                             } catch (_: Exception) {}
                         }
                     )
-                    SettingsActionRow(title = "Terms of Service", onClick = {})
-                    SettingsActionRow(title = "Privacy Policy", onClick = {})
-                    SettingsActionRow(title = "Open Source Licenses", onClick = {})
+                    SettingsActionRow(
+                        title = "Terms of Service",
+                        onClick = {
+                            showLegalDialog = LegalDialogConfig(
+                                title = "Terms of Service",
+                                content = "Welcome to Musync. By accessing or using our streaming services, you agree to comply with all applicable terms. Musync streams high-fidelity music directly for personal non-commercial listening. Audio streams and metadata are provided in real-time."
+                            )
+                        }
+                    )
+                    SettingsActionRow(
+                        title = "Privacy Policy",
+                        onClick = {
+                            showLegalDialog = LegalDialogConfig(
+                                title = "Privacy Policy",
+                                content = "Your privacy is paramount. Musync does not sell your private information. Listening history, favorites, and custom playlists are encrypted and stored solely to personalize your audio experience."
+                            )
+                        }
+                    )
+                    SettingsActionRow(
+                        title = "Open Source Licenses",
+                        onClick = {
+                            showLegalDialog = LegalDialogConfig(
+                                title = "Open Source Licenses",
+                                content = "Musync is built with high-performance open-source technologies including Android Jetpack Compose, Media3 ExoPlayer, Kotlin Coroutines, Material 3, and Firebase Authentication."
+                            )
+                        }
+                    )
+                    SettingsActionRow(
+                        title = "Credits",
+                        onClick = {
+                            showLegalDialog = LegalDialogConfig(
+                                title = "Credits",
+                                content = "Engineered & Designed by Gowtham Krishna Chowdary.\nPowered by Google DeepMind Antigravity Advanced Agentic Architecture."
+                            )
+                        }
+                    )
                 }
             }
         }
 
         item {
             Spacer(modifier = Modifier.height(60.dp))
+        }
+    }
+
+    // Interactive Dialogs
+    if (showEditNameDialog) {
+        EditNameDialog(
+            currentName = currentUser?.displayName ?: "",
+            onConfirm = { newName ->
+                scope.launch {
+                    val res = viewModel.authManager.updateProfileName(newName)
+                    if (res.isSuccess) {
+                        viewModel.showToast("Profile name updated to $newName")
+                    }
+                }
+                showEditNameDialog = false
+            },
+            onDismiss = { showEditNameDialog = false }
+        )
+    }
+
+    if (showChangePasswordDialog) {
+        ChangePasswordDialog(
+            onConfirm = { newPassword ->
+                scope.launch {
+                    val res = viewModel.authManager.updatePassword(newPassword)
+                    if (res.isSuccess) {
+                        viewModel.showToast("Password changed successfully")
+                    }
+                }
+                showChangePasswordDialog = false
+            },
+            onDismiss = { showChangePasswordDialog = false }
+        )
+    }
+
+    if (showDeleteAccountDialog) {
+        DeleteAccountDialog(
+            onConfirm = {
+                scope.launch {
+                    viewModel.authManager.deleteAccount()
+                    onBack()
+                }
+                showDeleteAccountDialog = false
+            },
+            onDismiss = { showDeleteAccountDialog = false }
+        )
+    }
+
+    if (showMusicLanguagesDialog) {
+        MusicLanguagesDialog(
+            selectedLanguages = uiState.preferredMusicLanguages,
+            onToggleLanguage = { viewModel.onToggleMusicLanguage(it) },
+            onDismiss = { showMusicLanguagesDialog = false }
+        )
+    }
+
+    showSingleChoiceDialog?.let { config ->
+        SingleChoiceDialog(
+            title = config.title,
+            options = config.options,
+            selected = config.selected,
+            onSelect = {
+                config.onSelect(it)
+                showSingleChoiceDialog = null
+            },
+            onDismiss = { showSingleChoiceDialog = null }
+        )
+    }
+
+    showLegalDialog?.let { config ->
+        LegalInfoDialog(
+            title = config.title,
+            content = config.content,
+            onDismiss = { showLegalDialog = null }
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DIALOG CONFIG DATA CLASSES
+// ─────────────────────────────────────────────────────────────────────────────
+
+private data class SingleChoiceConfig(
+    val title: String,
+    val options: List<String>,
+    val selected: String,
+    val onSelect: (String) -> Unit
+)
+
+private data class LegalDialogConfig(
+    val title: String,
+    val content: String
+)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INTERACTIVE DIALOG COMPONENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun EditNameDialog(
+    currentName: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by remember { mutableStateOf(currentName) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xF518181B))
+                .border(1.dp, Color(0x30FFFFFF), RoundedCornerShape(24.dp))
+                .padding(24.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Edit Profile Name",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 20.sp),
+                    color = TextWhite
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                TextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    placeholder = { Text("Enter your name", color = TextGreyMuted) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0x18FFFFFF)),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite
+                    ),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel", color = TextGreySecondary)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(
+                        onClick = {
+                            if (name.isNotBlank()) onConfirm(name.trim())
+                        }
+                    ) {
+                        Text("Save", color = AppleMusicPink, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChangePasswordDialog(
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xF518181B))
+                .border(1.dp, Color(0x30FFFFFF), RoundedCornerShape(24.dp))
+                .padding(24.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Change Password",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 20.sp),
+                    color = TextWhite
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                TextField(
+                    value = newPassword,
+                    onValueChange = { newPassword = it; error = null },
+                    placeholder = { Text("New Password (min 6 characters)", color = TextGreyMuted) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0x18FFFFFF)),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite
+                    ),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                TextField(
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it; error = null },
+                    placeholder = { Text("Confirm New Password", color = TextGreyMuted) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0x18FFFFFF)),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite
+                    ),
+                    singleLine = true
+                )
+                if (error != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(text = error ?: "", color = DeleteRed, style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel", color = TextGreySecondary)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(
+                        onClick = {
+                            if (newPassword.length < 6) {
+                                error = "Password must be at least 6 characters"
+                            } else if (newPassword != confirmPassword) {
+                                error = "Passwords do not match"
+                            } else {
+                                onConfirm(newPassword.trim())
+                            }
+                        }
+                    ) {
+                        Text("Update", color = AppleMusicPink, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeleteAccountDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xF518181B))
+                .border(1.dp, Color(0x30FFFFFF), RoundedCornerShape(24.dp))
+                .padding(24.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Delete Account",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 20.sp),
+                    color = DeleteRed
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Are you sure you want to delete your Musync account? All your favorites, playlists, and listening preferences will be permanently removed. This action cannot be undone.",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                    color = TextGreySecondary
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel", color = TextGreySecondary)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(onClick = onConfirm) {
+                        Text("Delete", color = DeleteRed, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MusicLanguagesDialog(
+    selectedLanguages: Set<String>,
+    onToggleLanguage: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val languages = listOf("Telugu", "Hindi", "English", "Tamil", "Kannada", "Malayalam", "Punjabi", "Marathi", "Bengali")
+
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xF518181B))
+                .border(1.dp, Color(0x30FFFFFF), RoundedCornerShape(24.dp))
+                .padding(24.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "Preferred Music Languages",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 20.sp),
+                    color = TextWhite
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                LazyColumn(modifier = Modifier.height(260.dp)) {
+                    items(languages.size) { index ->
+                        val lang = languages[index]
+                        val isChecked = selectedLanguages.contains(lang)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onToggleLanguage(lang) }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(text = lang, style = MaterialTheme.typography.bodyLarge, color = TextWhite)
+                            Checkbox(
+                                checked = isChecked,
+                                onCheckedChange = { onToggleLanguage(lang) },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = AppleMusicPink,
+                                    checkmarkColor = Color.White
+                                )
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Done", color = AppleMusicPink, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SingleChoiceDialog(
+    title: String,
+    options: List<String>,
+    selected: String,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xF518181B))
+                .border(1.dp, Color(0x30FFFFFF), RoundedCornerShape(24.dp))
+                .padding(24.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 20.sp),
+                    color = TextWhite
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                LazyColumn(modifier = Modifier.height(260.dp)) {
+                    items(options.size) { index ->
+                        val opt = options[index]
+                        val isSelected = opt.equals(selected, ignoreCase = true)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelect(opt) }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = opt,
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                ),
+                                color = if (isSelected) AppleMusicPink else TextWhite
+                            )
+                            if (isSelected) {
+                                Text("✓", color = AppleMusicPink, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel", color = TextGreySecondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegalInfoDialog(
+    title: String,
+    content: String,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xF518181B))
+                .border(1.dp, Color(0x30FFFFFF), RoundedCornerShape(24.dp))
+                .padding(24.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 20.sp),
+                    color = TextWhite
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = content,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 14.sp,
+                        lineHeight = 22.sp
+                    ),
+                    color = TextGreySecondary
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Close", color = AppleMusicPink, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
     }
 }

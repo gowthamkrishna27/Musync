@@ -175,6 +175,7 @@ fun MainApp(
             container.musicRepository,
             container.favoritesRepository,
             container.playlistRepository,
+            container.recentlyPlayedRepository,
             container.localAudioScanner,
             container.playbackManager
         )
@@ -205,7 +206,8 @@ fun MainApp(
             container.universalMusicProvider,
             container.beatHapticManager,
             container.authManager,
-            container.cloudSyncManager
+            container.cloudSyncManager,
+            container.audioEffectManager
         )
     )
 
@@ -226,6 +228,15 @@ fun MainApp(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    val initialLandingPage = remember {
+        when (container.preferencesManager.getDefaultLandingPage()) {
+            "Discover" -> Screen.New.route
+            "Library" -> Screen.Library.route
+            "Radio" -> Screen.Radio.route
+            else -> Screen.Home.route
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -233,7 +244,7 @@ fun MainApp(
     ) {
         NavHost(
             navController = navController,
-            startDestination = Screen.Home.route,
+            startDestination = initialLandingPage,
             modifier = Modifier.fillMaxSize(),
             enterTransition = {
                 fadeIn(animationSpec = tween(170, easing = FastOutSlowInEasing)) +

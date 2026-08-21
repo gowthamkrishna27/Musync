@@ -1,8 +1,11 @@
 package com.musync.app.ui.home
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.res.painterResource
+import com.musync.app.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -133,24 +136,14 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Musync",
-                                    style = MaterialTheme.typography.headlineLarge.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 32.sp
-                                    ),
-                                    color = TextWhite
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                com.musync.app.ui.navigation.NetworkQualityDot(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .padding(bottom = 6.dp)
-                                )
-                            }
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_musync_logo),
+                                contentDescription = "Musync",
+                                modifier = Modifier
+                                    .height(36.dp)
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Fit
+                            )
 
                             // Settings Button (Apple Music style)
                             Box(
@@ -232,8 +225,8 @@ fun HomeScreen(
                     }
 
 
-                    // 5. "Recently Played" Section
-                    if (!uiState.isOffline && uiState.searchQuery.isBlank() && uiState.trendingTracks.isNotEmpty()) {
+                    // 5. "Recently Played" Section (Live playback history)
+                    if (!uiState.isOffline && uiState.searchQuery.isBlank() && uiState.recentlyPlayedTracks.isNotEmpty()) {
                         item {
                             SectionHeader(
                                 title = "Recently Played",
@@ -244,11 +237,11 @@ fun HomeScreen(
                                 contentPadding = PaddingValues(horizontal = 20.dp),
                                 horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
-                                itemsIndexed(uiState.trendingTracks.take(8), key = { index, track -> "recent_${track.id}_$index" }) { _, track ->
+                                itemsIndexed(uiState.recentlyPlayedTracks.take(15), key = { index, track -> "recent_${track.id}_$index" }) { _, track ->
                                     GlassSongCard(
                                         track = track,
                                         isPlaying = playbackState.currentTrack?.id == track.id && playbackState.isPlaying,
-                                        onClick = { viewModel.playTrack(track, uiState.trendingTracks) }
+                                        onClick = { viewModel.playTrack(track, uiState.recentlyPlayedTracks) }
                                     )
                                 }
                             }

@@ -223,6 +223,30 @@ class MusicPlaybackService : MediaLibraryService() {
                     }
                     Player.STATE_ENDED -> {
                         previousTrackEndTime = System.currentTimeMillis()
+                        val lastItem = exoPlayer.currentMediaItem
+                        if (lastItem != null) {
+                            val isAutoplayEnabled = app.container.preferencesManager.getAutoplay()
+                            if (isAutoplayEnabled) {
+                                val trackId = lastItem.mediaId
+                                android.util.Log.i("MusicPlaybackService", "🎵 Autoplay triggered for trackId=$trackId")
+                                serviceScope.launch {
+                                    try {
+                                        val recs = app.container.musicRepository.getRecommendations(trackId).getOrNull()
+                                        if (!recs.isNullOrEmpty()) {
+                                            val nextTrack = recs.first()
+                                            val networkQuality = com.musync.app.core.network.NetworkQualityHelper.getRecommendedQuality(this@MusicPlaybackService)
+                                            val nextMediaItem = MediaItemMapper.toMediaItem(nextTrack, quality = networkQuality)
+                                            exoPlayer.addMediaItem(nextMediaItem)
+                                            exoPlayer.prepare()
+                                            exoPlayer.play()
+                                            android.util.Log.i("MusicPlaybackService", "✓ Autoplay started next recommended song: '${nextTrack.title}'")
+                                        }
+                                    } catch (e: Exception) {
+                                        android.util.Log.w("MusicPlaybackService", "Autoplay failed: ${e.message}")
+                                    }
+                                }
+                            }
+                        }
                         "ENDED"
                     }
                     else -> "UNKNOWN ($playbackState)"
@@ -298,10 +322,13 @@ class MusicPlaybackService : MediaLibraryService() {
 
     private fun recordCurrentTrack() {
         val currentMediaItem = player?.currentMediaItem ?: return
+        val app = application as MusyncApplication
+        val isHistoryEnabled = app.container.preferencesManager.getRecordListeningHistory()
+        if (!isHistoryEnabled) return
+
         val track = MediaItemMapper.fromMediaItem(currentMediaItem)
         serviceScope.launch(Dispatchers.IO) {
             try {
-                val app = application as MusyncApplication
                 app.container.recentlyPlayedRepository.recordPlayed(track)
             } catch (e: Exception) {
                 // ignore

@@ -1,4 +1,4 @@
-﻿package com.musync.app
+package com.musync.app
 
 import android.Manifest
 import android.content.Intent
@@ -9,6 +9,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.rememberNavController
 import com.musync.app.ui.navigation.MainApp
@@ -31,8 +33,9 @@ class MainActivity : ComponentActivity() {
         handleDeepLink(intent)
 
         setContent {
-            MusyncTheme {
-                val app = application as MusyncApplication
+            val app = application as MusyncApplication
+            val themeMode by app.container.preferencesManager.themeMode.collectAsState(initial = "Dark")
+            MusyncTheme(themeMode = themeMode) {
                 val navController = rememberNavController()
                 MainApp(app = app, navController = navController)
             }
