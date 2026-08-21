@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -72,7 +73,7 @@ import com.musync.app.ui.auth.AccountProfileCard
 import com.musync.app.ui.auth.AuthBottomSheet
 
 enum class LibraryNavTab {
-    FAVORITES, PLAYLISTS, HISTORY, LOCAL
+    FAVORITES, PLAYLISTS, DOWNLOADS, HISTORY, LOCAL
 }
 
 @Composable
@@ -98,6 +99,7 @@ fun LibraryScreen(
     val favorites by viewModel.favorites.collectAsState()
     val playlists by viewModel.playlists.collectAsState()
     val recents by viewModel.recentlyPlayed.collectAsState()
+    val downloads by viewModel.downloads.collectAsState()
     val playbackState by viewModel.playbackManager.playbackState.collectAsState()
 
     val favoriteIds = favorites.map { it.id }.toSet()
@@ -105,6 +107,7 @@ fun LibraryScreen(
     val tabs = listOf(
         LibraryNavTab.FAVORITES to "Favorites",
         LibraryNavTab.PLAYLISTS to "Playlists",
+        LibraryNavTab.DOWNLOADS to "Downloads",
         LibraryNavTab.HISTORY to "History",
         LibraryNavTab.LOCAL to "Local"
     )
@@ -124,14 +127,27 @@ fun LibraryScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Musync",
-                style = MaterialTheme.typography.headlineLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 32.sp
-                ),
-                color = TextWhite
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                androidx.compose.foundation.Image(
+                    painter = androidx.compose.ui.res.painterResource(id = com.musync.app.R.drawable.ic_musync_logo),
+                    contentDescription = "Musync Logo",
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(8.dp)),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Library",
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 28.sp
+                    ),
+                    color = TextWhite
+                )
+            }
 
             if (selectedTab == LibraryNavTab.PLAYLISTS) {
                 IconButton(onClick = { showCreateDialog = true }) {
@@ -362,6 +378,57 @@ fun LibraryScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+                }
+            }
+            LibraryNavTab.DOWNLOADS -> {
+                if (downloads.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.DownloadForOffline,
+                                contentDescription = null,
+                                tint = IconGrey,
+                                modifier = Modifier.size(44.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "No Offline Music",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = TextWhite
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Songs you download will appear here for playback anywhere without an internet connection.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextGreyMuted,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 120.dp)
+                    ) {
+                        items(downloads, key = { "lib_dl_${it.id}" }) { track ->
+                            TrackItem(
+                                track = track,
+                                isPlaying = playbackState.currentTrack?.id == track.id,
+                                isFavorite = favoriteIds.contains(track.id),
+                                subtitleExtra = "Offline MP4",
+                                onClick = { viewModel.playTrack(track, downloads) },
+                                onFavoriteToggle = { viewModel.toggleFavorite(track) },
+                                onPlayNext = { viewModel.playbackManager.playNext(track) },
+                                onAddToQueue = { viewModel.playbackManager.addToQueue(track) },
+                                onAddToPlaylist = { trackForPlaylist = track }
+                            )
                         }
                     }
                 }

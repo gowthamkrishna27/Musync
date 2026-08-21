@@ -83,6 +83,9 @@ data class SettingsUiState(
 
     // Storage & Network
     val networkUsage: String = "Allow Mobile Data",
+    val downloadWifiOnly: Boolean = false,
+    val downloadedSongsCount: Int = 0,
+    val downloadedStorageBytes: Long = 0L,
     val cacheSizeBytes: Long = 0L,
     val isClearingCache: Boolean = false,
 
@@ -95,6 +98,7 @@ class SettingsViewModel(
     private val musicRepository: MusicRepository,
     private val universalMusicProvider: UniversalMusicProvider,
     private val beatHapticManager: BeatHapticManager,
+    private val downloadRepository: com.musync.app.domain.repository.DownloadRepository,
     val authManager: com.musync.app.auth.AuthManager,
     val cloudSyncManager: com.musync.app.data.sync.CloudSyncManager,
     val audioEffectManager: AudioEffectManager
@@ -106,6 +110,7 @@ class SettingsViewModel(
             hapticIntensity = beatHapticManager.getIntensity(),
             audioQuality = preferencesManager.getAudioQuality(),
             downloadQuality = preferencesManager.getDownloadQuality(),
+            downloadWifiOnly = preferencesManager.getDownloadWifiOnly(),
             appLanguage = preferencesManager.getAppLanguage(),
             region = preferencesManager.getRegion(),
             preferredMusicLanguages = preferencesManager.getMusicLanguages(),
@@ -219,6 +224,21 @@ class SettingsViewModel(
         viewModelScope.launch {
             preferencesManager.downloadQuality.collect { dlQuality ->
                 _uiState.update { it.copy(downloadQuality = dlQuality) }
+            }
+        }
+        viewModelScope.launch {
+            preferencesManager.downloadWifiOnly.collect { wifiOnly ->
+                _uiState.update { it.copy(downloadWifiOnly = wifiOnly) }
+            }
+        }
+        viewModelScope.launch {
+            downloadRepository.getCompletedCount().collect { count ->
+                _uiState.update { it.copy(downloadedSongsCount = count) }
+            }
+        }
+        viewModelScope.launch {
+            downloadRepository.getTotalStorageUsed().collect { bytes ->
+                _uiState.update { it.copy(downloadedStorageBytes = bytes ?: 0L) }
             }
         }
         viewModelScope.launch {
@@ -640,6 +660,26 @@ class SettingsViewModel(
         }
     }
 
+    fun setDownloadWifiOnly(wifiOnly: Boolean) {
+        viewModelScope.launch {
+            preferencesManager.setDownloadWifiOnly(wifiOnly)
+            _uiState.update { it.copy(downloadWifiOnly = wifiOnly) }
+        }
+    }
+
+    fun clearAllDownloads() {
+        viewModelScope.launch {
+            downloadRepository.clearAllDownloads()
+            _uiState.update {
+                it.copy(
+                    downloadedSongsCount = 0,
+                    downloadedStorageBytes = 0L,
+                    toastMessage = "All downloads cleared"
+                )
+            }
+        }
+    }
+
     fun clearCustomApi() {
         viewModelScope.launch {
             preferencesManager.setBaseUrl("none")
@@ -662,6 +702,7 @@ class SettingsViewModel(
         private val musicRepository: MusicRepository,
         private val universalMusicProvider: UniversalMusicProvider,
         private val beatHapticManager: BeatHapticManager,
+        private val downloadRepository: com.musync.app.domain.repository.DownloadRepository,
         private val authManager: com.musync.app.auth.AuthManager,
         private val cloudSyncManager: com.musync.app.data.sync.CloudSyncManager,
         private val audioEffectManager: AudioEffectManager
@@ -673,6 +714,7 @@ class SettingsViewModel(
                 musicRepository,
                 universalMusicProvider,
                 beatHapticManager,
+                downloadRepository,
                 authManager,
                 cloudSyncManager,
                 audioEffectManager

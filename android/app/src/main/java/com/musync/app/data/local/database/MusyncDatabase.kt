@@ -1,4 +1,4 @@
-﻿package com.musync.app.data.local.database
+package com.musync.app.data.local.database
 
 import android.content.Context
 import androidx.room.Database
@@ -14,6 +14,8 @@ import com.musync.app.data.local.database.entity.PlaylistEntity
 import com.musync.app.data.local.database.entity.PlaylistItemEntity
 import com.musync.app.data.local.database.entity.RecentlyPlayedEntity
 
+import com.musync.app.data.local.database.dao.DownloadDao
+import com.musync.app.data.local.database.entity.DownloadEntity
 import com.musync.app.data.local.database.dao.UserDao
 import com.musync.app.data.local.database.entity.UserEntity
 
@@ -24,9 +26,10 @@ import com.musync.app.data.local.database.entity.UserEntity
         PlaylistEntity::class,
         PlaylistItemEntity::class,
         RecentlyPlayedEntity::class,
-        CachedTrackEntity::class
+        CachedTrackEntity::class,
+        DownloadEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class MusyncDatabase : RoomDatabase() {
@@ -35,6 +38,7 @@ abstract class MusyncDatabase : RoomDatabase() {
     abstract fun playlistDao(): PlaylistDao
     abstract fun recentlyPlayedDao(): RecentlyPlayedDao
     abstract fun trackCacheDao(): TrackCacheDao
+    abstract fun downloadDao(): DownloadDao
 
     companion object {
         @Volatile

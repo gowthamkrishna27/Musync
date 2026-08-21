@@ -287,16 +287,36 @@ class PlaybackManager(private val context: Context) {
 
     private var playbackRequestId = 0L
 
+    private fun resolveOfflineTrack(track: Track): Track {
+        if (track.streamUrl?.startsWith("file://") == true || track.streamUrl?.startsWith("content://") == true) {
+            return track
+        }
+        val cleanId = track.id.replace("[^a-zA-Z0-9_-]".toRegex(), "_")
+        val downloadsDir = java.io.File(context.filesDir, "downloads")
+        val localFile = java.io.File(downloadsDir, "$cleanId.mp4")
+        if (localFile.exists() && localFile.length() > 10_000) {
+            val artworksDir = java.io.File(context.filesDir, "artworks")
+            val artworkFile = java.io.File(artworksDir, "$cleanId.jpg")
+            val localArt = if (artworkFile.exists()) "file://${artworkFile.absolutePath}" else track.artworkUrl
+            return track.copy(
+                streamUrl = "file://${localFile.absolutePath}",
+                artworkUrl = localArt
+            )
+        }
+        return track
+    }
+
     fun play(track: Track) {
         val requestId = ++playbackRequestId
+        val resolvedTrack = resolveOfflineTrack(track)
         currentQueue.clear()
-        currentQueue.add(track)
+        currentQueue.add(resolvedTrack)
 
         val networkQuality = com.musync.app.core.network.NetworkQualityHelper.getRecommendedQuality(context)
-        val mediaItem = MediaItemMapper.toMediaItem(track, quality = networkQuality)
+        val mediaItem = MediaItemMapper.toMediaItem(resolvedTrack, quality = networkQuality)
         withController { controller ->
             if (requestId != playbackRequestId) return@withController
-            android.util.Log.i("PlaybackManager", "▶ USER_SELECTED single track (Req #$requestId): '${track.title}' (${track.id}) | quality=$networkQuality | URI: ${mediaItem.requestMetadata.mediaUri}")
+            android.util.Log.i("PlaybackManager", "▶ USER_SELECTED single track (Req #$requestId): '${resolvedTrack.title}' (${resolvedTrack.id}) | quality=$networkQuality | URI: ${mediaItem.requestMetadata.mediaUri}")
             controller.setMediaItems(listOf(mediaItem), 0, 0L)
             controller.prepare()
             controller.play()
@@ -306,7 +326,7 @@ class PlaybackManager(private val context: Context) {
             it.copy(
                 queue = currentQueue.toList(),
                 queueIndex = 0,
-                currentTrack = track,
+                currentTrack = resolvedTrack,
                 errorMessage = null
             )
         }
@@ -315,7 +335,7 @@ class PlaybackManager(private val context: Context) {
     fun playTracks(tracks: List<Track>, startIndex: Int = 0) {
         if (tracks.isEmpty()) return
         val requestId = ++playbackRequestId
-        val incomingTracks = tracks.toList()
+        val incomingTracks = tracks.map { resolveOfflineTrack(it) }
         currentQueue.clear()
         currentQueue.addAll(incomingTracks)
 

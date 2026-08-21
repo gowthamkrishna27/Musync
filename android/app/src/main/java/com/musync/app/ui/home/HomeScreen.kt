@@ -127,7 +127,7 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 160.dp)
                 ) {
-                    // 1. Top App Header: Large "Home" Title + Profile Avatar Button
+                    // 1. Top App Header: Logo + Page Name ("Home") + Profile Avatar Button
                     item {
                         Row(
                             modifier = Modifier
@@ -136,14 +136,27 @@ fun HomeScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.ic_musync_logo),
-                                contentDescription = "Musync",
-                                modifier = Modifier
-                                    .height(36.dp)
-                                    .clip(RoundedCornerShape(8.dp)),
-                                contentScale = ContentScale.Fit
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.ic_musync_logo),
+                                    contentDescription = "Musync Logo",
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                    contentScale = ContentScale.Fit
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Home",
+                                    style = MaterialTheme.typography.headlineLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 28.sp
+                                    ),
+                                    color = TextWhite
+                                )
+                            }
 
                             // Settings Button (Apple Music style)
                             Box(
@@ -174,6 +187,7 @@ fun HomeScreen(
                     // 2. Mood & Category Filter Pills (Apple Music / YouTube Music style)
                     if (!uiState.isOffline && uiState.searchQuery.isBlank()) {
                         item {
+                            val activePills = uiState.languagePills.ifEmpty { moodPills }
                             LazyRow(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -181,7 +195,7 @@ fun HomeScreen(
                                 contentPadding = PaddingValues(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                items(moodPills, key = { it }) { mood ->
+                                items(activePills, key = { it }) { mood ->
                                     val isSelected = selectedMood == mood
                                     Box(
                                         modifier = Modifier
@@ -190,9 +204,7 @@ fun HomeScreen(
                                             .border(1.dp, if (isSelected) Color(0x66FFFFFF) else Color(0x1AFFFFFF), RoundedCornerShape(20.dp))
                                             .clickable {
                                                 selectedMood = mood
-                                                if (mood in listOf("Telugu", "Tamil", "Hindi", "All")) {
-                                                    viewModel.selectLanguage(mood)
-                                                }
+                                                viewModel.selectLanguage(mood)
                                             }
                                             .padding(horizontal = 14.dp, vertical = 7.dp)
                                     ) {
@@ -224,8 +236,115 @@ fun HomeScreen(
                         }
                     }
 
+                    // 4. "Made For You" Section (Personalized Multi-Language Recommendation Pool)
+                    if (!uiState.isOffline && uiState.searchQuery.isBlank() && uiState.madeForYouTracks.isNotEmpty()) {
+                        item {
+                            SectionHeader(
+                                title = "Made For You",
+                                actionText = "Play all",
+                                onActionClick = {
+                                    uiState.madeForYouTracks.firstOrNull()?.let {
+                                        viewModel.playTrack(it, uiState.madeForYouTracks)
+                                    }
+                                }
+                            )
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                itemsIndexed(uiState.madeForYouTracks.take(15), key = { index, track -> "mfy_${track.id}_$index" }) { _, track ->
+                                    GlassSongCard(
+                                        track = track,
+                                        isPlaying = playbackState.currentTrack?.id == track.id && playbackState.isPlaying,
+                                        onClick = { viewModel.playTrack(track, uiState.madeForYouTracks) }
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                    }
 
-                    // 5. "Recently Played" Section (Live playback history)
+                    // 5. "New For You" Section (Fresh Drops in Preferred Languages)
+                    if (!uiState.isOffline && uiState.searchQuery.isBlank() && uiState.newForYouTracks.isNotEmpty()) {
+                        item {
+                            SectionHeader(
+                                title = "New For You",
+                                actionText = "See all >",
+                                onActionClick = { onNavigateToSearch() }
+                            )
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                itemsIndexed(uiState.newForYouTracks.take(15), key = { index, track -> "nfy_${track.id}_$index" }) { _, track ->
+                                    GlassSongCard(
+                                        track = track,
+                                        isPlaying = playbackState.currentTrack?.id == track.id && playbackState.isPlaying,
+                                        onClick = { viewModel.playTrack(track, uiState.newForYouTracks) }
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                    }
+
+                    // 6. "Trending For You" Section (Live Trending in Preferred Languages)
+                    if (!uiState.isOffline && uiState.searchQuery.isBlank() && uiState.trendingForYouTracks.isNotEmpty()) {
+                        item {
+                            SectionHeader(
+                                title = "Trending For You",
+                                actionText = "Play all",
+                                onActionClick = {
+                                    uiState.trendingForYouTracks.firstOrNull()?.let {
+                                        viewModel.playTrack(it, uiState.trendingForYouTracks)
+                                    }
+                                }
+                            )
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                itemsIndexed(uiState.trendingForYouTracks.take(15), key = { index, track -> "tfy_${track.id}_$index" }) { _, track ->
+                                    GlassSongCard(
+                                        track = track,
+                                        isPlaying = playbackState.currentTrack?.id == track.id && playbackState.isPlaying,
+                                        onClick = { viewModel.playTrack(track, uiState.trendingForYouTracks) }
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                    }
+
+                    // 7. "Because You Listen To" Section
+                    if (!uiState.isOffline && uiState.searchQuery.isBlank() && uiState.becauseYouListenToTracks.isNotEmpty() && !uiState.becauseArtistName.isNullOrBlank()) {
+                        item {
+                            SectionHeader(
+                                title = "Because You Listen To ${uiState.becauseArtistName}",
+                                actionText = "Play all",
+                                onActionClick = {
+                                    uiState.becauseYouListenToTracks.firstOrNull()?.let {
+                                        viewModel.playTrack(it, uiState.becauseYouListenToTracks)
+                                    }
+                                }
+                            )
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                itemsIndexed(uiState.becauseYouListenToTracks.take(10), key = { index, track -> "byl_${track.id}_$index" }) { _, track ->
+                                    GlassSongCard(
+                                        track = track,
+                                        isPlaying = playbackState.currentTrack?.id == track.id && playbackState.isPlaying,
+                                        onClick = { viewModel.playTrack(track, uiState.becauseYouListenToTracks) }
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                    }
+
+                    // 8. "Recently Played" Section (Live playback history)
                     if (!uiState.isOffline && uiState.searchQuery.isBlank() && uiState.recentlyPlayedTracks.isNotEmpty()) {
                         item {
                             SectionHeader(

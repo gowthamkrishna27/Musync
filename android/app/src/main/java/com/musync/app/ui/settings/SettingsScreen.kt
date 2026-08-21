@@ -413,7 +413,7 @@ private fun SettingsDetailView(
                     )
                     SettingsOptionSelector(
                         title = "Default Landing Page",
-                        options = listOf("Home", "Discover", "Library", "Radio"),
+                        options = listOf("Home", "New", "Offline", "Library"),
                         selected = uiState.defaultLandingPage,
                         onSelect = { viewModel.onDefaultLandingPageChange(it) }
                     )
@@ -748,9 +748,18 @@ private fun SettingsDetailView(
                 item {
                     SettingsGroupHeader(title = "Storage Overview")
                     val cacheMb = (uiState.cacheSizeBytes / (1024 * 1024)).coerceAtLeast(0)
+                    val downloadedMb = (uiState.downloadedStorageBytes / (1024 * 1024)).coerceAtLeast(0)
                     SettingsRow(title = "Cache Size", value = "$cacheMb MB")
-                    SettingsRow(title = "Downloaded Music", value = "0 MB")
-                    SettingsRow(title = "Offline Data", value = "Catalog & Session DB")
+                    SettingsRow(title = "Downloaded Songs", value = "${uiState.downloadedSongsCount} tracks ($downloadedMb MB)")
+                    SettingsRow(title = "Offline Storage", value = "High-Quality MP4")
+                    
+                    SettingsToggleRow(
+                        title = "Download over Wi-Fi only",
+                        subtitle = "Block downloads on cellular / mobile data",
+                        checked = uiState.downloadWifiOnly,
+                        onCheckedChange = { viewModel.setDownloadWifiOnly(it) }
+                    )
+
                     SettingsOptionSelector(
                         title = "Network Usage",
                         options = listOf("Allow Mobile Data", "Wi-Fi Only"),
@@ -759,6 +768,12 @@ private fun SettingsDetailView(
                     )
 
                     Spacer(modifier = Modifier.height(24.dp))
+                    SettingsActionRow(
+                        title = "Clear All Downloads (${uiState.downloadedSongsCount})",
+                        textColor = AppleMusicPink,
+                        onClick = { viewModel.clearAllDownloads() }
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
                     if (uiState.isClearingCache) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),

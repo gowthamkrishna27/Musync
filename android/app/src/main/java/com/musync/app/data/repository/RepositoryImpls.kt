@@ -261,3 +261,37 @@ class RecentlyPlayedRepositoryImpl(
     }
 }
 
+class DownloadRepositoryImpl(
+    private val downloadDao: com.musync.app.data.local.database.dao.DownloadDao,
+    private val downloadManager: com.musync.app.data.download.MusyncDownloadManager
+) : com.musync.app.domain.repository.DownloadRepository {
+
+    override fun getDownloadedTracks(): Flow<List<Track>> {
+        return downloadDao.getCompletedDownloads().map { entities ->
+            entities.map { it.toTrack() }
+        }
+    }
+
+    override fun getCompletedCount(): Flow<Int> = downloadDao.getCompletedCountFlow()
+
+    override fun getTotalStorageUsed(): Flow<Long?> = downloadDao.getTotalStorageUsedFlow()
+
+    override suspend fun isDownloaded(trackId: String): Boolean {
+        val dl = downloadDao.getDownload(trackId)
+        return dl != null && dl.status == "COMPLETED"
+    }
+
+    override suspend fun downloadTrack(track: Track) {
+        downloadManager.download(track)
+    }
+
+    override suspend fun deleteDownload(trackId: String) {
+        downloadManager.delete(trackId)
+    }
+
+    override suspend fun clearAllDownloads() {
+        downloadManager.clearAll()
+    }
+}
+
+

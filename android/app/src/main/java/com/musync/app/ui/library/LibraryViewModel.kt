@@ -1,4 +1,4 @@
-﻿package com.musync.app.ui.library
+package com.musync.app.ui.library
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.musync.app.data.local.scanner.LocalAudioScanner
 import com.musync.app.domain.model.Playlist
 import com.musync.app.domain.model.Track
+import com.musync.app.domain.repository.DownloadRepository
 import com.musync.app.domain.repository.FavoritesRepository
 import com.musync.app.domain.repository.PlaylistRepository
 import com.musync.app.domain.repository.RecentlyPlayedRepository
@@ -26,6 +27,7 @@ class LibraryViewModel(
     private val favoritesRepository: FavoritesRepository,
     private val playlistRepository: PlaylistRepository,
     private val recentlyPlayedRepository: RecentlyPlayedRepository,
+    private val downloadRepository: com.musync.app.domain.repository.DownloadRepository,
     private val localAudioScanner: LocalAudioScanner,
     val playbackManager: PlaybackManager
 ) : ViewModel() {
@@ -37,6 +39,9 @@ class LibraryViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val recentlyPlayed: StateFlow<List<Track>> = recentlyPlayedRepository.getRecentlyPlayed(50)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val downloads: StateFlow<List<Track>> = downloadRepository.getDownloadedTracks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _localTracks = MutableStateFlow<List<Track>>(emptyList())
@@ -97,6 +102,7 @@ class LibraryViewModel(
         private val favoritesRepository: FavoritesRepository,
         private val playlistRepository: PlaylistRepository,
         private val recentlyPlayedRepository: RecentlyPlayedRepository,
+        private val downloadRepository: DownloadRepository,
         private val localAudioScanner: LocalAudioScanner,
         private val playbackManager: PlaybackManager
     ) : ViewModelProvider.Factory {
@@ -106,10 +112,12 @@ class LibraryViewModel(
                 favoritesRepository,
                 playlistRepository,
                 recentlyPlayedRepository,
+                downloadRepository,
                 localAudioScanner,
                 playbackManager
             ) as T
         }
     }
 }
+
 

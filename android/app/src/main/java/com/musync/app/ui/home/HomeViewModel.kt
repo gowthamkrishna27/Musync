@@ -3,6 +3,8 @@ package com.musync.app.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.musync.app.core.language.LanguageNormalizer
+import com.musync.app.data.local.datastore.PreferencesManager
 import com.musync.app.data.local.scanner.LocalAudioScanner
 import com.musync.app.domain.model.Artist
 import com.musync.app.domain.model.Playlist
@@ -31,6 +33,16 @@ data class HomeUiState(
     val searchQuery: String = "",
     val searchResults: List<Track> = emptyList(),
     val selectedLanguage: String = "All",
+    val preferredLanguages: Set<String> = setOf("Telugu", "Hindi", "English"),
+    val languagePills: List<String> = listOf("All", "Telugu", "Hindi", "English"),
+    
+    // Personalized Recommendation Sections
+    val madeForYouTracks: List<Track> = emptyList(),
+    val newForYouTracks: List<Track> = emptyList(),
+    val trendingForYouTracks: List<Track> = emptyList(),
+    val becauseYouListenToTracks: List<Track> = emptyList(),
+    val becauseArtistName: String? = null,
+
     val teluguTracks: List<Track> = emptyList(),
     val tamilTracks: List<Track> = emptyList(),
     val hindiTracks: List<Track> = emptyList(),
@@ -50,7 +62,8 @@ class HomeViewModel(
     private val playlistRepository: PlaylistRepository,
     private val recentlyPlayedRepository: RecentlyPlayedRepository,
     private val localAudioScanner: LocalAudioScanner,
-    val playbackManager: PlaybackManager
+    val playbackManager: PlaybackManager,
+    private val preferencesManager: PreferencesManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -65,11 +78,28 @@ class HomeViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
+        // Stream live recently played tracks
         viewModelScope.launch {
             recentlyPlayedRepository.getRecentlyPlayed(20).collect { recents ->
                 _uiState.update { it.copy(recentlyPlayedTracks = recents) }
             }
         }
+
+        // Reactively observe Preferred Music Languages from Settings
+        viewModelScope.launch {
+            preferencesManager.musicLanguages.collect { langs ->
+                val displayNames = LanguageNormalizer.toDisplayNameSet(langs).toList()
+                val pills = listOf("All") + displayNames + listOf("Chill", "Party", "Workout", "Focus")
+                _uiState.update {
+                    it.copy(
+                        preferredLanguages = langs,
+                        languagePills = pills
+                    )
+                }
+                refreshPersonalizedRecommendations(langs)
+            }
+        }
+
         loadHomeData()
     }
 
@@ -83,10 +113,11 @@ class HomeViewModel(
     private fun loadSpecificLanguageTracks(language: String) {
         viewModelScope.launch {
             try {
-                val results = musicRepository.getDiscoverTrending(language = language).getOrDefault(emptyList())
+                val langName = LanguageNormalizer.toDisplayName(language)
+                val results = musicRepository.getDiscoverTrending(language = langName).getOrDefault(emptyList())
                 if (results.isNotEmpty()) {
                     _uiState.update { current ->
-                        when (language) {
+                        when (langName) {
                             "Telugu" -> current.copy(teluguTracks = results)
                             "Tamil" -> current.copy(tamilTracks = results)
                             "Hindi" -> current.copy(hindiTracks = results)
@@ -96,6 +127,115 @@ class HomeViewModel(
                 }
             } catch (_: Exception) {}
         }
+    }
+
+    /**
+     * Core Recommendation Pipeline:
+     * 1. Evaluates user preferred languages (e.g. te, hi, en)
+     * 2. Incorporates listening history & session affinities
+     * 3. Fetches candidates and ranks them with controlled diversity (40% L1, 30% L2, 20% L3, 10% Discovery)
+     */
+    fun refreshPersonalizedRecommendations(preferredLanguages: Set<String>) {
+        viewModelScope.launch {
+            try {
+                val langCodes = LanguageNormalizer.toCodeSet(preferredLanguages)
+                val sessionProfile = playbackManager.sessionTracker.sessionProfile
+                val weights = LanguageNormalizer.computeLanguageWeights(langCodes, sessionProfile.languageAffinities)
+
+                val madeForYouCandidates = mutableListOf<Track>()
+                val newReleasesCandidates = mutableListOf<Track>()
+                val trendingCandidates = mutableListOf<Track>()
+
+                // Fetch parallel pools per preferred language
+                for (code in langCodes) {
+                    val langName = LanguageNormalizer.toDisplayName(code)
+                    launch {
+                        try {
+                            val trending = musicRepository.getDiscoverTrending("india", langName).getOrDefault(emptyList())
+                            val newDrops = musicRepository.getDiscoverNew(langName).getOrDefault(emptyList())
+                            synchronized(trendingCandidates) { trendingCandidates.addAll(trending) }
+                            synchronized(newReleasesCandidates) { newReleasesCandidates.addAll(newDrops) }
+                            synchronized(madeForYouCandidates) {
+                                madeForYouCandidates.addAll(trending.take(6))
+                                madeForYouCandidates.addAll(newDrops.take(6))
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+
+                // Add discovery candidates
+                val globalNew = musicRepository.getDiscoverNew("All").getOrDefault(emptyList())
+                val globalTrending = musicRepository.getDiscoverTrending("global", "All").getOrDefault(emptyList())
+                madeForYouCandidates.addAll(globalNew.take(4))
+                madeForYouCandidates.addAll(globalTrending.take(4))
+
+                // Score and rank candidates using language affinity + artist affinity + completion history
+                val scoredMadeForYou = interleaveAndRank(madeForYouCandidates, langCodes, sessionProfile)
+                val scoredNewForYou = interleaveAndRank(newReleasesCandidates.ifEmpty { globalNew }, langCodes, sessionProfile)
+                val scoredTrendingForYou = interleaveAndRank(trendingCandidates.ifEmpty { globalTrending }, langCodes, sessionProfile)
+
+                // Compute "Because You Listen To" based on top recent artist
+                val recents = _uiState.value.recentlyPlayedTracks
+                val topArtist = recents.firstOrNull()?.artist?.name ?: _uiState.value.trendingTracks.firstOrNull()?.artist?.name
+                val becauseTracks = if (!topArtist.isNullOrBlank()) {
+                    musicRepository.search("artist:$topArtist hits").getOrDefault(emptyList()).take(8)
+                } else emptyList()
+
+                _uiState.update {
+                    it.copy(
+                        madeForYouTracks = scoredMadeForYou,
+                        newForYouTracks = scoredNewForYou,
+                        trendingForYouTracks = scoredTrendingForYou,
+                        becauseYouListenToTracks = becauseTracks,
+                        becauseArtistName = topArtist
+                    )
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun interleaveAndRank(
+        candidates: List<Track>,
+        preferredCodes: Set<String>,
+        sessionProfile: com.musync.app.playback.recommendation.SessionProfile
+    ): List<Track> {
+        val deduped = candidates.distinctBy { it.id }
+        if (deduped.isEmpty()) return emptyList()
+
+        // Group by language
+        val byLang = mutableMapOf<String, MutableList<Track>>()
+        for (track in deduped) {
+            val code = LanguageNormalizer.inferLanguage(track)
+            byLang.getOrPut(code) { mutableListOf() }.add(track)
+        }
+
+        // Interleave to avoid mono-language clusters
+        val result = mutableListOf<Track>()
+        var addedInRound = true
+        val activeCodes = preferredCodes.toList().ifEmpty { listOf("te", "hi", "en") }
+
+        while (addedInRound && result.size < 24) {
+            addedInRound = false
+            for (code in activeCodes) {
+                val list = byLang[code]
+                if (!list.isNullOrEmpty()) {
+                    result.add(list.removeAt(0))
+                    addedInRound = true
+                }
+            }
+            // Controlled discovery item
+            val otherLangs = byLang.keys.filter { it !in activeCodes }
+            for (other in otherLangs) {
+                val list = byLang[other]
+                if (!list.isNullOrEmpty()) {
+                    result.add(list.removeAt(0))
+                    addedInRound = true
+                    break
+                }
+            }
+        }
+
+        return if (result.isNotEmpty()) result else deduped.take(20)
     }
 
     fun loadHomeData() {
@@ -133,31 +273,10 @@ class HomeViewModel(
                     }
                 }
 
-                // Parallel live discovery fetch for regional catalogs
-                launch {
-                    val telugu = musicRepository.getDiscoverTrending("india", "Telugu").getOrDefault(emptyList())
-                    if (telugu.isNotEmpty()) {
-                        _uiState.update { it.copy(teluguTracks = telugu) }
-                    }
-                }
-                launch {
-                    val tamil = musicRepository.getDiscoverTrending("india", "Tamil").getOrDefault(emptyList())
-                    if (tamil.isNotEmpty()) {
-                        _uiState.update { it.copy(tamilTracks = tamil) }
-                    }
-                }
-                launch {
-                    val hindi = musicRepository.getDiscoverTrending("india", "Hindi").getOrDefault(emptyList())
-                    if (hindi.isNotEmpty()) {
-                        _uiState.update { it.copy(hindiTracks = hindi) }
-                    }
-                }
-                launch {
-                    val global = musicRepository.getDiscoverNew("All").getOrDefault(emptyList())
-                    if (global.isNotEmpty()) {
-                        _uiState.update { it.copy(globalTracks = global) }
-                    }
-                }
+                // Refresh personalization using preferred languages
+                val preferred = preferencesManager.getMusicLanguages()
+                refreshPersonalizedRecommendations(preferred)
+
             } catch (_: Exception) {
                 loadOfflineLocalTracks()
             }
@@ -237,7 +356,8 @@ class HomeViewModel(
         private val playlistRepository: PlaylistRepository,
         private val recentlyPlayedRepository: RecentlyPlayedRepository,
         private val localAudioScanner: LocalAudioScanner,
-        private val playbackManager: PlaybackManager
+        private val playbackManager: PlaybackManager,
+        private val preferencesManager: PreferencesManager
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -247,9 +367,11 @@ class HomeViewModel(
                 playlistRepository,
                 recentlyPlayedRepository,
                 localAudioScanner,
-                playbackManager
+                playbackManager,
+                preferencesManager
             ) as T
         }
     }
 }
+
 

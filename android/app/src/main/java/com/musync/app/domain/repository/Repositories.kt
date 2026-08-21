@@ -47,3 +47,14 @@ interface RecentlyPlayedRepository {
     suspend fun clearHistory()
 }
 
+interface DownloadRepository {
+    fun getDownloadedTracks(): Flow<List<Track>>
+    fun getCompletedCount(): Flow<Int>
+    fun getTotalStorageUsed(): Flow<Long?>
+    suspend fun isDownloaded(trackId: String): Boolean
+    suspend fun downloadTrack(track: Track)
+    suspend fun deleteDownload(trackId: String)
+    suspend fun clearAllDownloads()
+}
+
+

@@ -97,16 +97,29 @@ fun SearchScreen(
             .statusBarsPadding()
             .padding(top = 8.dp)
     ) {
-        // Title: "Musync"
-        Text(
-            text = "Musync",
-            style = MaterialTheme.typography.headlineLarge.copy(
-                fontWeight = FontWeight.Bold,
-                fontSize = 32.sp
-            ),
-            color = TextWhite,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
-        )
+        // Title: Logo + "Search"
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(id = com.musync.app.R.drawable.ic_musync_logo),
+                contentDescription = "Musync Logo",
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(8.dp)),
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = "Search",
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 28.sp
+                ),
+                color = TextWhite
+            )
+        }
 
         Spacer(modifier = Modifier.height(14.dp))
 

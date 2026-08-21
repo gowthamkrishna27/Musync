@@ -89,7 +89,7 @@ import com.musync.app.ui.settings.SettingsViewModel
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import com.musync.app.ui.browse.NewScreen
-import com.musync.app.ui.radio.RadioScreen
+import com.musync.app.ui.offline.OfflineScreen
 import com.musync.app.ui.theme.AppleMusicRed
 import com.musync.app.ui.theme.BackgroundBlack
 import com.musync.app.ui.theme.BorderStroke
@@ -177,7 +177,8 @@ fun MainApp(
             container.playlistRepository,
             container.recentlyPlayedRepository,
             container.localAudioScanner,
-            container.playbackManager
+            container.playbackManager,
+            container.preferencesManager
         )
     )
 
@@ -194,6 +195,7 @@ fun MainApp(
             container.favoritesRepository,
             container.playlistRepository,
             container.recentlyPlayedRepository,
+            container.downloadRepository,
             container.localAudioScanner,
             container.playbackManager
         )
@@ -205,6 +207,7 @@ fun MainApp(
             container.musicRepository,
             container.universalMusicProvider,
             container.beatHapticManager,
+            container.downloadRepository,
             container.authManager,
             container.cloudSyncManager,
             container.audioEffectManager
@@ -232,7 +235,7 @@ fun MainApp(
         when (container.preferencesManager.getDefaultLandingPage()) {
             "Discover" -> Screen.New.route
             "Library" -> Screen.Library.route
-            "Radio" -> Screen.Radio.route
+            "Offline" -> Screen.Offline.route
             else -> Screen.Home.route
         }
     }
@@ -294,12 +297,12 @@ fun MainApp(
             }
 
             composable(
-                route = Screen.Radio.route,
+                route = Screen.Offline.route,
                 deepLinks = listOf(
-                    navDeepLink { uriPattern = "musync://radio" }
+                    navDeepLink { uriPattern = "musync://offline" }
                 )
             ) {
-                RadioScreen()
+                OfflineScreen()
             }
 
             composable(
@@ -465,13 +468,30 @@ fun MainApp(
                                 val activeColor = AppleMusicPink
                                 val inactiveColor = Color(0xFFE5E5EA)
 
+                                val animatedBgColor by androidx.compose.animation.animateColorAsState(
+                                    targetValue = if (isSelected) Color(0xF52A2A2E) else Color.Transparent,
+                                    animationSpec = tween(220, easing = FastOutSlowInEasing),
+                                    label = "tab_pill_bg"
+                                )
+
                                 Box(
                                     modifier = Modifier
                                         .clip(CircleShape)
-                                        .then(
-                                            if (isSelected) {
-                                                Modifier.background(Color(0x28FFFFFF))
-                                            } else Modifier
+                                        .background(animatedBgColor)
+                                        .border(
+                                            width = 1.dp,
+                                            brush = if (isSelected) {
+                                                Brush.verticalGradient(
+                                                    listOf(
+                                                        Color(0x66FFFFFF),
+                                                        Color(0x33FA2D48),
+                                                        Color(0x15FFFFFF)
+                                                    )
+                                                )
+                                            } else {
+                                                Brush.linearGradient(listOf(Color.Transparent, Color.Transparent))
+                                            },
+                                            shape = CircleShape
                                         )
                                         .clickable {
                                             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
@@ -481,7 +501,7 @@ fun MainApp(
                                                 restoreState = true
                                             }
                                         }
-                                        .padding(horizontal = if (isSelected) 14.dp else 10.dp, vertical = 5.dp),
+                                        .padding(horizontal = if (isSelected) 14.dp else 9.dp, vertical = 6.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Column(
@@ -493,8 +513,8 @@ fun MainApp(
                                             Icon(
                                                 imageVector = icon,
                                                 contentDescription = screen.title,
-                                                tint = if (isSelected) activeColor else inactiveColor,
-                                                modifier = Modifier.size(20.dp)
+                                                tint = if (isSelected) activeColor else inactiveColor.copy(alpha = 0.65f),
+                                                modifier = Modifier.size(19.dp)
                                             )
                                         }
                                         Spacer(modifier = Modifier.height(2.dp))
@@ -504,7 +524,7 @@ fun MainApp(
                                                 fontSize = 10.sp,
                                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                                             ),
-                                            color = if (isSelected) activeColor else inactiveColor
+                                            color = if (isSelected) activeColor else inactiveColor.copy(alpha = 0.65f)
                                         )
                                     }
                                 }

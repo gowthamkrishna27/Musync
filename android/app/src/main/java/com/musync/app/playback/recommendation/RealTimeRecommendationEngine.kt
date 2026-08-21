@@ -36,7 +36,8 @@ class RealTimeRecommendationEngine(
     private val musicRepository: MusicRepository,
     private val favoritesRepository: FavoritesRepository,
     private val recentlyPlayedRepository: RecentlyPlayedRepository,
-    private val sessionTracker: ListeningSessionTracker
+    private val sessionTracker: ListeningSessionTracker,
+    private val preferencesManager: com.musync.app.data.local.datastore.PreferencesManager? = null
 ) {
     companion object {
         private const val TAG = "RealTimeRecEngine"
@@ -45,6 +46,8 @@ class RealTimeRecommendationEngine(
     }
 
     val sessionProfile: SessionProfile get() = sessionTracker.sessionProfile
+    val preferredLanguages: Set<String>
+        get() = preferencesManager?.getMusicLanguages() ?: setOf("Telugu", "Hindi", "English")
 
     // Rolling pre-generated recommendation pool
     private val _recommendationPool = mutableListOf<Track>()
@@ -58,7 +61,7 @@ class RealTimeRecommendationEngine(
         .build()
 
     private val shuffleEngine: IntelligentShuffleEngine
-        get() = IntelligentShuffleEngine(sessionProfile)
+        get() = IntelligentShuffleEngine(sessionProfile, preferredLanguages)
 
     // -----------------------------------------------------------------------
     // Public API

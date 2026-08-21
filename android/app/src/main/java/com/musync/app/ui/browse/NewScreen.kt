@@ -82,20 +82,35 @@ fun NewScreen(
         contentPadding = PaddingValues(top = 16.dp, bottom = 160.dp)
     ) {
         // 1. Header: "New"
+        // 1. Header: Logo + "New"
         item {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 6.dp)
             ) {
-                Text(
-                    text = "Musync",
-                    style = MaterialTheme.typography.headlineLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 32.sp
-                    ),
-                    color = TextWhite
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    androidx.compose.foundation.Image(
+                        painter = androidx.compose.ui.res.painterResource(id = com.musync.app.R.drawable.ic_musync_logo),
+                        contentDescription = "Musync Logo",
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "New",
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 28.sp
+                        ),
+                        color = TextWhite
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Discover latest drops, albums & curated charts",
                     style = MaterialTheme.typography.bodyMedium,

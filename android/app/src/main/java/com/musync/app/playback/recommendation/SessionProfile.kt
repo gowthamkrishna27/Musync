@@ -16,15 +16,18 @@ data class SessionProfile(
     val sessionId: String = java.util.UUID.randomUUID().toString(),
     val sessionStartMs: Long = System.currentTimeMillis(),
 
-    // Affinity scores per genre/artist [0.0, 1.0]. Default 0.5 = neutral.
+    // Affinity scores per genre/artist/language [0.0, 1.0]. Default 0.5 = neutral.
     val genreAffinities: MutableMap<String, Float> = mutableMapOf(),
     val artistAffinities: MutableMap<String, Float> = mutableMapOf(),
+    val languageAffinities: MutableMap<String, Float> = mutableMapOf(),
 
-    // Skip learning: track-level, artist-level, genre-level skip counts
+    // Skip learning: track-level, artist-level, genre-level, language-level skip counts
     val skipCounts: MutableMap<String, Int> = mutableMapOf(),         // trackId -> skip count
     val completionCounts: MutableMap<String, Int> = mutableMapOf(),   // trackId -> completion count
     val artistSkipCounts: MutableMap<String, Int> = mutableMapOf(),   // artistName -> skip count
     val genreSkipCounts: MutableMap<String, Int> = mutableMapOf(),    // genre -> skip count
+    val languageSkipCounts: MutableMap<String, Int> = mutableMapOf(), // languageCode -> skip count
+    val languageCompletionCounts: MutableMap<String, Int> = mutableMapOf(),
 
     // Rolling recency deque: last 50 played trackIds (index 0 = most recent)
     private val _recentTrackIds: ArrayDeque<String> = ArrayDeque(50),
@@ -45,7 +48,7 @@ data class SessionProfile(
     // Event handlers — called by ListeningSessionTracker
     // -----------------------------------------------------------------------
 
-    fun onTrackStarted(trackId: String, artistName: String) {
+    fun onTrackStarted(trackId: String, artistName: String, language: String? = null) {
         totalEvents++
         _recentTrackIds.remove(trackId)
         _recentTrackIds.addFirst(trackId)
@@ -57,23 +60,33 @@ data class SessionProfile(
         if (_recentArtistNames.size > ARTIST_RECENCY_CAPACITY) _recentArtistNames.removeLast()
     }
 
-    fun onTrackCompleted(trackId: String, artistName: String, genre: String?) {
+    fun onTrackCompleted(trackId: String, artistName: String, genre: String?, language: String? = null) {
         totalEvents++
         val boost = 0.3f
         adjustArtistAffinity(artistName, boost)
         genre?.let { adjustGenreAffinity(it, boost) }
+        language?.let {
+            adjustLanguageAffinity(it, boost)
+            val code = com.musync.app.core.language.LanguageNormalizer.toCode(it)
+            languageCompletionCounts[code] = (languageCompletionCounts[code] ?: 0) + 1
+        }
         completionCounts[trackId] = (completionCounts[trackId] ?: 0) + 1
     }
 
-    fun onTrackReplayed(trackId: String, artistName: String, genre: String?) {
+    fun onTrackReplayed(trackId: String, artistName: String, genre: String?, language: String? = null) {
         totalEvents++
         val boost = 0.4f
         adjustArtistAffinity(artistName, boost)
         genre?.let { adjustGenreAffinity(it, boost) }
+        language?.let {
+            adjustLanguageAffinity(it, boost)
+            val code = com.musync.app.core.language.LanguageNormalizer.toCode(it)
+            languageCompletionCounts[code] = (languageCompletionCounts[code] ?: 0) + 1
+        }
         completionCounts[trackId] = (completionCounts[trackId] ?: 0) + 1
     }
 
-    fun onTrackSkipped(trackId: String, artistName: String, genre: String?) {
+    fun onTrackSkipped(trackId: String, artistName: String, genre: String?, language: String? = null) {
         totalEvents++
         val penalty = 0.2f
         skipCounts[trackId] = (skipCounts[trackId] ?: 0) + 1
@@ -89,27 +102,37 @@ data class SessionProfile(
             genreAffinities[normGenre] = (curGenreAffinity - penalty).coerceAtLeast(0f)
             genreSkipCounts[normGenre] = (genreSkipCounts[normGenre] ?: 0) + 1
         }
+
+        language?.let {
+            val code = com.musync.app.core.language.LanguageNormalizer.toCode(it)
+            val curLangAffinity = languageAffinities[code] ?: 0.5f
+            languageAffinities[code] = (curLangAffinity - (penalty * 0.7f)).coerceAtLeast(0.1f)
+            languageSkipCounts[code] = (languageSkipCounts[code] ?: 0) + 1
+        }
     }
 
-    fun onTrackLiked(artistName: String, genre: String?) {
+    fun onTrackLiked(artistName: String, genre: String?, language: String? = null) {
         totalEvents++
         val boost = 0.5f
         adjustArtistAffinity(artistName, boost)
         genre?.let { adjustGenreAffinity(it, boost) }
+        language?.let { adjustLanguageAffinity(it, boost) }
     }
 
-    fun onTrackUnliked(artistName: String, genre: String?) {
+    fun onTrackUnliked(artistName: String, genre: String?, language: String? = null) {
         totalEvents++
         val penalty = 0.3f
         adjustArtistAffinity(artistName, -penalty)
         genre?.let { adjustGenreAffinity(it, -penalty) }
+        language?.let { adjustLanguageAffinity(it, -penalty) }
     }
 
-    fun on75Percent(artistName: String, genre: String?) {
+    fun on75Percent(artistName: String, genre: String?, language: String? = null) {
         totalEvents++
         val boost = 0.15f
         adjustArtistAffinity(artistName, boost)
         genre?.let { adjustGenreAffinity(it, boost) }
+        language?.let { adjustLanguageAffinity(it, boost) }
     }
 
     // -----------------------------------------------------------------------
@@ -126,6 +149,26 @@ data class SessionProfile(
     fun getGenreAffinity(genre: String): Float {
         val key = genre.lowercase().trim()
         return genreAffinities[key] ?: 0.5f
+    }
+
+    /**
+     * Returns combined language affinity [0.0, 1.0] reflecting explicit user preferences
+     * modulated by real-time listening history and session skip signals.
+     */
+    fun getLanguageAffinity(lang: String?, preferredLanguages: Set<String>): Float {
+        val code = com.musync.app.core.language.LanguageNormalizer.toCode(lang)
+        val normalizedPreferred = preferredLanguages.map {
+            com.musync.app.core.language.LanguageNormalizer.toCode(it)
+        }.toSet()
+
+        val isExplicitlyPreferred = normalizedPreferred.isEmpty() || normalizedPreferred.contains(code)
+        val baseScore = if (isExplicitlyPreferred) 0.70f else 0.30f
+
+        val sessionAffinity = languageAffinities[code] ?: 0.5f
+        val skipCount = languageSkipCounts[code] ?: 0
+        val skipPenalty = (skipCount * 0.05f).coerceAtMost(0.25f)
+
+        return (baseScore * 0.6f + sessionAffinity * 0.4f - skipPenalty).coerceIn(0.05f, 1.0f)
     }
 
     /**
@@ -178,5 +221,11 @@ data class SessionProfile(
         if (key.isBlank()) return
         val current = genreAffinities[key] ?: 0.5f
         genreAffinities[key] = (current * AFFINITY_DECAY + delta).coerceIn(0f, 1f)
+    }
+
+    private fun adjustLanguageAffinity(language: String, delta: Float) {
+        val code = com.musync.app.core.language.LanguageNormalizer.toCode(language)
+        val current = languageAffinities[code] ?: 0.5f
+        languageAffinities[code] = (current * AFFINITY_DECAY + delta).coerceIn(0f, 1f)
     }
 }

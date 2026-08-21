@@ -121,6 +121,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.musync.app.domain.model.PlaybackState
 import com.musync.app.domain.model.RepeatMode
+import com.musync.app.ui.theme.AppleMusicPink
 import com.musync.app.ui.theme.BackgroundBlack
 import com.musync.app.ui.theme.BorderStroke
 import com.musync.app.ui.theme.CardElevated
@@ -161,8 +162,13 @@ fun NowPlayingSheet(
     var isDraggingSlider by remember { mutableStateOf(false) }
     var sliderDragPosition by remember { mutableFloatStateOf(0f) }
 
-    var isDownloading by remember(track.id) { mutableStateOf(false) }
-    var isDownloaded by remember(track.id) { mutableStateOf(false) }
+    val downloadManager = app.container.musyncDownloadManager
+    val downloadRepo = app.container.downloadRepository
+    val activeDownloads by downloadManager.downloadStates.collectAsState()
+    val downloadedTracks by downloadRepo.getDownloadedTracks().collectAsState(initial = emptyList())
+    val isDownloaded = remember(track.id, downloadedTracks) { downloadedTracks.any { it.id == track.id } }
+    val currentDlState = activeDownloads[track.id]
+    val isDownloading = currentDlState?.status == "DOWNLOADING" || currentDlState?.status == "QUEUED"
 
     var showEqualizerSheet by remember { mutableStateOf(false) }
     var showDeviceDialog by remember { mutableStateOf(false) }
@@ -186,7 +192,7 @@ fun NowPlayingSheet(
             when {
                 track.id.startsWith("local") -> "Device Audio"
                 !track.genre.isNullOrBlank() && track.genre != "Music" -> track.genre
-                else -> "${track.artist.name} Radio"
+                else -> "${track.artist.name} Mix"
             }
         }
 
@@ -613,62 +619,32 @@ fun NowPlayingSheet(
                 IconButton(
                     onClick = {
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        if (isDownloading) return@IconButton
-                        isDownloading = true
-                        scope.launch(Dispatchers.IO) {
-                            try {
-                                val streamUrl = app.container.universalMusicProvider.getStreamUrl(track)
-                                if (!streamUrl.isNullOrBlank()) {
-                                    val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
-                                    if (dm != null) {
-                                        val cleanTitle = track.title.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
-                                        val cleanArtist = track.artist.name.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
-                                        val fileName = "${cleanTitle} - ${cleanArtist}.mp3"
-                                        val request = DownloadManager.Request(Uri.parse(streamUrl))
-                                            .setTitle(track.title)
-                                            .setDescription(track.artist.name)
-                                            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                                            .setDestinationInExternalPublicDir(Environment.DIRECTORY_MUSIC, "Musync/$fileName")
-                                            .setAllowedOverMetered(true)
-                                            .setAllowedOverRoaming(true)
-                                        dm.enqueue(request)
-                                        withContext(Dispatchers.Main) {
-                                            isDownloading = false
-                                            isDownloaded = true
-                                            Toast.makeText(context, "Downloading \"${track.title}\"", Toast.LENGTH_SHORT).show()
-                                        }
-                                    } else {
-                                        withContext(Dispatchers.Main) {
-                                            isDownloading = false
-                                            Toast.makeText(context, "Download manager unavailable", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                } else {
-                                    withContext(Dispatchers.Main) {
-                                        isDownloading = false
-                                        Toast.makeText(context, "Audio source unavailable for download", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                withContext(Dispatchers.Main) {
-                                    isDownloading = false
-                                    Toast.makeText(context, "Download failed: ${e.message}", Toast.LENGTH_SHORT).show()
-                                }
-                            }
+                        if (isDownloaded) {
+                            Toast.makeText(context, "\"${track.title}\" is already downloaded", Toast.LENGTH_SHORT).show()
+                        } else if (isDownloading) {
+                            val pct = ((currentDlState?.progress ?: 0f) * 100).toInt()
+                            Toast.makeText(context, "Downloading \"${track.title}\": $pct%", Toast.LENGTH_SHORT).show()
+                        } else {
+                            downloadManager.download(track)
+                            Toast.makeText(context, "Downloading \"${track.title}\"...", Toast.LENGTH_SHORT).show()
                         }
                     }
                 ) {
                     if (isDownloading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = IconWhite,
-                            strokeWidth = 2.dp
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(
+                                progress = { currentDlState?.progress ?: 0f },
+                                modifier = Modifier.size(20.dp),
+                                color = AppleMusicPink,
+                                strokeWidth = 2.dp,
+                                trackColor = Color(0x33FFFFFF)
+                            )
+                        }
                     } else {
                         Icon(
                             imageVector = if (isDownloaded) Icons.Default.DownloadDone else Icons.Default.Download,
                             contentDescription = "Download Song",
-                            tint = if (isDownloaded) StatusGreen else IconGrey,
+                            tint = if (isDownloaded) Color(0xFF30D158) else IconGrey,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -1144,45 +1120,25 @@ fun NowPlayingSheet(
                         .fillMaxWidth()
                         .clickable {
                             showOptionsSheet = false
-                            if (!isDownloading) {
-                                isDownloading = true
-                                scope.launch(Dispatchers.IO) {
-                                    try {
-                                        val streamUrl = app.container.universalMusicProvider.getStreamUrl(track)
-                                        if (!streamUrl.isNullOrBlank()) {
-                                            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
-                                            if (dm != null) {
-                                                val cleanTitle = track.title.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
-                                                val cleanArtist = track.artist.name.replace("[\\\\/:*?\"<>|]".toRegex(), "_")
-                                                val fileName = "${cleanTitle} - ${cleanArtist}.mp3"
-                                                val request = DownloadManager.Request(Uri.parse(streamUrl))
-                                                    .setTitle(track.title)
-                                                    .setDescription(track.artist.name)
-                                                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                                                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_MUSIC, "Musync/$fileName")
-                                                    .setAllowedOverMetered(true)
-                                                    .setAllowedOverRoaming(true)
-                                                dm.enqueue(request)
-                                                withContext(Dispatchers.Main) {
-                                                    isDownloading = false
-                                                    isDownloaded = true
-                                                    Toast.makeText(context, "Downloading \"${track.title}\"", Toast.LENGTH_SHORT).show()
-                                                }
-                                            }
-                                        }
-                                    } catch (e: Exception) {
-                                        withContext(Dispatchers.Main) {
-                                            isDownloading = false
-                                            Toast.makeText(context, "Download failed: ${e.message}", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                }
+                            if (isDownloaded) {
+                                Toast.makeText(context, "\"${track.title}\" is already downloaded", Toast.LENGTH_SHORT).show()
+                            } else if (isDownloading) {
+                                val pct = ((currentDlState?.progress ?: 0f) * 100).toInt()
+                                Toast.makeText(context, "Downloading \"${track.title}\": $pct%", Toast.LENGTH_SHORT).show()
+                            } else {
+                                downloadManager.download(track)
+                                Toast.makeText(context, "Downloading \"${track.title}\"...", Toast.LENGTH_SHORT).show()
                             }
                         }
                         .padding(vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Download, null, tint = IconWhite, modifier = Modifier.size(20.dp))
+                    Icon(
+                        imageVector = if (isDownloaded) Icons.Default.DownloadDone else Icons.Default.Download,
+                        contentDescription = null,
+                        tint = if (isDownloaded) Color(0xFF30D158) else IconWhite,
+                        modifier = Modifier.size(20.dp)
+                    )
                     Spacer(modifier = Modifier.width(14.dp))
                     Text(if (isDownloaded) "Download Again" else "Download Song", color = TextWhite)
                 }

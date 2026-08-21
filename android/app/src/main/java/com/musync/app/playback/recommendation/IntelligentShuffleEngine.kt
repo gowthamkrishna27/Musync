@@ -34,6 +34,7 @@ import kotlin.random.Random
  */
 class IntelligentShuffleEngine(
     private val sessionProfile: SessionProfile,
+    private val preferredLanguages: Set<String> = emptySet(),
     private val temperature: Float = 0.7f
 ) {
     companion object {
@@ -112,8 +113,13 @@ class IntelligentShuffleEngine(
         val artistKey = track.artist.name.lowercase().trim()
 
         // --- Session affinity signals ---
-        score += (sessionProfile.getArtistAffinity(track.artist.name) - 0.5f) * 0.6f
-        score += (sessionProfile.getGenreAffinity(track.genre ?: "") - 0.5f) * 0.4f
+        score += (sessionProfile.getArtistAffinity(track.artist.name) - 0.5f) * 0.5f
+        score += (sessionProfile.getGenreAffinity(track.genre ?: "") - 0.5f) * 0.3f
+
+        // --- Preferred Language affinity signal ---
+        val inferredLang = com.musync.app.core.language.LanguageNormalizer.inferLanguage(track)
+        val langAffinity = sessionProfile.getLanguageAffinity(inferredLang, preferredLanguages)
+        score += (langAffinity - 0.5f) * 0.5f
 
         // --- Penalise skipped artists / genres ---
         score -= sessionProfile.getArtistSkipPenalty(track.artist.name) * 0.5f

@@ -9,6 +9,7 @@ data class Track(
     val durationMs: Long? = null,
     val streamUrl: String? = null,
     val genre: String? = null,
+    val language: String? = null,
     val playCount: Long? = null,
     val explicit: Boolean = false
 )

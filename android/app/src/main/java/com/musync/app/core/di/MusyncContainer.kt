@@ -102,6 +102,22 @@ class MusyncContainer(private val context: Context) {
         com.musync.app.data.sync.CloudSyncManager(authManager, database)
     }
 
+    val musyncDownloadManager: com.musync.app.data.download.MusyncDownloadManager by lazy {
+        com.musync.app.data.download.MusyncDownloadManager(
+            context = context,
+            downloadDao = database.downloadDao(),
+            preferencesManager = preferencesManager,
+            universalMusicProvider = universalMusicProvider
+        )
+    }
+
+    val downloadRepository: com.musync.app.domain.repository.DownloadRepository by lazy {
+        com.musync.app.data.repository.DownloadRepositoryImpl(
+            downloadDao = database.downloadDao(),
+            downloadManager = musyncDownloadManager
+        )
+    }
+
     val playbackManager: PlaybackManager by lazy {
         PlaybackManager(context)
     }
@@ -114,7 +130,8 @@ class MusyncContainer(private val context: Context) {
             musicRepository = musicRepository,
             favoritesRepository = favoritesRepository,
             recentlyPlayedRepository = recentlyPlayedRepository,
-            sessionTracker = playbackManager.sessionTracker
+            sessionTracker = playbackManager.sessionTracker,
+            preferencesManager = preferencesManager
         )
     }
 }

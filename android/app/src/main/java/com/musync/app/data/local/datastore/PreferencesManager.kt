@@ -65,6 +65,7 @@ class PreferencesManager(private val context: Context) {
         val KEY_BASE_URL = stringPreferencesKey("base_url")
         val KEY_AUDIO_QUALITY = stringPreferencesKey("audio_quality")
         val KEY_DOWNLOAD_QUALITY = stringPreferencesKey("download_quality")
+        val KEY_DOWNLOAD_WIFI_ONLY = booleanPreferencesKey("download_wifi_only")
         val KEY_HAPTIC_INTENSITY = stringPreferencesKey("haptic_intensity")
         val KEY_SHUFFLE = booleanPreferencesKey("shuffle_enabled")
         val KEY_REPEAT_MODE = stringPreferencesKey("repeat_mode")
@@ -293,6 +294,15 @@ class PreferencesManager(private val context: Context) {
     suspend fun setDownloadQuality(quality: String) {
         securePrefs.edit().putString("saved_dl_quality", quality).apply()
         context.dataStore.edit { it[KEY_DOWNLOAD_QUALITY] = quality }
+    }
+
+    val downloadWifiOnly: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_DOWNLOAD_WIFI_ONLY] ?: false
+    }
+    fun getDownloadWifiOnly(): Boolean = securePrefs.getBoolean("saved_dl_wifi_only", false)
+    suspend fun setDownloadWifiOnly(wifiOnly: Boolean) {
+        securePrefs.edit().putBoolean("saved_dl_wifi_only", wifiOnly).apply()
+        context.dataStore.edit { it[KEY_DOWNLOAD_WIFI_ONLY] = wifiOnly }
     }
 
     val hapticIntensity: Flow<String> = context.dataStore.data.map { prefs ->
