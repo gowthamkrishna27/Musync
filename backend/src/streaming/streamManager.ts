@@ -173,8 +173,9 @@ export class StreamManager {
             url: parsed.url,
             headers: parsed.headers || {},
             expiresAt: Date.now() + ttlSeconds * 1000,
-            format: `audio/${parsed.ext || "webm"}`,
-            source: parsed.client || "android_vr"
+            format: `audio/${parsed.ext || "m4a"}`,
+            ext: parsed.ext || "m4a",
+            source: parsed.client || "ios"
           };
 
           // Store in L1 and L2

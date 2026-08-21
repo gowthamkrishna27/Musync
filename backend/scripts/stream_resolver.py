@@ -21,8 +21,7 @@ def resolve(video_id, quality="low", _media_type="audio"):
         'socket_timeout': 12,
         'extractor_args': {
             'youtube': {
-                'player_client': ['ios', 'android', 'mweb', 'web'],
-                'player_skip': ['webpage', 'configs', 'js']
+                'player_client': ['ios', 'android', 'web']
             }
         }
     }
