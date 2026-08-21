@@ -186,8 +186,6 @@ fun MainApp(
         factory = SearchViewModel.Factory(
             container.musicRepository,
             container.favoritesRepository,
-            container.downloadRepository,
-            container.localAudioScanner,
             container.playbackManager
         )
     )

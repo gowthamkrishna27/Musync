@@ -236,17 +236,35 @@ class PlaybackManager(private val context: Context) {
                         if (currentTrack != null && dur > 0) {
                             sessionTracker.onProgressUpdate(currentTrack.id, pos, dur)
 
-                            // Trigger next-song pre-generation at 75% without blocking audio
-                            if (preGenTriggeredForTrackId != currentTrack.id) {
-                                val pct = pos.toFloat() / dur.toFloat() * 100f
-                                if (pct >= 75f) {
-                                    preGenTriggeredForTrackId = currentTrack.id
-                                    android.util.Log.d("PlaybackManager", "⚡ 75% reached for '${currentTrack.title}' — recommendation pre-generation triggered")
+                            // Trigger next-song pre-generation and stream URL pre-warm at 65% completion
+                            val pct = (pos.toFloat() / dur.toFloat()) * 100f
+                            if (preGenTriggeredForTrackId != currentTrack.id && pct >= 65f) {
+                                preGenTriggeredForTrackId = currentTrack.id
+                                android.util.Log.d("PlaybackManager", "⚡ 65% reached for '${currentTrack.title}' — proactive next track pre-warm active")
+                                
+                                val nextIdx = _playbackState.value.queueIndex + 1
+                                if (nextIdx in currentQueue.indices) {
+                                    val nextTrack = currentQueue[nextIdx]
+                                    val app = context.applicationContext as? com.musync.app.MusyncApplication
+                                    val baseUrl = app?.container?.preferencesManager?.getBaseUrl() ?: "https://musync-production-2fc5.up.railway.app"
+                                    val quality = NetworkQualityHelper.getRecommendedQuality(context)
+                                    scope.launch(Dispatchers.IO) {
+                                        try {
+                                            val videoId = nextTrack.id.removePrefix("yt_")
+                                            val preloadUrl = java.net.URL("$baseUrl/stream/preload?id=$videoId&quality=$quality")
+                                            val conn = preloadUrl.openConnection() as java.net.HttpURLConnection
+                                            conn.connectTimeout = 3000
+                                            conn.readTimeout = 5000
+                                            conn.requestMethod = "GET"
+                                            conn.setRequestProperty("User-Agent", "Musync-Android-Preload/1.0")
+                                            conn.responseCode
+                                            conn.disconnect()
+                                        } catch (_: Exception) {}
+                                    }
                                 }
                             }
 
                             // Track completion: if position >= 95% of duration, emit completion
-                            val pct = pos.toFloat() / dur.toFloat() * 100f
                             if (pct >= 95f) {
                                 sessionTracker.onTrackCompleted(currentTrack.id)
                             }

@@ -262,21 +262,38 @@ class MusicPlaybackService : MediaLibraryService() {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 val currentItem = exoPlayer.currentMediaItem
                 val uri = currentItem?.requestMetadata?.mediaUri ?: currentItem?.localConfiguration?.uri
+                val currentPositionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
                 android.util.Log.e(
                     "MusicPlaybackService",
-                    "ExoPlayer Error occurred | MediaId: ${currentItem?.mediaId} | Title: ${currentItem?.mediaMetadata?.title} | URI: $uri | ErrorCode: ${error.errorCode} | ErrorCodeName: ${error.errorCodeName} | Message: ${error.message}",
+                    "ExoPlayer Error occurred | MediaId: ${currentItem?.mediaId} | Title: ${currentItem?.mediaMetadata?.title} | URI: $uri | ErrorCode: ${error.errorCode} | ErrorCodeName: ${error.errorCodeName} | Pos: ${currentPositionMs}ms",
                     error
                 )
 
-                // Resilient Current-Track Error Recovery: Retry the selected track up to 3 times
                 trackFailureCount++
-                if (trackFailureCount <= 3) {
-                    val delayMs = 300L * trackFailureCount
-                    android.util.Log.w("MusicPlaybackService", "Retrying failed track '${currentItem?.mediaMetadata?.title}' (attempt #$trackFailureCount) in ${delayMs}ms...")
+                if (trackFailureCount <= 3 && currentItem != null) {
+                    val delayMs = 350L * trackFailureCount
+                    android.util.Log.w("MusicPlaybackService", "Retrying failed track '${currentItem.mediaMetadata.title}' (attempt #$trackFailureCount) at ${currentPositionMs}ms...")
                     serviceScope.launch {
                         delay(delayMs)
-                        exoPlayer.prepare()
-                        exoPlayer.play()
+                        try {
+                            val track = MediaItemMapper.fromMediaItem(currentItem)
+                            val baseUrl = app.container.preferencesManager.getBaseUrl()
+                            val userQuality = app.container.preferencesManager.getAudioQuality()
+                            val networkQuality = com.musync.app.core.network.NetworkQualityHelper.getRecommendedQuality(this@MusicPlaybackService, userQuality)
+                            val refreshedItem = MediaItemMapper.toMediaItem(track, quality = networkQuality, baseUrl = baseUrl)
+
+                            val currentIndex = exoPlayer.currentMediaItemIndex
+                            if (currentIndex in 0 until exoPlayer.mediaItemCount) {
+                                exoPlayer.replaceMediaItem(currentIndex, refreshedItem)
+                                exoPlayer.seekTo(currentIndex, currentPositionMs)
+                                exoPlayer.prepare()
+                                exoPlayer.play()
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.w("MusicPlaybackService", "Error recovery reload failed: ${e.message}")
+                            exoPlayer.prepare()
+                            exoPlayer.play()
+                        }
                     }
                 } else {
                     android.util.Log.w("MusicPlaybackService", "Track unrecoverable after $trackFailureCount attempts: '${currentItem?.mediaMetadata?.title}'")
@@ -362,6 +379,11 @@ class MusicPlaybackService : MediaLibraryService() {
             mediaItems: MutableList<MediaItem>
         ): ListenableFuture<MutableList<MediaItem>> {
             val future = com.google.common.util.concurrent.SettableFuture.create<MutableList<MediaItem>>()
+            val app = application as MusyncApplication
+            val baseUrl = app.container.preferencesManager.getBaseUrl()
+            val userQuality = app.container.preferencesManager.getAudioQuality()
+            val networkQuality = com.musync.app.core.network.NetworkQualityHelper.getRecommendedQuality(this@MusicPlaybackService, userQuality)
+
             val resolvedItems = mediaItems.map { item ->
                 val uri = item.requestMetadata.mediaUri ?: item.localConfiguration?.uri
                 val uriStr = uri?.toString()
@@ -370,7 +392,7 @@ class MusicPlaybackService : MediaLibraryService() {
                     item.buildUpon().setUri(uri).build()
                 } else {
                     val track = MediaItemMapper.fromMediaItem(item)
-                    MediaItemMapper.toMediaItem(track)
+                    MediaItemMapper.toMediaItem(track, quality = networkQuality, baseUrl = baseUrl)
                 }
             }.toMutableList()
             future.set(resolvedItems)
@@ -385,6 +407,11 @@ class MusicPlaybackService : MediaLibraryService() {
             startPositionMs: Long
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
             val future = com.google.common.util.concurrent.SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
+            val app = application as MusyncApplication
+            val baseUrl = app.container.preferencesManager.getBaseUrl()
+            val userQuality = app.container.preferencesManager.getAudioQuality()
+            val networkQuality = com.musync.app.core.network.NetworkQualityHelper.getRecommendedQuality(this@MusicPlaybackService, userQuality)
+
             val resolvedItems = mediaItems.map { item ->
                 val uri = item.requestMetadata.mediaUri ?: item.localConfiguration?.uri
                 val uriStr = uri?.toString()
@@ -393,7 +420,7 @@ class MusicPlaybackService : MediaLibraryService() {
                     item.buildUpon().setUri(uri).build()
                 } else {
                     val track = MediaItemMapper.fromMediaItem(item)
-                    MediaItemMapper.toMediaItem(track)
+                    MediaItemMapper.toMediaItem(track, quality = networkQuality, baseUrl = baseUrl)
                 }
             }.toMutableList()
 

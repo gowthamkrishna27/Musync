@@ -6,6 +6,7 @@ export interface StreamCacheEntry {
   headers: Record<string, string>;
   expiresAt: number;
   format?: string;
+  ext?: string;
   bitrate?: number;
   source?: string;
 }

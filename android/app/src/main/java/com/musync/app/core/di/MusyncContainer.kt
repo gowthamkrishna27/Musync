@@ -107,7 +107,8 @@ class MusyncContainer(private val context: Context) {
             context = context,
             downloadDao = database.downloadDao(),
             preferencesManager = preferencesManager,
-            universalMusicProvider = universalMusicProvider
+            universalMusicProvider = universalMusicProvider,
+            playbackStateProvider = { playbackManager.playbackState.value }
         )
     }
 

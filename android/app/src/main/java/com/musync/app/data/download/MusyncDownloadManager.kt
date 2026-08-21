@@ -39,7 +39,8 @@ class MusyncDownloadManager(
     private val context: Context,
     private val downloadDao: DownloadDao,
     private val preferencesManager: PreferencesManager,
-    private val universalMusicProvider: UniversalMusicProvider
+    private val universalMusicProvider: UniversalMusicProvider,
+    private val playbackStateProvider: (() -> com.musync.app.domain.model.PlaybackState)? = null
 ) {
     companion object {
         private const val TAG = "MusyncDownloadManager"
@@ -187,6 +188,9 @@ class MusyncDownloadManager(
                                     var lastProgressTime = System.currentTimeMillis()
 
                                     while (input.read(buffer).also { read = it } != -1) {
+                                        if (playbackStateProvider?.invoke()?.isBuffering == true) {
+                                            kotlinx.coroutines.delay(150L) // Yield network bandwidth to player
+                                        }
                                         output.write(buffer, 0, read)
                                         bytesDownloaded += read
 

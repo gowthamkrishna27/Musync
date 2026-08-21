@@ -366,8 +366,17 @@ export class StreamManager {
       const status = audioResponse.status;
       res.status(status);
 
-      const contentType = audioResponse.headers["content-type"] || "audio/webm";
-      res.setHeader("Content-Type", String(contentType));
+      let contentType = String(audioResponse.headers["content-type"] || "");
+      if (!contentType || contentType === "application/octet-stream" || contentType.startsWith("video/")) {
+        if (streamEntry.ext === "webm" || contentType.includes("webm") || streamEntry.format?.includes("webm")) {
+          contentType = "audio/webm";
+        } else if (streamEntry.ext === "aac" || streamEntry.format?.includes("aac")) {
+          contentType = "audio/aac";
+        } else {
+          contentType = "audio/mp4";
+        }
+      }
+      res.setHeader("Content-Type", contentType);
       res.setHeader("Accept-Ranges", "bytes");
 
       const contentLength = audioResponse.headers["content-length"];

@@ -334,20 +334,15 @@ fun SearchScreen(
                     }
                 }
                 else -> {
-                    val offlineIds = remember(uiState.offlineTracks) { uiState.offlineTracks.map { it.id }.toSet() }
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(bottom = 120.dp)
                     ) {
                         items(uiState.tracks) { track ->
-                            val isOffline = offlineIds.contains(track.id)
                             TrackItem(
                                 track = track,
                                 isPlaying = playbackState.currentTrack?.id == track.id,
                                 isFavorite = favoriteIds.contains(track.id),
-                                subtitleExtra = if (isOffline) {
-                                    if (track.id.startsWith("local")) "Device Audio" else "Offline MP4"
-                                } else null,
                                 onClick = { viewModel.playTrack(track) },
                                 onFavoriteToggle = { viewModel.toggleFavorite(track) },
                                 onPlayNext = { viewModel.playbackManager.playNext(track) },
