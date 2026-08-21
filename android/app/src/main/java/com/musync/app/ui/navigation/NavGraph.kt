@@ -468,31 +468,9 @@ fun MainApp(
                                 val activeColor = AppleMusicPink
                                 val inactiveColor = Color(0xFFE5E5EA)
 
-                                val animatedBgColor by androidx.compose.animation.animateColorAsState(
-                                    targetValue = if (isSelected) Color(0xF52A2A2E) else Color.Transparent,
-                                    animationSpec = tween(220, easing = FastOutSlowInEasing),
-                                    label = "tab_pill_bg"
-                                )
-
                                 Box(
                                     modifier = Modifier
                                         .clip(CircleShape)
-                                        .background(animatedBgColor)
-                                        .border(
-                                            width = 1.dp,
-                                            brush = if (isSelected) {
-                                                Brush.verticalGradient(
-                                                    listOf(
-                                                        Color(0x66FFFFFF),
-                                                        Color(0x33FA2D48),
-                                                        Color(0x15FFFFFF)
-                                                    )
-                                                )
-                                            } else {
-                                                Brush.linearGradient(listOf(Color.Transparent, Color.Transparent))
-                                            },
-                                            shape = CircleShape
-                                        )
                                         .clickable {
                                             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                                             navController.navigate(screen.route) {
@@ -501,7 +479,7 @@ fun MainApp(
                                                 restoreState = true
                                             }
                                         }
-                                        .padding(horizontal = if (isSelected) 14.dp else 9.dp, vertical = 6.dp),
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Column(
@@ -513,8 +491,8 @@ fun MainApp(
                                             Icon(
                                                 imageVector = icon,
                                                 contentDescription = screen.title,
-                                                tint = if (isSelected) activeColor else inactiveColor.copy(alpha = 0.65f),
-                                                modifier = Modifier.size(19.dp)
+                                                tint = if (isSelected) activeColor else inactiveColor.copy(alpha = 0.55f),
+                                                modifier = Modifier.size(20.dp)
                                             )
                                         }
                                         Spacer(modifier = Modifier.height(2.dp))
@@ -524,7 +502,7 @@ fun MainApp(
                                                 fontSize = 10.sp,
                                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                                             ),
-                                            color = if (isSelected) activeColor else inactiveColor.copy(alpha = 0.65f)
+                                            color = if (isSelected) activeColor else inactiveColor.copy(alpha = 0.55f)
                                         )
                                     }
                                 }
