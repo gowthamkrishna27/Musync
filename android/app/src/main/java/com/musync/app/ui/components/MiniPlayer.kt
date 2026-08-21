@@ -196,35 +196,5 @@ fun MiniPlayer(
                 )
             }
         }
-
-        // Red Timeline Progress Bar across bottom of mini player
-        val progress = remember(playbackState.currentPositionMs, playbackState.durationMs) {
-            if (playbackState.durationMs > 0) {
-                (playbackState.currentPositionMs.toFloat() / playbackState.durationMs.toFloat()).coerceIn(0f, 1f)
-            } else 0f
-        }
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp)
-                .height(2.5.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(Color(0x22FFFFFF))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize(progress)
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(
-                                com.musync.app.ui.theme.AppleMusicRed,
-                                com.musync.app.ui.theme.AppleMusicPink
-                            )
-                        )
-                    )
-            )
-        }
     }
 }
