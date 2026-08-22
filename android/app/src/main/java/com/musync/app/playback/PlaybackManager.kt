@@ -137,26 +137,10 @@ class PlaybackManager(private val context: Context) {
 
                 android.util.Log.e(
                     "PlaybackManager",
-                    "❌ [PLAYER_ERROR] (attempt $retryCount/$maxRetries) | Track: '${item?.mediaMetadata?.title}' (${item?.mediaId}) | URI: $uri | ErrorCode: ${error.errorCode} (${error.errorCodeName}) | Message: ${error.message}",
+                    "❌ [PLAYER_ERROR] Track: '${item?.mediaMetadata?.title}' (${item?.mediaId}) | URI: $uri | ErrorCode: ${error.errorCode} (${error.errorCodeName}) | Message: ${error.message}",
                     error
                 )
 
-                // Resilient exponential backoff retry with jitter for temporary network interruptions
-                if (retryCount < maxRetries) {
-                    retryCount++
-                    val backoffDelay = (400L * (1 shl (retryCount - 1))) + kotlin.random.Random.nextLong(100, 300)
-                    android.util.Log.w("PlaybackManager", "Network hiccup encountered. Retrying selected track (attempt $retryCount) in ${backoffDelay}ms...")
-                    scope.launch {
-                        delay(backoffDelay)
-                        mediaController?.let { controller ->
-                            controller.prepare()
-                            controller.play()
-                        }
-                    }
-                    return
-                }
-
-                retryCount = 0
                 _playbackState.update {
                     it.copy(
                         isPlaying = false,

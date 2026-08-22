@@ -242,26 +242,6 @@ export class StreamManager {
       return;
     }
 
-    const cdnUrl = resolution.entry.url;
-    const ext = resolution.entry.ext || "m4a";
-    const contentType = ext === "webm" ? "audio/webm" : (ext === "aac" ? "audio/aac" : "audio/mp4");
-
-    // --- Redirect path (default, fast, no server bandwidth) ---
-    // ExoPlayer and most media players follow 302 redirects natively.
-    const rangeHeader = req.headers.range;
-    if (!rangeHeader) {
-      const resolveMs = Date.now() - Date.now(); // already resolved above
-      console.log(JSON.stringify({
-        streamRedirect: { trackId: videoId, quality, source: resolution.source, contentType, cdnUrl: cdnUrl.substring(0, 80) + "..." }
-      }));
-      res.setHeader("Content-Type", contentType);
-      res.setHeader("Cache-Control", "no-store");
-      res.redirect(302, cdnUrl);
-      return;
-    }
-
-    // --- Legacy proxy path (only when Range header is present) ---
-    // Used for progressive seek on players that don't follow redirects with Range.
     const streamStartTime = Date.now();
     let timeToFirstByte = 0;
     let bytesReceived = 0;
@@ -321,7 +301,7 @@ export class StreamManager {
       }
     });
 
-    // rangeHeader already declared above (used to decide redirect vs proxy path)
+    const rangeHeader = req.headers.range;
 
     const executeUpstreamRequest = async (entry: StreamCacheEntry) => {
       const reqHeaders: Record<string, string> = {

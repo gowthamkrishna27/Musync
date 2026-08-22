@@ -4,18 +4,17 @@ import yt_dlp
 
 
 def resolve(video_id, quality="low", _media_type="audio"):
-    # Quality-aware format selection
+    # Quality-aware format selection prioritizing clean audio streams
     if quality in ("high", "lossless"):
-        format_spec = "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/140/251/ba/b/best"
+        format_spec = "bestaudio[ext=m4a]/bestaudio[ext=webm]/140/251/bestaudio/ba/b"
     elif quality == "standard":
-        format_spec = "bestaudio[abr<=160][ext=m4a]/bestaudio[abr<=160][ext=webm]/140/251/bestaudio/ba/b/best"
-    else:  # low / saver
-        format_spec = "bestaudio[abr<=96][ext=m4a]/bestaudio[abr<=96][ext=webm]/bestaudio[ext=m4a]/140/251/ba/b/18/best"
+        format_spec = "bestaudio[abr<=160][ext=m4a]/bestaudio[abr<=160][ext=webm]/140/251/bestaudio/ba/b"
+    else:  # low / saver (fastest start, least data usage)
+        format_spec = "bestaudio[abr<=96][ext=m4a]/bestaudio[abr<=96][ext=webm]/139/249/250/140/251/bestaudio/ba/b"
 
-    # tv_embedded and mweb clients bypass YouTube's n-sig throttling (2025+)
-    # yt-dlp automatically decodes the 'n' parameter — any URL it returns is already
-    # unthrottled. The old ratebypass=yes check was incorrect and blocked valid streams.
-    ydl_opts = {
+    # Multi-client strategy: try android_vr, mweb, web, ios, tv_embedded
+    # yt-dlp automatically decodes the 'n' parameter across these clients
+    primary_opts = {
         'format': format_spec,
         'quiet': True,
         'no_warnings': True,
@@ -25,35 +24,36 @@ def resolve(video_id, quality="low", _media_type="audio"):
         'socket_timeout': 20,
         'extractor_args': {
             'youtube': {
-                'player_client': ['tv_embedded', 'mweb', 'web']
+                'player_client': ['android_vr', 'mweb', 'web', 'ios', 'tv_embedded']
             }
         }
     }
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(primary_opts) as ydl:
             url = f"https://www.youtube.com/watch?v={video_id}"
             info = ydl.extract_info(url, download=False)
 
             if info:
                 stream_url = info.get('url')
                 if stream_url:
-                    # yt-dlp already handles n-parameter deobfuscation, so any
-                    # returned URL is playable — no extra throttle check needed.
+                    headers = info.get('http_headers', {})
+                    ext = info.get('ext') or ('webm' if 'webm' in stream_url else 'm4a')
+                    client = info.get('protocol') or 'android_vr'
                     return {
                         'url': stream_url,
-                        'headers': info.get('http_headers', {}),
-                        'client': info.get('protocol') or 'tv_embedded',
+                        'headers': headers,
+                        'client': client,
                         'quality': quality,
                         'media_type': 'audio',
-                        'ext': info.get('ext', 'm4a')
+                        'ext': ext
                     }
     except Exception as primary_err:
-        # Fallback: try android_vr then android clients
-        for fallback_client, tag in [(['android_vr', 'ios'], 'android_vr'), (['android', 'web'], 'android')]:
+        # Fallback: broaden format spec to any audio/best
+        for fallback_client, tag in [(['mweb', 'web'], 'mweb'), (['android', 'ios'], 'android')]:
             try:
                 fallback_opts = {
-                    'format': 'bestaudio/140/251/18/ba/b',
+                    'format': 'bestaudio/ba/b/best',
                     'quiet': True,
                     'no_warnings': True,
                     'skip_download': True,
@@ -70,13 +70,15 @@ def resolve(video_id, quality="low", _media_type="audio"):
                     info = ydl.extract_info(url, download=False)
                     resolved_url = info.get('url') if info else None
                     if resolved_url:
+                        headers = info.get('http_headers', {})
+                        ext = info.get('ext') or ('webm' if 'webm' in resolved_url else 'm4a')
                         return {
                             'url': resolved_url,
-                            'headers': info.get('http_headers', {}),
+                            'headers': headers,
                             'client': tag,
                             'quality': quality,
                             'media_type': 'audio',
-                            'ext': info.get('ext', 'mp4')
+                            'ext': ext
                         }
             except Exception:
                 pass
