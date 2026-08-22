@@ -7,6 +7,7 @@ import { promisify } from "util";
 import path from "path";
 import { cacheService, StreamCacheEntry } from "../cache/cacheService";
 import { metricsService } from "../metrics/metricsService";
+import { youtubeService } from "../services/youtube/youtube.service";
 
 const execAsync = promisify(exec);
 const PYTHON_BIN = process.platform === "win32" ? "python" : "python3";
@@ -141,6 +142,32 @@ export class StreamManager {
       if (recheck && recheck.expiresAt > Date.now()) {
         return { entry: recheck, source: "redis" };
       }
+
+      // Primary: Pure TypeScript YouTube.js Service (<150ms resolution)
+      try {
+        const resolved = await youtubeService.resolveAudioStream(videoId, safeQuality);
+        if (resolved && resolved.url) {
+          const ttlSeconds = 2 * 3600; // 2 hours
+          const entry: StreamCacheEntry = {
+            url: resolved.url,
+            headers: resolved.headers,
+            expiresAt: resolved.expiresAt,
+            format: resolved.format,
+            ext: resolved.ext,
+            bitrate: resolved.bitrate,
+            source: "youtube.js"
+          };
+
+          await cacheService.set(cacheKey, entry, ttlSeconds);
+          await cacheService.recordTrackPlay(videoId);
+
+          return { entry, source: "resolver" };
+        }
+      } catch (ytjsErr: any) {
+        console.warn(`[YouTube.js resolver error for ${videoId}]:`, ytjsErr.message);
+      }
+
+      // Fallback: Python stream_resolver.py
       try {
         const fs = require("fs");
         const candidatePaths = [
@@ -152,9 +179,6 @@ export class StreamManager {
         ];
         const scriptPath = candidatePaths.find((p: string) => fs.existsSync(p)) || candidatePaths[0];
 
-        // Acquire semaphore slot — caps concurrent Python spawns to MAX_CONCURRENT_RESOLVES
-        // acquireResolveSlot may reject with a timeout error; if it does, we do NOT hold
-        // a slot, so releaseResolveSlot must NOT be called in that case.
         let slotAcquired = false;
         await StreamManager.acquireResolveSlot(20000, highPriority);
         slotAcquired = true;
@@ -167,32 +191,23 @@ export class StreamManager {
         } finally {
           if (slotAcquired) StreamManager.releaseResolveSlot();
         }
-        
-        if (stderr && stderr.trim()) {
-          console.warn(`[StreamResolver stderr for ${videoId} (${safeQuality})]:`, stderr.trim());
-        }
 
         const parsed = JSON.parse(stdout.trim());
         if (parsed.url) {
-          const ttlSeconds = 2 * 3600; // 2 hours TTL — keeps signed URLs well within their expiry window
+          const ttlSeconds = 2 * 3600;
           const entry: StreamCacheEntry = {
             url: parsed.url,
             headers: parsed.headers || {},
             expiresAt: Date.now() + ttlSeconds * 1000,
             format: `audio/${parsed.ext || "m4a"}`,
             ext: parsed.ext || "m4a",
-            source: parsed.client || "ios"
+            source: parsed.client || "fallback"
           };
 
-          // Store in L1 and L2
           await cacheService.set(cacheKey, entry, ttlSeconds);
-          // Increment popularity
           await cacheService.recordTrackPlay(videoId);
 
-          return {
-            entry,
-            source: "resolver"
-          };
+          return { entry, source: "resolver" };
         } else if (parsed.error) {
           return { entry: null, error: parsed.error };
         }

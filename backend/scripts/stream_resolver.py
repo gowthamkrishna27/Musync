@@ -25,17 +25,17 @@ def get_js_runtimes():
 
 
 def resolve(video_id, quality="low", _media_type="audio"):
-    # Quality-aware format selection prioritizing clean audio streams (Opus/AAC)
+    # Quality-aware format selection prioritizing unthrottled playable streams
     if quality in ("high", "lossless"):
-        format_spec = "bestaudio[ext=m4a]/bestaudio[ext=webm]/140/251/bestaudio/ba/b"
+        format_spec = "bestaudio[ext=m4a]/bestaudio[ext=webm]/140/251/bestaudio/ba/b/18"
     elif quality == "standard":
-        format_spec = "bestaudio[abr<=160][ext=m4a]/bestaudio[abr<=160][ext=webm]/140/251/bestaudio/ba/b"
-    else:  # low / saver (48kbps-96kbps for fast initial buffering)
-        format_spec = "bestaudio[abr<=96][ext=m4a]/bestaudio[abr<=96][ext=webm]/139/249/250/140/251/bestaudio/ba/b"
+        format_spec = "bestaudio[abr<=160][ext=m4a]/bestaudio[abr<=160][ext=webm]/140/251/bestaudio/ba/b/18"
+    else:  # low / saver
+        format_spec = "bestaudio[abr<=96][ext=m4a]/bestaudio[abr<=96][ext=webm]/139/249/250/140/251/bestaudio/ba/b/18"
 
     js_runtimes = get_js_runtimes()
 
-    # Primary: android_vr with JS challenge solver and remote ejs components enabled
+    # Primary: android client (guaranteed 206 stream download without PO token rejection)
     primary_opts = {
         'format': format_spec,
         'quiet': True,
@@ -47,7 +47,7 @@ def resolve(video_id, quality="low", _media_type="audio"):
         'remote_components': ['ejs:github'],
         'extractor_args': {
             'youtube': {
-                'player_client': ['android_vr']
+                'player_client': ['android']
             }
         }
     }
@@ -63,21 +63,21 @@ def resolve(video_id, quality="low", _media_type="audio"):
                 stream_url = info.get('url')
                 if stream_url:
                     headers = info.get('http_headers', {})
-                    ext = info.get('ext') or ('webm' if 'webm' in stream_url else 'm4a')
+                    ext = info.get('ext') or ('webm' if 'webm' in stream_url else 'mp4')
                     return {
                         'url': stream_url,
                         'headers': headers,
-                        'client': 'android_vr',
+                        'client': 'android',
                         'quality': quality,
                         'media_type': 'audio',
                         'ext': ext
                     }
     except Exception as primary_err:
-        # Fallback: widen format spec to bestaudio/ba/b with all available clients
-        for fallback_client in [['android_vr'], ['tv_embedded'], ['web']]:
+        # Fallback: widen format spec to 18/bestaudio/ba/b with android_vr
+        for fallback_client in [['android', 'android_vr'], ['android_vr'], ['web']]:
             try:
                 fallback_opts = {
-                    'format': 'bestaudio/ba/b/best',
+                    'format': '18/bestaudio/ba/b/best',
                     'quiet': True,
                     'no_warnings': True,
                     'skip_download': True,
@@ -99,7 +99,7 @@ def resolve(video_id, quality="low", _media_type="audio"):
                     resolved_url = info.get('url') if info else None
                     if resolved_url:
                         headers = info.get('http_headers', {})
-                        ext = info.get('ext') or ('webm' if 'webm' in resolved_url else 'm4a')
+                        ext = info.get('ext') or ('webm' if 'webm' in resolved_url else 'mp4')
                         return {
                             'url': resolved_url,
                             'headers': headers,

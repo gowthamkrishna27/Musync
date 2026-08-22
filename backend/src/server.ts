@@ -14,6 +14,7 @@ import { StreamManager } from "./streaming/streamManager";
 import { RecommendationEngine } from "./recommendations/recommendationEngine";
 import { sessionService } from "./recommendations/sessionService";
 import { DiscoveryWorker } from "./discovery/discoveryWorker";
+import { youtubeService } from "./services/youtube/youtube.service";
 
 dotenv.config();
 
@@ -335,9 +336,17 @@ app.get(["/search", "/result/"], apiLimiter, async (req: Request, res: Response)
       return res.json(cached);
     }
 
-    // 1. Parallel Multi-Query Search
+    // 1. Parallel Multi-Query Search with YouTube.js and YTMusic
     const normalizedQuery = query.toLowerCase();
     const queryTokens = normalizedQuery.split(/\s+/).filter(t => t.length > 0);
+
+    let ytjsResults: any[] = [];
+    try {
+      const res = await youtubeService.search(query, 25);
+      ytjsResults = res.tracks || [];
+    } catch (_e) {
+      ytjsResults = [];
+    }
 
     let songResults: any[] = [];
     try {
@@ -347,7 +356,7 @@ app.get(["/search", "/result/"], apiLimiter, async (req: Request, res: Response)
     }
 
     let generalResults: any[] = [];
-    if (songResults.length < 5) {
+    if (songResults.length + ytjsResults.length < 5) {
       try {
         const general = await ytmusic.search(query);
         generalResults = general.filter((item: any) => item.type === "song" || item.type === "video" || !item.type);
@@ -361,12 +370,12 @@ app.get(["/search", "/result/"], apiLimiter, async (req: Request, res: Response)
     const seenSignatures = new Set<string>();
     const allRawItems: any[] = [];
 
-    for (const item of [...songResults, ...generalResults]) {
+    for (const item of [...ytjsResults, ...songResults, ...generalResults]) {
       const id = item.videoId || item.id || "";
       if (!id || seenIds.has(id)) continue;
 
       const title = (item.name || item.title || "").toLowerCase().trim();
-      const artist = (item.artist?.name || item.artists?.[0]?.name || item.author || "").toLowerCase().trim();
+      const artist = (item.artist?.name || item.artists?.[0]?.name || item.author || (typeof item.artist === "string" ? item.artist : "")).toLowerCase().trim();
       const sig = `${title}:${artist}`;
 
       if (seenSignatures.has(sig)) continue;
@@ -378,8 +387,8 @@ app.get(["/search", "/result/"], apiLimiter, async (req: Request, res: Response)
     // 2. Intelligent Relevance Scoring
     const scoredItems = allRawItems.map((item) => {
       const title = (item.name || item.title || "").toLowerCase();
-      const artist = (item.artist?.name || item.artists?.[0]?.name || item.author || "").toLowerCase();
-      const album = (item.album?.name || "").toLowerCase();
+      const artist = (item.artist?.name || item.artists?.[0]?.name || item.author || (typeof item.artist === "string" ? item.artist : "")).toLowerCase();
+      const album = (item.album?.name || (typeof item.album === "string" ? item.album : "")).toLowerCase();
       let score = 0;
 
       // Exact match
@@ -440,7 +449,6 @@ function prewarmSearchResults(tracks: any[], topN: number = 2): void {
   })().catch(() => {});
 }
 
-
 // 7. Search autocomplete suggestions with caching
 app.get("/suggestions", apiLimiter, async (req: Request, res: Response) => {
   const query = (req.query.query || req.query.q || "") as string;
@@ -480,6 +488,26 @@ app.get(["/song", "/song/"], apiLimiter, async (req: Request, res: Response) => 
       return res.json({ ...cached, url: streamUrl, media_url: streamUrl, stream_url: streamUrl });
     }
 
+    // 1. Try YouTubeService
+    const songInfo = await youtubeService.getSongInfo(videoId);
+    if (songInfo) {
+      const result = {
+        videoId,
+        id: videoId,
+        title: songInfo.title || "Unknown Title",
+        artist: typeof songInfo.artist === "string" ? songInfo.artist : (songInfo.artist?.name || "YouTube Artist"),
+        thumbnails: songInfo.thumbnails,
+        thumbnailUrl: songInfo.thumbnailUrl,
+        artworkUrl: songInfo.artworkUrl,
+        duration: songInfo.duration,
+        url: streamUrl,
+        media_url: streamUrl,
+        stream_url: streamUrl
+      };
+      await cacheService.set(cacheKey, result, 86400); // 24 hours TTL
+      return res.json(result);
+    }
+
     const songData = await ytmusic.getSong(videoId);
     const result = {
       videoId,
@@ -502,6 +530,22 @@ app.get(["/song", "/song/"], apiLimiter, async (req: Request, res: Response) => 
       stream_url: streamUrl
     });
   }
+});
+
+// 8a. RESTful API Music search and stream aliases
+app.get("/api/music/search", apiLimiter, async (req: Request, res: Response) => {
+  const query = (req.query.q || req.query.query || "Trending") as string;
+  try {
+    const results = await youtubeService.search(query);
+    res.json(results);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message, tracks: [] });
+  }
+});
+
+app.get("/api/music/stream/:videoId", streamLimiter, async (req: Request, res: Response) => {
+  req.query.id = req.params.videoId;
+  await StreamManager.handleStreamRequest(req, res);
 });
 
 // 9. Direct high-performance progressive audio stream endpoint
