@@ -307,21 +307,25 @@ export class StreamManager {
 
     const executeUpstreamRequest = async (entry: StreamCacheEntry) => {
       const reqHeaders: Record<string, string> = {
-        ...entry.headers,
+        "User-Agent": entry.headers?.["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "*/*",
-        "Sec-Fetch-Mode": "navigate"
+        "Accept-Encoding": "identity",
+        "Connection": "keep-alive"
       };
 
       if (rangeHeader) {
         reqHeaders["Range"] = rangeHeader;
       }
 
-      return await streamHttpClient({
+      return await axios({
         method: "GET",
         url: entry.url,
         headers: reqHeaders,
         responseType: "stream",
         signal: abortController.signal,
+        httpAgent,
+        httpsAgent,
+        timeout: 25000,
         validateStatus: (status) => status < 400
       });
     };
