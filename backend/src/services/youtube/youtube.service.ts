@@ -162,8 +162,24 @@ export class YouTubeService {
   public async resolveAudioStream(videoId: string, quality: string = "low"): Promise<AudioStreamResolution | null> {
     const yt = await this.getClient();
     try {
-      const info = await yt.getInfo(videoId);
-      const formats = info.streaming_data?.adaptive_formats || [];
+      let formats: any[] = [];
+
+      // 1. Try YouTube Music info first (contains valid signature_ciphers for music)
+      try {
+        const musicInfo = await yt.music.getInfo(videoId);
+        formats = musicInfo.streaming_data?.adaptive_formats || [];
+      } catch (_musicErr) {
+        formats = [];
+      }
+
+      // 2. Fallback to general YouTube info
+      if (formats.length === 0) {
+        try {
+          const generalInfo = await yt.getInfo(videoId);
+          formats = generalInfo.streaming_data?.adaptive_formats || [];
+        } catch (_genErr) {}
+      }
+
       const audioFormats = formats.filter(f => f.has_audio && !f.has_video);
 
       if (audioFormats.length === 0) {
