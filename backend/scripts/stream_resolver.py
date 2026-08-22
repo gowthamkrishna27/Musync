@@ -6,16 +6,21 @@ import yt_dlp
 
 def get_js_runtimes():
     """Detect available JavaScript runtime (node or deno or bun) for yt-dlp challenge solver."""
+    import os
     runtimes = {}
-    node_path = shutil.which("node") or shutil.which("nodejs")
-    if node_path:
-        runtimes["node"] = {"path": node_path}
-    deno_path = shutil.which("deno")
-    if deno_path:
-        runtimes["deno"] = {"path": deno_path}
-    bun_path = shutil.which("bun")
-    if bun_path:
-        runtimes["bun"] = {"path": bun_path}
+    candidates = [
+        shutil.which("node"),
+        shutil.which("nodejs"),
+        "/usr/local/bin/node",
+        "/usr/bin/node",
+        "/bin/node"
+    ]
+    for c in candidates:
+        if c and (os.path.exists(c) or shutil.which(c)):
+            runtimes["node"] = {"path": c}
+            break
+    if "node" not in runtimes:
+        runtimes["node"] = {}
     return runtimes
 
 

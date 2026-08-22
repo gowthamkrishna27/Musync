@@ -24,5 +24,6 @@ EXPOSE 5000
 
 ENV PORT=5000
 ENV NODE_ENV=production
+ENV PATH="/usr/local/bin:/usr/bin:/bin:${PATH}"
 
 CMD ["npx", "tsx", "src/server.ts"]
