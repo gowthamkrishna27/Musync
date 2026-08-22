@@ -208,7 +208,7 @@ app.get("/debug/env", async (_req: Request, res: Response) => {
     diagnostics.ffmpegError = e.message;
   }
 
-  const testId = "3_g2un5M350";
+  const testId = "dQw4w9WgXcQ";
   try {
     const resolution = await StreamManager.resolveAudioStream(testId);
     diagnostics.streamResolverTest = {
@@ -221,6 +221,55 @@ app.get("/debug/env", async (_req: Request, res: Response) => {
   }
 
   res.json(diagnostics);
+});
+
+// 4a. Live stream diagnostic test
+app.get("/debug/stream-test", async (req: Request, res: Response) => {
+  const testId = (req.query.id as string) || "dQw4w9WgXcQ";
+  const results: Record<string, any> = { testId };
+  try {
+    const resolution = await StreamManager.resolveStream(testId, "low");
+    results.resolution = {
+      success: Boolean(resolution.entry?.url),
+      url: resolution.entry?.url ? resolution.entry.url.substring(0, 100) + "..." : null,
+      headers: resolution.entry?.headers,
+      ext: resolution.entry?.ext,
+      source: resolution.source,
+      error: resolution.error || null
+    };
+
+    if (resolution.entry?.url) {
+      try {
+        const fetchRes = await axios.get(resolution.entry.url, {
+          headers: {
+            "User-Agent": resolution.entry.headers?.["User-Agent"] || "Mozilla/5.0",
+            "Range": "bytes=0-1000",
+            "Accept": "*/*"
+          },
+          timeout: 10000,
+          validateStatus: () => true
+        });
+        results.upstreamFetch = {
+          status: fetchRes.status,
+          statusText: fetchRes.statusText,
+          contentType: fetchRes.headers["content-type"],
+          contentRange: fetchRes.headers["content-range"],
+          contentLength: fetchRes.headers["content-length"],
+          dataSnippet: typeof fetchRes.data === "string" ? fetchRes.data.substring(0, 200) : null
+        };
+      } catch (fetchErr: any) {
+        results.upstreamFetchError = {
+          message: fetchErr.message,
+          status: fetchErr.response?.status,
+          responseHeaders: fetchErr.response?.headers,
+          responseData: fetchErr.response?.data ? String(fetchErr.response.data).substring(0, 200) : null
+        };
+      }
+    }
+  } catch (err: any) {
+    results.generalError = err.message;
+  }
+  res.json(results);
 });
 
 // 5. In-App OTA Update endpoints
