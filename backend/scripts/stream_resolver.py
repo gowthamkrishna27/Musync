@@ -30,7 +30,7 @@ def resolve(video_id, quality="low", _media_type="audio"):
 
     js_runtimes = get_js_runtimes()
 
-    # Primary: android_vr with JS challenge solver enabled
+    # Primary: android_vr with JS challenge solver and remote ejs components enabled
     primary_opts = {
         'format': format_spec,
         'quiet': True,
@@ -39,6 +39,7 @@ def resolve(video_id, quality="low", _media_type="audio"):
         'nocheckcertificate': True,
         'geo_bypass': True,
         'socket_timeout': 20,
+        'remote_components': ['ejs:github'],
         'extractor_args': {
             'youtube': {
                 'player_client': ['android_vr']
@@ -67,7 +68,7 @@ def resolve(video_id, quality="low", _media_type="audio"):
                         'ext': ext
                     }
     except Exception as primary_err:
-        # Fallback: broaden format spec to bestaudio/ba/b with all available clients
+        # Fallback: widen format spec to bestaudio/ba/b with all available clients
         for fallback_client in [['android_vr'], ['tv_embedded'], ['web']]:
             try:
                 fallback_opts = {
@@ -77,6 +78,7 @@ def resolve(video_id, quality="low", _media_type="audio"):
                     'skip_download': True,
                     'nocheckcertificate': True,
                     'socket_timeout': 20,
+                    'remote_components': ['ejs:github'],
                     'extractor_args': {
                         'youtube': {
                             'player_client': fallback_client
