@@ -207,11 +207,15 @@ export class StreamManager {
   }
 
   /**
-   * High-Performance Range-Aware Progressive Audio Streaming Proxy
-   * - Full support for Range: bytes=0-, bytes=500000-, bytes=1000000-2000000
-   * - Immediate upstream abort when client disconnects (zero socket leaks)
-   * - Backpressure propagation
-   * - Automatic stale cache purge & single-retry on 403 / 410
+   * Audio Stream Handler — Redirect Mode
+   *
+   * Resolves the signed YouTube CDN URL server-side (with caching & single-flight
+   * coalescing) then issues a 302 redirect so ExoPlayer fetches the audio bytes
+   * directly from YouTube's CDN. This avoids server-side proxying which caused 502s
+   * because YouTube CDN blocks requests originating from Railway server IPs.
+   *
+   * Falls back to the legacy proxy path only if the client sends a Range header
+   * (some players require byte-range proxying for seek support).
    */
   static async handleStreamRequest(req: Request, res: Response): Promise<void> {
     const videoId = (req.query.id || req.query.query || req.query.videoId) as string;
@@ -222,6 +226,42 @@ export class StreamManager {
       return;
     }
 
+    metricsService.incrementActiveStreams();
+    const cleanup = () => metricsService.decrementActiveStreams();
+    res.on("finish", cleanup);
+    res.on("close", cleanup);
+
+    // Resolve the CDN URL (cached up to 2h)
+    const resolution = await StreamManager.resolveStream(videoId, quality, true);
+    if (!resolution.entry) {
+      console.warn(`[Stream 502] Resolution failed for ${videoId}: ${resolution.error}`);
+      res.status(502).json({
+        error: `Could not resolve stream for track: ${videoId}`,
+        details: resolution.error
+      });
+      return;
+    }
+
+    const cdnUrl = resolution.entry.url;
+    const ext = resolution.entry.ext || "m4a";
+    const contentType = ext === "webm" ? "audio/webm" : (ext === "aac" ? "audio/aac" : "audio/mp4");
+
+    // --- Redirect path (default, fast, no server bandwidth) ---
+    // ExoPlayer and most media players follow 302 redirects natively.
+    const rangeHeader = req.headers.range;
+    if (!rangeHeader) {
+      const resolveMs = Date.now() - Date.now(); // already resolved above
+      console.log(JSON.stringify({
+        streamRedirect: { trackId: videoId, quality, source: resolution.source, contentType, cdnUrl: cdnUrl.substring(0, 80) + "..." }
+      }));
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Cache-Control", "no-store");
+      res.redirect(302, cdnUrl);
+      return;
+    }
+
+    // --- Legacy proxy path (only when Range header is present) ---
+    // Used for progressive seek on players that don't follow redirects with Range.
     const streamStartTime = Date.now();
     let timeToFirstByte = 0;
     let bytesReceived = 0;
@@ -230,12 +270,10 @@ export class StreamManager {
     let isUpstreamDisconnected = false;
     let isStreamFinished = false;
 
-    metricsService.incrementActiveStreams();
-
-    const cleanup = () => {
+    // Proxy cleanup — metrics already incremented at top of method
+    const proxyCleanup = () => {
       if (!isStreamFinished) {
         isStreamFinished = true;
-        metricsService.decrementActiveStreams();
 
         const durationSec = Math.max(0.001, (Date.now() - streamStartTime) / 1000);
         const downstreamRateKbps = (bytesSent * 8) / (1000 * durationSec);
@@ -247,13 +285,10 @@ export class StreamManager {
 
         console.log(JSON.stringify({
           streamDiagnostic: {
-            trackId: videoId,
-            mediaType: "audio",
-            quality,
+            trackId: videoId, mediaType: "audio", quality,
             streamStartTime: new Date(streamStartTime).toISOString(),
             timeToFirstByteMs: timeToFirstByte,
-            bytesReceived,
-            bytesSent,
+            bytesReceived, bytesSent,
             connectionDurationSec: parseFloat(durationSec.toFixed(2)),
             upstreamRateKbps: parseFloat(upstreamRateKbps.toFixed(1)),
             downstreamRateKbps: parseFloat(downstreamRateKbps.toFixed(1)),
@@ -268,29 +303,15 @@ export class StreamManager {
     };
 
     req.on("close", () => {
-      if (!res.writableEnded) {
-        isClientDisconnected = true;
-      }
-      cleanup();
+      if (!res.writableEnded) isClientDisconnected = true;
+      proxyCleanup();
     });
-    res.on("finish", cleanup);
-    res.on("error", cleanup);
+    res.on("error", proxyCleanup);
 
     const cacheKey = `stream:v3:audio:${videoId}:${quality.toLowerCase()}`;
 
-    // 1. Resolve Audio Source (High Priority for active playback)
-    let resolution = await StreamManager.resolveStream(videoId, quality, true);
+    // Use the already-resolved stream entry from the top of the method
     let streamEntry = resolution.entry;
-
-    if (!streamEntry) {
-      cleanup();
-      console.warn(`[Stream 502] Initial resolution failed for track ${videoId}: ${resolution.error}`);
-      res.status(502).json({
-        error: `Could not resolve stream for track: ${videoId}`,
-        details: resolution.error
-      });
-      return;
-    }
 
     // 2. Prepare Upstream Request with AbortController & Automatic Retry
     const abortController = new AbortController();
@@ -300,7 +321,7 @@ export class StreamManager {
       }
     });
 
-    const rangeHeader = req.headers.range;
+    // rangeHeader already declared above (used to decide redirect vs proxy path)
 
     const executeUpstreamRequest = async (entry: StreamCacheEntry) => {
       const reqHeaders: Record<string, string> = {
