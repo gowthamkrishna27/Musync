@@ -284,7 +284,7 @@ class PreferencesManager(private val context: Context) {
     }
 
     val audioQuality: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_AUDIO_QUALITY] ?: "high"
+        prefs[KEY_AUDIO_QUALITY] ?: "low"
     }
 
     val downloadQuality: Flow<String> = context.dataStore.data.map { prefs ->
@@ -319,7 +319,7 @@ class PreferencesManager(private val context: Context) {
 
     fun getApiKey(): String? = securePrefs.getString(SECURE_KEY_API_KEY, null)
     fun getBaseUrl(): String = securePrefs.getString("saved_base_url", null) ?: DEFAULT_BASE_URL
-    fun getAudioQuality(): String = securePrefs.getString("saved_audio_quality", null) ?: "high"
+    fun getAudioQuality(): String = securePrefs.getString("saved_audio_quality", null) ?: "low"
 
     fun setApiKey(apiKey: String?) {
         securePrefs.edit().apply {

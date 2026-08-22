@@ -2,13 +2,9 @@ import sys
 import json
 import yt_dlp
 
-def _is_throttled(url):
-    """Detect YouTube n-sig throttled URLs (ratebypass absent = throttled)."""
-    return url and 'ratebypass=yes' not in url and 'ratebypass%3Dyes' not in url
-
 
 def resolve(video_id, quality="low", _media_type="audio"):
-    # Quality-aware format selection prioritizing unthrottled direct audio streams
+    # Quality-aware format selection
     if quality in ("high", "lossless"):
         format_spec = "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/140/251/ba/b/best"
     elif quality == "standard":
@@ -17,7 +13,8 @@ def resolve(video_id, quality="low", _media_type="audio"):
         format_spec = "bestaudio[abr<=96][ext=m4a]/bestaudio[abr<=96][ext=webm]/bestaudio[ext=m4a]/140/251/ba/b/18/best"
 
     # tv_embedded and mweb clients bypass YouTube's n-sig throttling (2025+)
-    # ios/android clients are frequently rate-limited on shared server IPs
+    # yt-dlp automatically decodes the 'n' parameter — any URL it returns is already
+    # unthrottled. The old ratebypass=yes check was incorrect and blocked valid streams.
     ydl_opts = {
         'format': format_spec,
         'quiet': True,
@@ -37,27 +34,22 @@ def resolve(video_id, quality="low", _media_type="audio"):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             url = f"https://www.youtube.com/watch?v={video_id}"
             info = ydl.extract_info(url, download=False)
-            
+
             if info:
                 stream_url = info.get('url')
-                if stream_url and not _is_throttled(stream_url):
-                    headers = info.get('http_headers', {})
-                    ext = info.get('ext', 'm4a')
-                    client = info.get('protocol') or 'tv_embedded'
-                    
+                if stream_url:
+                    # yt-dlp already handles n-parameter deobfuscation, so any
+                    # returned URL is playable — no extra throttle check needed.
                     return {
                         'url': stream_url,
-                        'headers': headers,
-                        'client': client,
+                        'headers': info.get('http_headers', {}),
+                        'client': info.get('protocol') or 'tv_embedded',
                         'quality': quality,
                         'media_type': 'audio',
-                        'ext': ext
+                        'ext': info.get('ext', 'm4a')
                     }
-                elif stream_url and _is_throttled(stream_url):
-                    # Throttled URL detected — fall through to fallback clients
-                    raise Exception(f"Throttled stream detected for {video_id}, trying fallback clients")
-    except Exception as e:
-        # Fallback: try android_vr + ios clients (different token path, often unthrottled)
+    except Exception as primary_err:
+        # Fallback: try android_vr then android clients
         for fallback_client, tag in [(['android_vr', 'ios'], 'android_vr'), (['android', 'web'], 'android')]:
             try:
                 fallback_opts = {
@@ -77,7 +69,7 @@ def resolve(video_id, quality="low", _media_type="audio"):
                     url = f"https://www.youtube.com/watch?v={video_id}"
                     info = ydl.extract_info(url, download=False)
                     resolved_url = info.get('url') if info else None
-                    if resolved_url and not _is_throttled(resolved_url):
+                    if resolved_url:
                         return {
                             'url': resolved_url,
                             'headers': info.get('http_headers', {}),
@@ -89,18 +81,19 @@ def resolve(video_id, quality="low", _media_type="audio"):
             except Exception:
                 pass
 
-        return {'error': f"Failed to resolve audio stream: {str(e)}"}
+        return {'error': f"Failed to resolve audio stream: {str(primary_err)}"}
 
     return {'error': "No audio stream found"}
+
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         print(json.dumps({'error': 'Missing video_id parameter'}))
         sys.exit(1)
-        
+
     v_id = sys.argv[1]
     qual = sys.argv[2] if len(sys.argv) > 2 else "low"
     m_type = sys.argv[3] if len(sys.argv) > 3 else "audio"
-    
+
     result = resolve(v_id, qual, m_type)
     print(json.dumps(result))
