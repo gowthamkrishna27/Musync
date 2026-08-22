@@ -543,6 +543,59 @@ app.get("/api/music/search", apiLimiter, async (req: Request, res: Response) => 
   }
 });
 
+app.get("/api/music/debug/:videoId", async (req: Request, res: Response) => {
+  const videoId = req.params.videoId as string;
+  try {
+    const yt = await youtubeService.getClient();
+    const result: any = { videoId, steps: [] };
+
+    // Step 1: yt.music.getInfo
+    try {
+      const musicInfo = await yt.music.getInfo(videoId);
+      const mFormats = musicInfo.streaming_data?.adaptive_formats || [];
+      const mAudio = mFormats.filter((f: any) => f.has_audio && !f.has_video);
+      result.musicInfo = {
+        totalFormats: mFormats.length,
+        audioFormats: mAudio.length,
+        firstItag: mAudio[0]?.itag,
+        hasUrl: Boolean(mAudio[0]?.url),
+        hasCipher: Boolean(mAudio[0]?.signature_cipher || mAudio[0]?.cipher)
+      };
+      if (mAudio.length > 0) {
+        const chosen = mAudio.find((f: any) => f.itag === 140) || mAudio[0];
+        try {
+          const url = chosen.url || (await chosen.decipher(yt.session.player));
+          result.musicDeciphered = { success: true, urlPreview: url?.substring(0, 60) };
+        } catch (decErr: any) {
+          result.musicDeciphered = { success: false, error: decErr.message };
+        }
+      }
+    } catch (mErr: any) {
+      result.musicInfoError = mErr.message;
+    }
+
+    // Step 2: yt.getInfo
+    try {
+      const genInfo = await yt.getInfo(videoId);
+      const gFormats = genInfo.streaming_data?.adaptive_formats || [];
+      const gAudio = gFormats.filter((f: any) => f.has_audio && !f.has_video);
+      result.generalInfo = {
+        totalFormats: gFormats.length,
+        audioFormats: gAudio.length,
+        firstItag: gAudio[0]?.itag,
+        hasUrl: Boolean(gAudio[0]?.url),
+        hasCipher: Boolean(gAudio[0]?.signature_cipher || gAudio[0]?.cipher)
+      };
+    } catch (gErr: any) {
+      result.generalInfoError = gErr.message;
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/music/stream/:videoId", streamLimiter, async (req: Request, res: Response) => {
   req.query.id = req.params.videoId;
   await StreamManager.handleStreamRequest(req, res);
