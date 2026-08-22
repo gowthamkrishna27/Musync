@@ -17,7 +17,8 @@ const httpAgent = new http.Agent({
   keepAliveMsecs: 30000,
   maxSockets: 10000,
   maxFreeSockets: 512,
-  timeout: 30000
+  timeout: 30000,
+  family: 4 // Force IPv4 matching the URL's signed IPv4 token
 });
 
 const httpsAgent = new https.Agent({
@@ -25,7 +26,8 @@ const httpsAgent = new https.Agent({
   keepAliveMsecs: 30000,
   maxSockets: 10000,
   maxFreeSockets: 512,
-  timeout: 30000
+  timeout: 30000,
+  family: 4 // Force IPv4 matching the URL's signed IPv4 token
 });
 
 // Dedicated high-throughput Axios instance
