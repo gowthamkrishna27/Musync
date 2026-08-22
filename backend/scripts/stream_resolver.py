@@ -54,7 +54,8 @@ def get_js_runtimes():
         shutil.which("nodejs"),
         "/usr/local/bin/node",
         "/usr/bin/node",
-        "/bin/node"
+        "/bin/node",
+        "C:\\Program Files\\nodejs\\node.exe"
     ]
     for c in candidates:
         if c and (os.path.exists(c) or shutil.which(c)):
@@ -84,25 +85,24 @@ def classify_error(err_str: str) -> str:
 
 
 def resolve(video_id, quality="low", _media_type="audio"):
-    # Quality-aware format selection prioritizing unthrottled playable audio
+    # Prioritize progressive, streamable formats compatible with Android ExoPlayer & HTML5 Audio
     if quality in ("high", "lossless"):
-        format_spec = "bestaudio[ext=m4a]/bestaudio[ext=webm]/140/251/bestaudio/ba/b/18/best"
+        format_spec = "140/251/18/bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/ba/b/best"
     elif quality == "standard":
-        format_spec = "bestaudio[abr<=160][ext=m4a]/bestaudio[abr<=160][ext=webm]/140/251/bestaudio/ba/b/18/best"
+        format_spec = "140/251/18/bestaudio[abr<=160][ext=m4a]/bestaudio[abr<=160][ext=webm]/bestaudio/ba/b/best"
     else:  # low / saver
-        format_spec = "bestaudio[abr<=96][ext=m4a]/bestaudio[abr<=96][ext=webm]/139/249/250/140/251/bestaudio/ba/b/18/best"
+        format_spec = "139/140/249/250/251/18/bestaudio[abr<=96][ext=m4a]/bestaudio[abr<=96][ext=webm]/bestaudio/ba/b/best"
 
     js_runtimes = get_js_runtimes()
     cookie_file = get_cookie_file()
 
     # Cascade client configurations:
-    # 1. android_vr: Highly resilient on datacenter IPs (no PO token challenge)
-    # 2. tv_embedded: Reliable player client fallback
-    # 3. android / web: Fallbacks if authenticated via cookies
+    # 1. ['android', 'web_embedded']: Clean unthrottled streaming with Node EJS solver
+    # 2. ['android_vr', 'tv_embedded']: Datacenter resilient fallback
+    # 3. ['web', 'mweb']: Standard web client fallback
     client_candidates = [
-        ['android_vr'],
+        ['android', 'web_embedded'],
         ['android_vr', 'tv_embedded'],
-        ['android'],
         ['web', 'mweb']
     ]
 
@@ -136,13 +136,11 @@ def resolve(video_id, quality="low", _media_type="audio"):
                 info = ydl.extract_info(url, download=False)
 
                 if info:
-                    # Check direct url or formats list
                     stream_url = info.get('url')
                     if not stream_url and info.get('formats'):
-                        # Pick best playable audio format
                         audio_formats = [
                             f for f in info['formats']
-                            if (f.get('vcodec') == 'none' or 'audio' in str(f.get('mime_type', ''))) and f.get('url')
+                            if f.get('url') and (f.get('vcodec') == 'none' or 'audio' in str(f.get('mime_type', '')) or f.get('itag') == 18)
                         ]
                         if audio_formats:
                             stream_url = audio_formats[-1].get('url')
@@ -157,6 +155,7 @@ def resolve(video_id, quality="low", _media_type="audio"):
                             'quality': quality,
                             'media_type': 'audio',
                             'ext': ext,
+                            'filesize': info.get('filesize') or info.get('filesize_approx'),
                             'has_cookies': bool(cookie_file)
                         }
         except Exception as e:
