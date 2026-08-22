@@ -240,12 +240,15 @@ app.get("/debug/stream-test", async (req: Request, res: Response) => {
 
     if (resolution.entry?.url) {
       try {
+        const https = require("https");
         const fetchRes = await axios.get(resolution.entry.url, {
           headers: {
             "User-Agent": resolution.entry.headers?.["User-Agent"] || "Mozilla/5.0",
             "Range": "bytes=0-1000",
-            "Accept": "*/*"
+            "Accept": "*/*",
+            "Accept-Encoding": "identity"
           },
+          httpsAgent: new https.Agent({ family: 4, keepAlive: true }),
           timeout: 10000,
           validateStatus: () => true
         });
