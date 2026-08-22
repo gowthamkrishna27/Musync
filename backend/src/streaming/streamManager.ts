@@ -298,26 +298,21 @@ export class StreamManager {
     });
 
     const executeUpstreamRequest = async (entry: StreamCacheEntry) => {
-      const reqHeaders: Record<string, string> = {
-        "User-Agent": entry.headers?.["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      const headers: Record<string, string> = {
+        "User-Agent": entry.headers?.["User-Agent"] || "Mozilla/5.0",
         "Accept": "*/*",
-        "Accept-Encoding": "identity",
-        "Connection": "keep-alive"
+        "Accept-Encoding": "identity"
       };
 
       if (req.headers.range) {
-        reqHeaders["Range"] = req.headers.range;
+        headers["Range"] = req.headers.range;
       }
 
-      return await axios({
-        method: "GET",
-        url: entry.url,
-        headers: reqHeaders,
+      return await axios.get(entry.url, {
+        headers,
         responseType: "stream",
-        signal: abortController.signal,
-        httpAgent,
-        httpsAgent,
-        timeout: 25000,
+        httpsAgent: new https.Agent({ family: 4, keepAlive: true }),
+        timeout: 20000,
         validateStatus: (status) => status < 400
       });
     };
@@ -348,13 +343,15 @@ export class StreamManager {
           return;
         }
 
+        console.error(`[Stream Upstream Failure for ${videoId}]:`, retryErr.message, "Status:", retryErr.response?.status, "Headers:", retryErr.response?.headers);
         cleanup();
         await cacheService.delete(cacheKey);
 
         if (!res.headersSent) {
           res.status(502).json({
             error: "Upstream audio delivery error after retry",
-            message: retryErr.message
+            message: retryErr.message,
+            upstreamStatus: retryErr.response?.status || null
           });
         }
         return;
