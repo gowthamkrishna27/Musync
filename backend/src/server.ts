@@ -54,12 +54,37 @@ const streamLimiter = rateLimit({
   legacyHeaders: false
 });
 
+import fs from "fs";
+import os from "os";
+
 const PORT = parseInt(process.env.PORT || "5000", 10);
 const ytmusic = new YTMusic();
 const recommendationEngine = new RecommendationEngine(ytmusic);
 let isInitialized = false;
 
 const PYTHON_BIN = process.platform === "win32" ? "python" : "python3";
+
+function bootstrapYouTubeCookies() {
+  const rawCookie = process.env.YOUTUBE_COOKIES || process.env.YOUTUBE_COOKIES_BASE64;
+  if (rawCookie && rawCookie.trim().length > 10) {
+    try {
+      let content = rawCookie;
+      if (rawCookie.startsWith("ey") || (!rawCookie.includes("\n") && rawCookie.length > 50 && !rawCookie.includes(";"))) {
+        try {
+          content = Buffer.from(rawCookie, "base64").toString("utf-8");
+        } catch {
+          content = rawCookie;
+        }
+      }
+      const tmpPath = path.join(os.tmpdir(), "musync_yt_cookies.txt");
+      fs.writeFileSync(tmpPath, content, { encoding: "utf-8", mode: 0o600 });
+      process.env.YOUTUBE_COOKIES_FILE = tmpPath;
+      console.log("✓ [Auth] YouTube cookies securely initialized from environment variable.");
+    } catch (err: any) {
+      console.warn("⚠ [Auth] Error writing YouTube cookies to tempfile:", err.message);
+    }
+  }
+}
 
 async function upgradeYtDlp() {
   try {
@@ -72,6 +97,7 @@ async function upgradeYtDlp() {
 }
 
 async function initYTMusic() {
+  bootstrapYouTubeCookies();
   await upgradeYtDlp();
   try {
     await ytmusic.initialize();
@@ -180,12 +206,20 @@ app.get("/metrics", (_req: Request, res: Response) => {
 
 // 4. Diagnostic endpoint to inspect environment
 app.get("/debug/env", async (_req: Request, res: Response) => {
+  const hasCookies = Boolean(
+    process.env.YOUTUBE_COOKIES ||
+    process.env.YOUTUBE_COOKIES_BASE64 ||
+    (process.env.YOUTUBE_COOKIES_FILE && fs.existsSync(process.env.YOUTUBE_COOKIES_FILE)) ||
+    fs.existsSync(path.join(process.cwd(), "cookies.txt"))
+  );
+
   const diagnostics: Record<string, any> = {
     platform: process.platform,
     arch: process.arch,
     nodeVersion: process.version,
     port: PORT,
     pythonBin: PYTHON_BIN,
+    cookiesConfigured: hasCookies
   };
 
   try {
@@ -546,51 +580,37 @@ app.get("/api/music/search", apiLimiter, async (req: Request, res: Response) => 
 app.get("/api/music/debug/:videoId", async (req: Request, res: Response) => {
   const videoId = req.params.videoId as string;
   try {
-    const yt = await youtubeService.getClient();
-    const result: any = { videoId, steps: [] };
+    const { Innertube } = await import("youtubei.js");
+    const clients = ["WEB", "ANDROID", "IOS", "YTMUSIC", "TV_EMBEDDED"];
+    const results: Record<string, any> = {};
 
-    // Step 1: yt.music.getInfo
-    try {
-      const musicInfo = await yt.music.getInfo(videoId);
-      const mFormats = musicInfo.streaming_data?.adaptive_formats || [];
-      const mAudio = mFormats.filter((f: any) => f.has_audio && !f.has_video);
-      result.musicInfo = {
-        totalFormats: mFormats.length,
-        audioFormats: mAudio.length,
-        firstItag: mAudio[0]?.itag,
-        hasUrl: Boolean(mAudio[0]?.url),
-        hasCipher: Boolean(mAudio[0]?.signature_cipher || mAudio[0]?.cipher)
-      };
-      if (mAudio.length > 0) {
-        const chosen = mAudio.find((f: any) => f.itag === 140) || mAudio[0];
+    for (const clientType of clients) {
+      try {
+        const yt = await Innertube.create({ client_type: clientType as any, retrieve_player: true });
+        let formats: any[] = [];
         try {
-          const url = chosen.url || (await chosen.decipher(yt.session.player));
-          result.musicDeciphered = { success: true, urlPreview: url?.substring(0, 60) };
-        } catch (decErr: any) {
-          result.musicDeciphered = { success: false, error: decErr.message };
+          const info = await yt.getInfo(videoId);
+          formats = info.streaming_data?.adaptive_formats || [];
+        } catch (_e: any) {
+          try {
+            const musicInfo = await yt.music.getInfo(videoId);
+            formats = musicInfo.streaming_data?.adaptive_formats || [];
+          } catch (_me: any) {}
         }
+        const audio = formats.filter((f: any) => f.has_audio && !f.has_video);
+        results[clientType] = {
+          totalFormats: formats.length,
+          audioFormats: audio.length,
+          firstItag: audio[0]?.itag,
+          hasUrl: Boolean(audio[0]?.url),
+          hasCipher: Boolean(audio[0]?.signature_cipher || audio[0]?.cipher)
+        };
+      } catch (err: any) {
+        results[clientType] = { error: err.message };
       }
-    } catch (mErr: any) {
-      result.musicInfoError = mErr.message;
     }
 
-    // Step 2: yt.getInfo
-    try {
-      const genInfo = await yt.getInfo(videoId);
-      const gFormats = genInfo.streaming_data?.adaptive_formats || [];
-      const gAudio = gFormats.filter((f: any) => f.has_audio && !f.has_video);
-      result.generalInfo = {
-        totalFormats: gFormats.length,
-        audioFormats: gAudio.length,
-        firstItag: gAudio[0]?.itag,
-        hasUrl: Boolean(gAudio[0]?.url),
-        hasCipher: Boolean(gAudio[0]?.signature_cipher || gAudio[0]?.cipher)
-      };
-    } catch (gErr: any) {
-      result.generalInfoError = gErr.message;
-    }
-
-    res.json(result);
+    res.json({ videoId, results });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

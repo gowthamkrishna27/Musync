@@ -186,7 +186,10 @@ export class StreamManager {
         try {
           ({ stdout, stderr } = await execAsync(
             `"${PYTHON_BIN}" "${scriptPath}" "${videoId}" "${safeQuality}" "audio"`,
-            { timeout: 25000 }
+            {
+              timeout: 25000,
+              env: { ...process.env }
+            }
           ));
         } finally {
           if (slotAcquired) StreamManager.releaseResolveSlot();
@@ -209,9 +212,12 @@ export class StreamManager {
 
           return { entry, source: "resolver" };
         } else if (parsed.error) {
+          const errType = parsed.error_type || "RESOLVER_ERROR";
+          console.warn(`[StreamResolver ${errType} for ${videoId}]:`, parsed.error);
           return { entry: null, error: parsed.error };
         }
       } catch (err: any) {
+        console.warn(`[StreamResolver execution error for ${videoId}]:`, err.message);
         return { entry: null, error: err.message || "Failed to resolve audio stream" };
       }
 

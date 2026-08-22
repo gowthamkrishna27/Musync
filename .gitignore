@@ -43,3 +43,8 @@ load_test/
 scratch/
 oauth.json
 browser.json
+*.cookies
+*cookies.txt
+cookies.txt
+musync_yt_cookies.txt
+

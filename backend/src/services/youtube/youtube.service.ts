@@ -1,5 +1,8 @@
 import { Innertube, UniversalCache, Platform } from "youtubei.js";
 import vm from "vm";
+import fs from "fs";
+import path from "path";
+import os from "os";
 import { MusyncTrack, MusyncSearchResults, AudioStreamResolution } from "./youtube.types";
 
 // Configure safe Node.js VM JavaScript evaluator for YouTube deciphering
@@ -9,6 +12,45 @@ Platform.shim.eval = (data: any, env: any) => {
   const wrapped = `(function() {\n${code}\n})()`;
   return vm.runInNewContext(wrapped, { ...env });
 };
+
+function getYouTubeCookieString(): string | undefined {
+  // 1. Direct cookie string in env
+  const rawCookie = process.env.YOUTUBE_COOKIES || process.env.YOUTUBE_COOKIES_BASE64;
+  if (rawCookie && rawCookie.trim().length > 10) {
+    if (rawCookie.startsWith("ey") || (!rawCookie.includes("\n") && rawCookie.length > 50 && !rawCookie.includes(";"))) {
+      try {
+        return Buffer.from(rawCookie, "base64").toString("utf-8");
+      } catch {
+        return rawCookie;
+      }
+    }
+    return rawCookie;
+  }
+
+  // 2. Cookie file paths
+  const candidateFiles = [
+    process.env.YOUTUBE_COOKIES_FILE,
+    path.join(os.tmpdir(), "musync_yt_cookies.txt"),
+    path.join(process.cwd(), "musync_yt_cookies.txt"),
+    path.join(process.cwd(), "cookies.txt"),
+    path.join(process.cwd(), "scripts", "cookies.txt")
+  ];
+
+  for (const filePath of candidateFiles) {
+    if (filePath && fs.existsSync(filePath)) {
+      try {
+        const content = fs.readFileSync(filePath, "utf-8").trim();
+        if (content.length > 10) {
+          return content;
+        }
+      } catch {
+        // Ignore read error
+      }
+    }
+  }
+
+  return undefined;
+}
 
 export class YouTubeService {
   private static instance: YouTubeService | null = null;
@@ -25,7 +67,7 @@ export class YouTubeService {
   }
 
   /**
-   * Lazy singleton initializer for Innertube instance
+   * Lazy singleton initializer for Innertube instance with secure cookie & proxy support
    */
   public async getClient(): Promise<Innertube> {
     if (this.innertube) {
@@ -37,12 +79,16 @@ export class YouTubeService {
     }
 
     this.initPromise = (async () => {
-      console.log("[YouTubeService] Initializing Innertube client...");
+      const cookieStr = getYouTubeCookieString();
+      const hasCookies = Boolean(cookieStr);
+      console.log(`[YouTubeService] Initializing Innertube client (Auth cookies present: ${hasCookies})...`);
+
       try {
         const client = await Innertube.create({
           lang: "en",
           location: "IN",
           retrieve_player: true,
+          cookie: cookieStr,
           cache: new UniversalCache(true)
         });
         this.innertube = client;
@@ -164,11 +210,11 @@ export class YouTubeService {
     try {
       let formats: any[] = [];
 
-      // 1. Try YouTube Music info first (contains valid signature_ciphers for music)
+      // 1. Try YouTube Music info first
       try {
         const musicInfo = await yt.music.getInfo(videoId);
         formats = musicInfo.streaming_data?.adaptive_formats || [];
-      } catch (_musicErr) {
+      } catch (_musicErr: any) {
         formats = [];
       }
 
@@ -177,13 +223,13 @@ export class YouTubeService {
         try {
           const generalInfo = await yt.getInfo(videoId);
           formats = generalInfo.streaming_data?.adaptive_formats || [];
-        } catch (_genErr) {}
+        } catch (_genErr: any) {
+          formats = [];
+        }
       }
 
       const audioFormats = formats.filter(f => f.has_audio && !f.has_video);
-
       if (audioFormats.length === 0) {
-        // Fallback to any format with audio
         const anyAudio = formats.filter(f => f.has_audio);
         if (anyAudio.length === 0) return null;
         audioFormats.push(...anyAudio);
@@ -213,9 +259,20 @@ export class YouTubeService {
 
       if (!chosen) return null;
 
-      // Decipher streaming URL if required
-      const resolvedUrl = chosen.url || (await chosen.decipher(yt.session.player));
-      if (!resolvedUrl) return null;
+      // Safe deciphering: only attempt decipher when cipher exists or direct URL is missing
+      let resolvedUrl: string | null = chosen.url || null;
+      if (!resolvedUrl && (chosen.signature_cipher || chosen.cipher)) {
+        try {
+          resolvedUrl = await chosen.decipher(yt.session.player);
+        } catch (decipherErr: any) {
+          console.warn(`[YouTubeService] Decipher failed for ${videoId} (${chosen.itag}):`, decipherErr.message);
+          return null;
+        }
+      }
+
+      if (!resolvedUrl) {
+        return null;
+      }
 
       const isWebm = (chosen.mime_type && chosen.mime_type.includes("webm")) || chosen.itag === 251 || chosen.itag === 250 || chosen.itag === 249;
       const ext = isWebm ? "webm" : "m4a";
@@ -238,7 +295,7 @@ export class YouTubeService {
         expiresAt: Date.now() + 2 * 3600 * 1000 // 2 hours validity
       };
     } catch (err: any) {
-      console.error(`[YouTubeService] resolveAudioStream failed for ${videoId}:`, err.message);
+      console.warn(`[YouTubeService] resolveAudioStream failed for ${videoId}:`, err.message);
       return null;
     }
   }
