@@ -124,7 +124,7 @@ export class StreamManager {
     }
 
     const safeQuality = ["low", "saver", "standard", "high"].includes(quality.toLowerCase()) ? quality.toLowerCase() : "low";
-    const cacheKey = `stream:v3:audio:${videoId}:${safeQuality}`;
+    const cacheKey = `stream:v4:audio:${videoId}:${safeQuality}`;
 
     // 1. Check L1 / L2 Cache
     const cached = await cacheService.get<StreamCacheEntry>(cacheKey);
@@ -288,7 +288,7 @@ export class StreamManager {
     });
     res.on("error", proxyCleanup);
 
-    const cacheKey = `stream:v3:audio:${videoId}:${quality.toLowerCase()}`;
+    const cacheKey = `stream:v4:audio:${videoId}:${quality.toLowerCase()}`;
 
     // Use the already-resolved stream entry from the top of the method
     let streamEntry = resolution.entry;
