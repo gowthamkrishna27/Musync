@@ -1,3 +1,6 @@
+import http from "http";
+import https from "https";
+import axios from "axios";
 import { Request, Response } from "express";
 import { exec } from "child_process";
 import { promisify } from "util";
@@ -8,6 +11,25 @@ import { youtubeService } from "../services/youtube/youtube.service";
 
 const execAsync = promisify(exec);
 const PYTHON_BIN = process.platform === "win32" ? "python" : "python3";
+
+// High-capacity HTTP/HTTPS agents with IPv4 socket pooling and keep-alive
+const httpAgent = new http.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30000,
+  maxSockets: 10000,
+  maxFreeSockets: 512,
+  timeout: 30000,
+  family: 4
+});
+
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30000,
+  maxSockets: 10000,
+  maxFreeSockets: 512,
+  timeout: 30000,
+  family: 4
+});
 
 export interface StreamResolutionResult {
   entry: StreamCacheEntry | null;
@@ -90,7 +112,7 @@ export class StreamManager {
     }
 
     const safeQuality = ["low", "saver", "standard", "high"].includes(quality.toLowerCase()) ? quality.toLowerCase() : "low";
-    const cacheKey = `stream:v5:audio:${videoId}:${safeQuality}`;
+    const cacheKey = `stream:v7:audio:${videoId}:${safeQuality}`;
 
     // 1. Check L1 / L2 Cache
     const cached = await cacheService.get<StreamCacheEntry>(cacheKey);
@@ -106,7 +128,7 @@ export class StreamManager {
         return { entry: recheck, source: "redis" };
       }
 
-      // Primary: Python stream_resolver.py (with android/web_embedded & challenge solver)
+      // Primary: Python stream_resolver.py (with android_vr / challenge solver)
       try {
         const fs = require("fs");
         const candidatePaths = [
@@ -141,8 +163,8 @@ export class StreamManager {
             url: parsed.url,
             headers: parsed.headers || {},
             expiresAt: Date.now() + ttlSeconds * 1000,
-            format: `audio/${parsed.ext || "m4a"}`,
-            ext: parsed.ext || "m4a",
+            format: `audio/${parsed.ext || "webm"}`,
+            ext: parsed.ext || "webm",
             source: parsed.client || "resolver"
           };
 
@@ -191,14 +213,10 @@ export class StreamManager {
   }
 
   /**
-   * Audio Stream Handler — Direct High-Performance CDN Redirect Mode
+   * Audio Stream Handler — High-Performance Direct Stream Proxy with Byte-Range & CORS Support
    *
-   * Resolves the signed YouTube CDN URL server-side (with L1 caching & single-flight
-   * coalescing) then issues a 302 redirect so ExoPlayer / HTML5 Audio fetches the audio bytes
-   * directly from YouTube's high-speed CDN.
-   *
-   * This provides instant startup (<150ms TTFB), eliminates server-side proxying bottlenecks,
-   * supports full hardware-accelerated seeking, and ensures complete client compatibility.
+   * Fetches the audio bytes from YouTube CDN using the server's signed IPv4 connection and
+   * pipes raw audio directly to the browser / Android player with complete CORS & Range headers.
    */
   static async handleStreamRequest(req: Request, res: Response): Promise<void> {
     const videoId = (req.query.id || req.query.query || req.query.videoId) as string;
@@ -214,11 +232,11 @@ export class StreamManager {
     res.on("finish", cleanup);
     res.on("close", cleanup);
 
-    // Set full CORS headers for Web, Capacitor WebView & Android ExoPlayer
+    // Set full CORS headers for Web, Android WebView, Capacitor & ExoPlayer
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Range, Content-Type, Accept, Origin, User-Agent");
-    res.setHeader("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges, Content-Type, X-Content-Duration, Location");
+    res.setHeader("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges, Content-Type, X-Content-Duration");
     res.setHeader("Cache-Control", "public, max-age=7200, no-transform");
 
     if (req.method === "OPTIONS") {
@@ -237,7 +255,164 @@ export class StreamManager {
       return;
     }
 
-    // 302 Found redirect to direct CDN streaming URL
-    res.redirect(302, resolution.entry.url);
+    const streamStartTime = Date.now();
+    let timeToFirstByte = 0;
+    let bytesSent = 0;
+    let isStreamFinished = false;
+
+    const proxyCleanup = () => {
+      if (!isStreamFinished) {
+        isStreamFinished = true;
+        const durationSec = Math.max(0.001, (Date.now() - streamStartTime) / 1000);
+        const downstreamRateKbps = (bytesSent * 8) / (1000 * durationSec);
+        const estimatedBitrateKbps = quality === "saver" || quality === "low" ? 48 : (quality === "standard" ? 96 : 128);
+        const throughputRatio = (downstreamRateKbps / estimatedBitrateKbps).toFixed(2);
+        const healthStatus = parseFloat(throughputRatio) >= 1.0 ? "HEALTHY" : "BUFFERING";
+
+        console.log(JSON.stringify({
+          streamDiagnostic: {
+            trackId: videoId, quality,
+            timeToFirstByteMs: timeToFirstByte,
+            bytesSent,
+            connectionDurationSec: parseFloat(durationSec.toFixed(2)),
+            downstreamRateKbps: parseFloat(downstreamRateKbps.toFixed(1)),
+            throughputRatio: `${throughputRatio}x`,
+            streamHealth: healthStatus
+          }
+        }));
+      }
+    };
+
+    req.on("close", proxyCleanup);
+    res.on("error", proxyCleanup);
+
+    const cacheKey = `stream:v7:audio:${videoId}:${quality.toLowerCase()}`;
+    let streamEntry = resolution.entry;
+
+    // Upstream Request configuration
+    const abortController = new AbortController();
+    req.on("close", () => {
+      if (!res.writableEnded) {
+        abortController.abort();
+      }
+    });
+
+    const executeUpstreamRequest = async (entry: StreamCacheEntry) => {
+      const reqHeaders: Record<string, string> = {
+        "User-Agent": entry.headers?.["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Encoding": "identity",
+        "Connection": "keep-alive"
+      };
+
+      if (req.headers.range) {
+        reqHeaders["Range"] = req.headers.range;
+      }
+
+      return await axios({
+        method: "GET",
+        url: entry.url,
+        headers: reqHeaders,
+        responseType: "stream",
+        signal: abortController.signal,
+        httpAgent,
+        httpsAgent,
+        timeout: 25000,
+        validateStatus: (status) => status < 400
+      });
+    };
+
+    let audioResponse;
+    try {
+      audioResponse = await executeUpstreamRequest(streamEntry);
+    } catch (firstErr: any) {
+      if (axios.isCancel(firstErr) || firstErr.name === "AbortError" || req.destroyed) {
+        cleanup();
+        return;
+      }
+
+      console.warn(`[Upstream retry] Audio stream request failed for ${videoId} (${firstErr.message}). Purging cache and re-resolving fresh stream...`);
+      await cacheService.delete(cacheKey);
+
+      try {
+        const freshResolution = await StreamManager.resolveStream(videoId, quality);
+        if (freshResolution.entry) {
+          streamEntry = freshResolution.entry;
+          audioResponse = await executeUpstreamRequest(streamEntry);
+        } else {
+          throw new Error(freshResolution.error || "Failed fresh resolution");
+        }
+      } catch (retryErr: any) {
+        if (axios.isCancel(retryErr) || retryErr.name === "AbortError" || req.destroyed) {
+          cleanup();
+          return;
+        }
+
+        cleanup();
+        await cacheService.delete(cacheKey);
+
+        if (!res.headersSent) {
+          res.status(502).json({
+            error: "Upstream audio delivery error after retry",
+            message: retryErr.message
+          });
+        }
+        return;
+      }
+    }
+
+    try {
+      const status = audioResponse.status;
+      res.status(status);
+
+      let contentType = String(audioResponse.headers["content-type"] || "");
+      if (!contentType || contentType === "application/octet-stream" || contentType.startsWith("video/")) {
+        if (streamEntry.ext === "webm" || contentType.includes("webm") || streamEntry.format?.includes("webm")) {
+          contentType = "audio/webm";
+        } else if (streamEntry.ext === "aac" || streamEntry.format?.includes("aac")) {
+          contentType = "audio/aac";
+        } else {
+          contentType = "audio/mp4";
+        }
+      }
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Accept-Ranges", "bytes");
+
+      const contentLength = audioResponse.headers["content-length"];
+      if (contentLength) {
+        res.setHeader("Content-Length", String(contentLength));
+        metricsService.recordRangeRequest(parseInt(String(contentLength), 10) || 0);
+      }
+
+      const contentRange = audioResponse.headers["content-range"];
+      if (contentRange) {
+        res.setHeader("Content-Range", String(contentRange));
+      }
+
+      if (!contentLength) {
+        const estimatedBitrateKbps = quality === "saver" || quality === "low" ? 48 : (quality === "standard" ? 96 : 128);
+        const estimatedBytes = estimatedBitrateKbps * 1000 / 8 * 240;
+        res.setHeader("X-Content-Duration", "240");
+        res.setHeader("X-Estimated-Content-Length", String(Math.round(estimatedBytes)));
+      }
+
+      audioResponse.data.on("data", (chunk: Buffer) => {
+        if (!timeToFirstByte) {
+          timeToFirstByte = Date.now() - streamStartTime;
+        }
+        bytesSent += chunk.length;
+      });
+
+      audioResponse.data.on("error", (streamErr: any) => {
+        cleanup();
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Stream transmission error", details: streamErr.message });
+        }
+      });
+
+      audioResponse.data.pipe(res);
+    } catch (pipeErr: any) {
+      cleanup();
+    }
   }
 }

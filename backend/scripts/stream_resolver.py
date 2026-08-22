@@ -97,12 +97,12 @@ def resolve(video_id, quality="low", _media_type="audio"):
     cookie_file = get_cookie_file()
 
     # Cascade client configurations:
-    # 1. ['android', 'web_embedded']: Clean unthrottled streaming with Node EJS solver
-    # 2. ['android_vr', 'tv_embedded']: Datacenter resilient fallback
+    # 1. ['android_vr', 'tv_embedded']: Datacenter resilient (bypasses bot block on Railway)
+    # 2. ['android', 'web_embedded']: Android mobile fallback
     # 3. ['web', 'mweb']: Standard web client fallback
     client_candidates = [
-        ['android', 'web_embedded'],
         ['android_vr', 'tv_embedded'],
+        ['android', 'web_embedded'],
         ['web', 'mweb']
     ]
 
