@@ -176,7 +176,7 @@ export class StreamManager {
       // Fallback: Pure TypeScript YouTube.js Service
       try {
         const resolved = await youtubeService.resolveAudioStream(videoId, safeQuality);
-        if (resolved && resolved.url) {
+        if (resolved && resolved.url && resolved.url.startsWith("http")) {
           const ttlSeconds = 2 * 3600; // 2 hours
           const entry: StreamCacheEntry = {
             url: resolved.url,
@@ -195,58 +195,6 @@ export class StreamManager {
         }
       } catch (ytjsErr: any) {
         console.warn(`[YouTube.js resolver error for ${videoId}]:`, ytjsErr.message);
-      }
-
-      // Fallback: Piped Audio Gateway Resolver
-      try {
-        const pipedUrl = await musicProxyService.resolvePipedStreamUrl(videoId);
-        if (pipedUrl) {
-          const ttlSeconds = 3600;
-          const entry: StreamCacheEntry = {
-            url: pipedUrl,
-            headers: {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-              "Accept": "*/*"
-            },
-            expiresAt: Date.now() + ttlSeconds * 1000,
-            format: "audio/webm",
-            ext: "webm",
-            source: "piped"
-          };
-
-          await cacheService.set(cacheKey, entry, ttlSeconds);
-          await cacheService.recordTrackPlay(videoId);
-
-          return { entry, source: "resolver" };
-        }
-      } catch (pipedErr: any) {
-        console.warn(`[Piped resolver error for ${videoId}]:`, pipedErr.message);
-      }
-
-      // Fallback: Invidious Audio Gateway Resolver
-      try {
-        const invidiousUrl = await musicProxyService.resolveInvidiousStreamUrl(videoId);
-        if (invidiousUrl) {
-          const ttlSeconds = 3600;
-          const entry: StreamCacheEntry = {
-            url: invidiousUrl,
-            headers: {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-              "Accept": "*/*"
-            },
-            expiresAt: Date.now() + ttlSeconds * 1000,
-            format: "audio/mp4",
-            ext: "m4a",
-            source: "invidious"
-          };
-
-          await cacheService.set(cacheKey, entry, ttlSeconds);
-          await cacheService.recordTrackPlay(videoId);
-
-          return { entry, source: "resolver" };
-        }
-      } catch (invErr: any) {
-        console.warn(`[Invidious resolver error for ${videoId}]:`, invErr.message);
       }
 
       return { entry: null, error: "Failed to resolve audio stream across all resolvers" };
