@@ -109,11 +109,17 @@ def resolve(video_id, quality="low", _media_type="audio"):
     last_error = "Unknown resolution error"
     last_error_type = "UNKNOWN"
 
+    class NullLogger:
+        def debug(self, msg): pass
+        def warning(self, msg): pass
+        def error(self, msg): pass
+
     for client_list in client_candidates:
         opts = {
             'format': format_spec,
             'quiet': True,
             'no_warnings': True,
+            'logger': NullLogger(),
             'skip_download': True,
             'nocheckcertificate': True,
             'geo_bypass': True,

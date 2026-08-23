@@ -423,7 +423,7 @@ export class MusicProxyService {
           (b.bitrate || 0) > (a.bitrate || 0) ? b : a
         );
 
-        if (best && best.url) {
+        if (best && best.url && (best.url.includes("videoplayback") || best.url.includes("googlevideo") || best.url.includes("itag=") || best.url.endsWith(".m4a") || best.url.endsWith(".webm"))) {
           const fullUrl = best.url.startsWith("http")
             ? best.url
             : new URL(best.url, instance).toString();

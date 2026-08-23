@@ -138,8 +138,19 @@ export class StreamManager {
           if (slotAcquired) StreamManager.releaseResolveSlot();
         }
 
-        const parsed = JSON.parse(stdout.trim());
-        if (parsed.url) {
+        const lines = stdout.trim().split("\n");
+        let parsed: any = null;
+        for (let i = lines.length - 1; i >= 0; i--) {
+          const l = lines[i].trim();
+          if (l.startsWith("{") && l.endsWith("}")) {
+            try {
+              parsed = JSON.parse(l);
+              break;
+            } catch {}
+          }
+        }
+
+        if (parsed && parsed.url && parsed.url.startsWith("http")) {
           const ttlSeconds = 2 * 3600;
           const entry: StreamCacheEntry = {
             url: parsed.url,
@@ -154,7 +165,7 @@ export class StreamManager {
           await cacheService.recordTrackPlay(videoId);
 
           return { entry, source: "resolver" };
-        } else if (parsed.error) {
+        } else if (parsed && parsed.error) {
           const errType = parsed.error_type || "RESOLVER_ERROR";
           console.warn(`[StreamResolver ${errType} for ${videoId}]:`, parsed.error);
         }
