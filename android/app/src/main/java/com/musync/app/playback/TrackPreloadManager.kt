@@ -61,7 +61,7 @@ class TrackPreloadManager(
     fun onTrackPlaying(
         currentIndex: Int,
         queue: List<Track>,
-        baseUrl: String = "https://musync-production-2fc5.up.railway.app",
+        baseUrl: String = "https://musync-8482.onrender.com",
         quality: String = "low"
     ) {
         if (queue.isEmpty() || currentIndex !in queue.indices) return

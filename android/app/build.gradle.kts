@@ -15,8 +15,8 @@ android {
         applicationId = "com.musync.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1200
-        versionName = "1.2.0.0"
+        versionCode = 1300
+        versionName = "1.3.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -78,8 +78,8 @@ dependencies {
     androidTestImplementation(composeBom)
 
     // Supabase (replaces Firebase Auth + Firestore)
-    implementation(platform("io.github.jan-tennert.supabase:bom:2.6.1"))
-    implementation("io.github.jan-tennert.supabase:auth-kt")          // GoTrue / Auth
+    implementation(platform("io.github.jan-tennert.supabase:bom:3.0.2"))
+    implementation("io.github.jan-tennert.supabase:auth-kt")          // Auth
     implementation("io.github.jan-tennert.supabase:postgrest-kt")      // PostgREST / Database
 
     // Ktor Android HTTP engine required by Supabase SDK

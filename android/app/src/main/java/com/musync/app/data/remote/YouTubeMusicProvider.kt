@@ -2,6 +2,7 @@ package com.musync.app.data.remote
 
 import android.util.Log
 import com.google.gson.Gson
+import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.musync.app.domain.model.Album
@@ -42,10 +43,11 @@ class YouTubeMusicProvider(
 
     companion object {
         private const val TAG = "YouTubeMusicProvider"
+        const val RENDER_URL = "https://musync-8482.onrender.com"
         const val RAILWAY_URL = "https://musync-production-2fc5.up.railway.app"
         const val LOCAL_URL = "http://192.168.0.104:5000"
-        const val CLOUD_URL = RAILWAY_URL
-        const val DEFAULT_RENDER_URL = RAILWAY_URL
+        const val CLOUD_URL = RENDER_URL
+        const val DEFAULT_RENDER_URL = RENDER_URL
 
         // NOTE: Piped and Invidious instance lists have been moved to the backend
         // (MusicProxyService). The Android client no longer calls these gateways directly.
@@ -61,9 +63,9 @@ class YouTubeMusicProvider(
 
         verifiedWorkingUrl?.let { return@withContext it }
 
-        // Default directly to 24/7 Railway Cloud Gateway
-        verifiedWorkingUrl = RAILWAY_URL
-        RAILWAY_URL
+        // Default directly to 24/7 Render Cloud Gateway
+        verifiedWorkingUrl = RENDER_URL
+        RENDER_URL
     }
 
     private var currentAudioQuality: String = "low"

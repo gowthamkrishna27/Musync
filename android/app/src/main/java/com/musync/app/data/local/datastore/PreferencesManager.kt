@@ -38,7 +38,7 @@ class PreferencesManager(private val context: Context) {
     }
 
     companion object {
-        const val DEFAULT_BASE_URL = "https://musync-production-2fc5.up.railway.app"
+        const val DEFAULT_BASE_URL = "https://musync-8482.onrender.com"
         private const val SECURE_KEY_API_KEY = "secure_api_key"
 
         // General

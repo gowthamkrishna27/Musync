@@ -18,8 +18,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 enum class AuthProviderType {
     GOOGLE,
@@ -80,11 +82,11 @@ class AuthManager(
                         _currentUser.value = null
                         Log.d(TAG, "AUTH: Not authenticated")
                     }
-                    is SessionStatus.LoadingFromStorage -> {
+                    is SessionStatus.Initializing -> {
                         Log.d(TAG, "AUTH: Loading session from storage...")
                     }
                     is SessionStatus.RefreshFailure -> {
-                        Log.w(TAG, "AUTH: Session refresh failed — ${status.cause?.message}")
+                        Log.w(TAG, "AUTH: Session refresh failed — ${status.cause}")
                         // Keep the last known user so the app doesn't log out unexpectedly on flaky networks
                     }
                     else -> {}
@@ -158,7 +160,7 @@ class AuthManager(
                 this.email = email.trim()
                 this.password = password
                 if (displayName.isNotBlank()) {
-                    data {
+                    data = buildJsonObject {
                         put("display_name", displayName.trim())
                         put("name", displayName.trim())
                     }
@@ -329,7 +331,7 @@ class AuthManager(
         val current = supabase.auth.currentUserOrNull()
         if (current != null) {
             supabase.auth.updateUser {
-                data {
+                data = buildJsonObject {
                     put("display_name", newName.trim())
                     put("name", newName.trim())
                 }

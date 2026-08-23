@@ -12,7 +12,7 @@ object MediaItemMapper {
     private const val EXTRA_TRACK_ID = "musync_extra_track_id"
     private const val EXTRA_ARTIST_ID = "musync_extra_artist_id"
     private const val EXTRA_GENRE = "musync_extra_genre"
-    private const val DEFAULT_BASE_URL = "https://musync-production-2fc5.up.railway.app"
+    private const val DEFAULT_BASE_URL = "https://musync-8482.onrender.com"
 
     fun toMediaItem(
         track: Track,
