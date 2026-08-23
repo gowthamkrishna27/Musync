@@ -30,13 +30,18 @@ const CACHE_TTL_MS = 3600000;
 
 const PIPED_INSTANCES: string[] = [
   "https://pipedapi.kavin.rocks",
-  "https://api.piped.privacydev.net",
-  "https://pipedapi.leptons.xyz"
+  "https://pipedapi.drgns.space",
+  "https://piped-api.lunar.icu",
+  "https://pipedapi.leptons.xyz",
+  "https://api.piped.privacydev.net"
 ];
 
 const INVIDIOUS_INSTANCES: string[] = [
-  "https://inv.nadeko.net",
   "https://invidious.nerdvpn.de",
+  "https://inv.nadeko.net",
+  "https://invidious.drgns.space",
+  "https://inv.tux.pizza",
+  "https://invidious.projectsegfau.lt",
   "https://invidious.privacydev.net"
 ];
 

@@ -8,6 +8,7 @@ import { URL } from "url";
 import { cacheService, StreamCacheEntry } from "../cache/cacheService";
 import { metricsService } from "../metrics/metricsService";
 import { youtubeService } from "../services/youtube/youtube.service";
+import { musicProxyService } from "../services/proxy/musicProxy.service";
 
 const execAsync = promisify(exec);
 const PYTHON_BIN = process.platform === "win32" ? "python" : "python3";
@@ -185,6 +186,58 @@ export class StreamManager {
         console.warn(`[YouTube.js resolver error for ${videoId}]:`, ytjsErr.message);
       }
 
+      // Fallback: Piped Audio Gateway Resolver
+      try {
+        const pipedUrl = await musicProxyService.resolvePipedStreamUrl(videoId);
+        if (pipedUrl) {
+          const ttlSeconds = 3600;
+          const entry: StreamCacheEntry = {
+            url: pipedUrl,
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+              "Accept": "*/*"
+            },
+            expiresAt: Date.now() + ttlSeconds * 1000,
+            format: "audio/webm",
+            ext: "webm",
+            source: "piped"
+          };
+
+          await cacheService.set(cacheKey, entry, ttlSeconds);
+          await cacheService.recordTrackPlay(videoId);
+
+          return { entry, source: "resolver" };
+        }
+      } catch (pipedErr: any) {
+        console.warn(`[Piped resolver error for ${videoId}]:`, pipedErr.message);
+      }
+
+      // Fallback: Invidious Audio Gateway Resolver
+      try {
+        const invidiousUrl = await musicProxyService.resolveInvidiousStreamUrl(videoId);
+        if (invidiousUrl) {
+          const ttlSeconds = 3600;
+          const entry: StreamCacheEntry = {
+            url: invidiousUrl,
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+              "Accept": "*/*"
+            },
+            expiresAt: Date.now() + ttlSeconds * 1000,
+            format: "audio/mp4",
+            ext: "m4a",
+            source: "invidious"
+          };
+
+          await cacheService.set(cacheKey, entry, ttlSeconds);
+          await cacheService.recordTrackPlay(videoId);
+
+          return { entry, source: "resolver" };
+        }
+      } catch (invErr: any) {
+        console.warn(`[Invidious resolver error for ${videoId}]:`, invErr.message);
+      }
+
       return { entry: null, error: "Failed to resolve audio stream across all resolvers" };
     });
   }
@@ -194,10 +247,10 @@ export class StreamManager {
   }
 
   /**
-   * Native Stream Proxy with Byte-Range & CORS Support
+   * Native Stream Proxy with Byte-Range, Redirect & CORS Support
    *
-   * Streams audio chunks directly from Google Video CDN using native Node https.request
-   * with family: 4 to preserve IPv4 token bindings without intermediary client headers tampering.
+   * Streams audio chunks directly from CDN / gateway endpoints with IPv4 binding
+   * and auto-redirect handling for Invidious/Piped CDN tokens.
    */
   static async handleStreamRequest(req: Request, res: Response): Promise<void> {
     const videoId = (req.query.id || req.query.query || req.query.videoId) as string;
@@ -239,80 +292,100 @@ export class StreamManager {
     const streamEntry = resolution.entry;
     const rangeHeader = req.headers.range || "bytes=0-";
 
-    try {
-      const u = new URL(streamEntry.url);
-      const reqHeaders: Record<string, string> = {
-        "User-Agent": streamEntry.headers?.["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "*/*",
-        "Accept-Encoding": "identity",
-        "Range": rangeHeader
-      };
+    const streamUpstream = (targetUrl: string, redirectCount = 0) => {
+      if (redirectCount > 5) {
+        cleanup();
+        if (!res.headersSent) res.status(502).json({ error: "Too many redirects from stream provider" });
+        return;
+      }
 
-      const upstreamReq = https.request({
-        protocol: u.protocol,
-        hostname: u.hostname,
-        port: 443,
-        path: u.pathname + u.search,
-        method: "GET",
-        family: 4,
-        headers: reqHeaders
-      }, (upstreamRes) => {
-        const status = upstreamRes.statusCode || 200;
-        if (status >= 400) {
-          console.error(`[Upstream CDN ${status} for ${videoId}]:`, upstreamRes.statusMessage);
+      try {
+        const u = new URL(targetUrl);
+        const protocolLib = u.protocol === "http:" ? http : https;
+        const reqHeaders: Record<string, string> = {
+          "User-Agent": streamEntry.headers?.["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "Accept": "*/*",
+          "Accept-Encoding": "identity",
+          "Range": rangeHeader
+        };
+
+        const upstreamReq = protocolLib.request({
+          protocol: u.protocol,
+          hostname: u.hostname,
+          port: u.port ? parseInt(u.port, 10) : (u.protocol === "http:" ? 80 : 443),
+          path: u.pathname + u.search,
+          method: "GET",
+          family: 4,
+          headers: reqHeaders
+        }, (upstreamRes) => {
+          const status = upstreamRes.statusCode || 200;
+
+          // Follow redirect if 3xx
+          if (status >= 300 && status < 400 && upstreamRes.headers.location) {
+            const nextUrl = upstreamRes.headers.location.startsWith("http")
+              ? upstreamRes.headers.location
+              : new URL(upstreamRes.headers.location, targetUrl).toString();
+            return streamUpstream(nextUrl, redirectCount + 1);
+          }
+
+          if (status >= 400) {
+            console.error(`[Upstream CDN ${status} for ${videoId}]:`, upstreamRes.statusMessage);
+            cleanup();
+            if (!res.headersSent) {
+              res.status(502).json({
+                error: "Upstream CDN error",
+                status,
+                statusMessage: upstreamRes.statusMessage
+              });
+            }
+            return;
+          }
+
+          res.status(status);
+
+          let contentType = String(upstreamRes.headers["content-type"] || "");
+          if (!contentType || contentType === "application/octet-stream" || contentType.startsWith("video/")) {
+            if (streamEntry.ext === "webm" || contentType.includes("webm") || streamEntry.format?.includes("webm")) {
+              contentType = "audio/webm";
+            } else if (streamEntry.ext === "aac" || streamEntry.format?.includes("aac")) {
+              contentType = "audio/aac";
+            } else {
+              contentType = "audio/mp4";
+            }
+          }
+          res.setHeader("Content-Type", contentType);
+          res.setHeader("Accept-Ranges", "bytes");
+
+          if (upstreamRes.headers["content-length"]) {
+            res.setHeader("Content-Length", String(upstreamRes.headers["content-length"]));
+          }
+          if (upstreamRes.headers["content-range"]) {
+            res.setHeader("Content-Range", String(upstreamRes.headers["content-range"]));
+          }
+
+          upstreamRes.pipe(res);
+        });
+
+        upstreamReq.on("error", (err: any) => {
           cleanup();
           if (!res.headersSent) {
-            res.status(502).json({
-              error: "Upstream CDN error",
-              status,
-              statusMessage: upstreamRes.statusMessage
-            });
+            res.status(502).json({ error: "Upstream request failed", message: err.message });
           }
-          return;
-        }
+        });
 
-        res.status(status);
+        req.on("close", () => {
+          upstreamReq.destroy();
+        });
 
-        let contentType = String(upstreamRes.headers["content-type"] || "");
-        if (!contentType || contentType === "application/octet-stream" || contentType.startsWith("video/")) {
-          if (streamEntry.ext === "webm" || contentType.includes("webm") || streamEntry.format?.includes("webm")) {
-            contentType = "audio/webm";
-          } else if (streamEntry.ext === "aac" || streamEntry.format?.includes("aac")) {
-            contentType = "audio/aac";
-          } else {
-            contentType = "audio/mp4";
-          }
-        }
-        res.setHeader("Content-Type", contentType);
-        res.setHeader("Accept-Ranges", "bytes");
-
-        if (upstreamRes.headers["content-length"]) {
-          res.setHeader("Content-Length", String(upstreamRes.headers["content-length"]));
-        }
-        if (upstreamRes.headers["content-range"]) {
-          res.setHeader("Content-Range", String(upstreamRes.headers["content-range"]));
-        }
-
-        upstreamRes.pipe(res);
-      });
-
-      upstreamReq.on("error", (err: any) => {
+        upstreamReq.end();
+      } catch (e: any) {
         cleanup();
         if (!res.headersSent) {
-          res.status(502).json({ error: "Upstream request failed", message: err.message });
+          res.status(500).json({ error: "Stream proxy error", message: e.message });
         }
-      });
-
-      req.on("close", () => {
-        upstreamReq.destroy();
-      });
-
-      upstreamReq.end();
-    } catch (e: any) {
-      cleanup();
-      if (!res.headersSent) {
-        res.status(500).json({ error: "Stream proxy error", message: e.message });
       }
-    }
+    };
+
+    streamUpstream(streamEntry.url);
   }
 }
