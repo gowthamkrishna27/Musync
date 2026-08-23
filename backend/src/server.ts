@@ -264,6 +264,25 @@ app.get("/debug/env", async (_req: Request, res: Response) => {
   res.json(diagnostics);
 });
 
+// 4. Raw Python execution diagnostic endpoint
+app.get("/debug/raw-python", async (req: Request, res: Response) => {
+  const testId = (req.query.id as string) || "JGwWNGJdvx8";
+  const { exec } = require("child_process");
+  const path = require("path");
+  const scriptPath = path.join(process.cwd(), "scripts", "stream_resolver.py");
+  const cmd = `python3 "${scriptPath}" "${testId}" "low" "audio"`;
+
+  exec(cmd, { timeout: 20000 }, (error: any, stdout: string, stderr: string) => {
+    res.json({
+      cmd,
+      cwd: process.cwd(),
+      error: error ? error.message : null,
+      stdout: stdout ? stdout.substring(0, 2000) : null,
+      stderr: stderr ? stderr.substring(0, 2000) : null
+    });
+  });
+});
+
 // 4a. Live stream diagnostic test
 app.get("/debug/stream-test", async (req: Request, res: Response) => {
   const testId = (req.query.id as string) || "dQw4w9WgXcQ";

@@ -235,9 +235,20 @@ class YouTubeMusicProvider(
 
     override suspend fun getStreamUrl(track: Track): String? = withContext(Dispatchers.IO) {
         val videoId = track.id.removePrefix("yt_")
-        val targetRenderUrl = getActiveBaseUrl()
 
-        // 1. Query Render /song endpoint with 3s fast timeout
+        // 1. Extract audio stream locally on the phone (Residential/Mobile IP, 0 datacenter blocks)
+        try {
+            val nativeUrl = com.musync.app.core.network.NativeYouTubeStreamExtractor.extractStreamUrl(videoId, currentAudioQuality)
+            if (!nativeUrl.isNullOrBlank()) {
+                Log.d(TAG, "✓ Using direct client-extracted stream URL for $videoId")
+                return@withContext nativeUrl
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Client-side extraction fallback triggered: ${e.message}")
+        }
+
+        // 2. Fallback: Query backend /song direct endpoint
+        val targetRenderUrl = getActiveBaseUrl()
         try {
             val songUrl = "$targetRenderUrl/song?id=$videoId"
             val reqBuilder = Request.Builder().url(songUrl).header("User-Agent", "Musync-Android/1.0")
@@ -257,7 +268,7 @@ class YouTubeMusicProvider(
             Log.w(TAG, "Failed resolving /song direct stream: ${e.message}")
         }
 
-        // 2. Return direct high-availability server audio stream redirect
+        // 3. Fallback: Backend audio stream proxy
         "$targetRenderUrl/stream?id=$videoId&quality=$currentAudioQuality"
     }
 
