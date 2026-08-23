@@ -423,11 +423,14 @@ export class MusicProxyService {
           (b.bitrate || 0) > (a.bitrate || 0) ? b : a
         );
 
-        if (best.url) {
+        if (best && best.url) {
+          const fullUrl = best.url.startsWith("http")
+            ? best.url
+            : new URL(best.url, instance).toString();
           console.log(
             `[MusicProxy] Piped stream resolved (${instance}) for ${videoId} @ ${best.bitrate}bps`
           );
-          return best.url;
+          return fullUrl;
         }
       } catch (err: any) {
         console.warn(
@@ -453,17 +456,17 @@ export class MusicProxyService {
           maxRedirects: 0,
           validateStatus: (s) => s < 400
         });
-        if (resp.status >= 200 && resp.status < 400) {
-          console.log(
-            `[MusicProxy] Invidious stream resolved (${instance}) for ${videoId}`
-          );
+        if (resp.status >= 300 && resp.status < 400 && resp.headers.location) {
+          const loc = resp.headers.location;
+          return loc.startsWith("http") ? loc : new URL(loc, instance).toString();
+        }
+        if (resp.status === 200) {
           return url;
         }
       } catch (err: any) {
-        if (err.response?.status && err.response.status >= 300 && err.response.status < 400) {
-          const location = err.response.headers?.location;
-          if (location) return location;
-          return `${instance}/latest_version?id=${videoId}&itag=140`;
+        if (err.response?.headers?.location) {
+          const loc = err.response.headers.location;
+          return loc.startsWith("http") ? loc : new URL(loc, instance).toString();
         }
         console.warn(
           `[MusicProxy] Invidious stream check (${instance}) failed for ${videoId}: ${err.message}`
