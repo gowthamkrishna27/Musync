@@ -205,6 +205,11 @@ app.get("/metrics", (_req: Request, res: Response) => {
   });
 });
 
+app.get("/debug/flush-cache", async (_req: Request, res: Response) => {
+  await cacheService.flush();
+  res.json({ success: true, message: "Cache flushed completely." });
+});
+
 // 4. Diagnostic endpoint to inspect environment
 app.get("/debug/env", async (_req: Request, res: Response) => {
   const hasCookies = Boolean(
