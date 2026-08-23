@@ -292,6 +292,13 @@ export class StreamManager {
     const streamEntry = resolution.entry;
     const rangeHeader = req.headers.range || "bytes=0-";
 
+    // Direct redirect mode option (zero proxy overhead, direct stream on mobile):
+    if (req.query.redirect === "true" || req.query.direct === "true") {
+      cleanup();
+      res.redirect(302, streamEntry.url);
+      return;
+    }
+
     const streamUpstream = (targetUrl: string, redirectCount = 0) => {
       if (redirectCount > 5) {
         cleanup();
@@ -303,7 +310,7 @@ export class StreamManager {
         const u = new URL(targetUrl);
         const protocolLib = u.protocol === "http:" ? http : https;
         const reqHeaders: Record<string, string> = {
-          "User-Agent": streamEntry.headers?.["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "User-Agent": streamEntry.headers?.["User-Agent"] || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
           "Accept": "*/*",
           "Accept-Encoding": "identity",
           "Range": rangeHeader
@@ -328,6 +335,19 @@ export class StreamManager {
             return streamUpstream(nextUrl, redirectCount + 1);
           }
 
+          let contentType = String(upstreamRes.headers["content-type"] || "");
+
+          // If Google CDN returned a bot challenge HTML page or 403 to Render's datacenter IP:
+          // Immediately redirect the client to Google CDN (ExoPlayer will stream directly from mobile IP)
+          if (contentType.includes("text/html") || status === 403) {
+            console.log(`[StreamManager] Datacenter IP challenge detected (${contentType}, ${status}). Redirecting mobile client directly to CDN.`);
+            cleanup();
+            if (!res.headersSent) {
+              res.redirect(302, targetUrl);
+            }
+            return;
+          }
+
           if (status >= 400) {
             console.error(`[Upstream CDN ${status} for ${videoId}]:`, upstreamRes.statusMessage);
             cleanup();
@@ -343,7 +363,6 @@ export class StreamManager {
 
           res.status(status);
 
-          let contentType = String(upstreamRes.headers["content-type"] || "");
           if (!contentType || contentType === "application/octet-stream" || contentType.startsWith("video/")) {
             if (streamEntry.ext === "webm" || contentType.includes("webm") || streamEntry.format?.includes("webm")) {
               contentType = "audio/webm";
