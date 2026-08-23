@@ -86,24 +86,21 @@ def classify_error(err_str: str) -> str:
 
 def resolve(video_id, quality="low", _media_type="audio"):
     # Prioritize progressive, streamable formats compatible with Android ExoPlayer & HTML5 Audio
-    if quality in ("high", "lossless"):
-        format_spec = "140/251/18/bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/ba/b/best"
-    elif quality == "standard":
-        format_spec = "140/251/18/bestaudio[abr<=160][ext=m4a]/bestaudio[abr<=160][ext=webm]/bestaudio/ba/b/best"
-    else:  # low / saver
-        format_spec = "139/140/249/250/251/18/bestaudio[abr<=96][ext=m4a]/bestaudio[abr<=96][ext=webm]/bestaudio/ba/b/best"
+    format_spec = "140/251/139/249/250/18/bestaudio/ba/b/best"
 
     js_runtimes = get_js_runtimes()
     cookie_file = get_cookie_file()
 
     # Cascade client configurations:
-    # 1. ['android_vr', 'tv_embedded']: Datacenter resilient (bypasses bot block on Railway)
-    # 2. ['android', 'web_embedded']: Android mobile fallback
-    # 3. ['web', 'mweb']: Standard web client fallback
+    # 1. ['android', 'tv_embedded']: Most resilient against bot-blocks & formats
+    # 2. ['android_vr', 'tv_embedded']: VR/TV client fallback
+    # 3. ['tv_embedded']: Standalone embedded TV fallback
+    # 4. ['android']: Native Android client fallback
     client_candidates = [
+        ['android', 'tv_embedded'],
         ['android_vr', 'tv_embedded'],
-        ['android', 'web_embedded'],
-        ['web', 'mweb']
+        ['tv_embedded'],
+        ['android']
     ]
 
     last_error = "Unknown resolution error"
