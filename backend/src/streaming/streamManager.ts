@@ -94,7 +94,7 @@ export class StreamManager {
     }
 
     const safeQuality = ["low", "saver", "standard", "high"].includes(quality.toLowerCase()) ? quality.toLowerCase() : "low";
-    const cacheKey = `stream:v8:audio:${videoId}:${safeQuality}`;
+    const cacheKey = `stream:v9:audio:${videoId}:${safeQuality}`;
 
     // 1. Check L1 / L2 Cache
     const cached = await cacheService.get<StreamCacheEntry>(cacheKey);
