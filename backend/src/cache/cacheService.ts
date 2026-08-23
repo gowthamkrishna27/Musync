@@ -232,6 +232,16 @@ class CacheService {
     };
   }
 
+  async flush(): Promise<void> {
+    this.l1Cache.clear();
+    this.pendingPromises.clear();
+    if (this.isRedisReady && this.redisClient) {
+      try {
+        await this.redisClient.flushdb();
+      } catch (_e) {}
+    }
+  }
+
   async close(): Promise<void> {
     if (this.redisClient) {
       try {
