@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
+    "postinstall": "pip3 install --break-system-packages yt-dlp || pip install --break-system-packages yt-dlp || pip3 install yt-dlp || pip install yt-dlp || true",
     "start": "node dist/server.js"
   },
   "keywords": [
