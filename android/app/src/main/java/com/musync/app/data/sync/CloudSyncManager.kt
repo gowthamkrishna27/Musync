@@ -112,16 +112,24 @@ class CloudSyncManager(
     private var syncJob: Job? = null
 
     init {
-        // Observe auth changes to trigger sync when a non-anonymous user logs in
-        scope.launch {
-            authManager.currentUser.collect { user ->
-                if (user != null && !user.isAnonymous) {
-                    Log.d(TAG, "User logged in: ${user.uid} (${user.provider}). Starting full sync...")
-                    triggerFullSync(user.uid)
-                } else {
-                    Log.d(TAG, "User logged out or guest. Skipping cloud sync.")
+        try {
+            // Observe auth changes to trigger sync when a non-anonymous user logs in
+            scope.launch {
+                try {
+                    authManager.currentUser.collect { user ->
+                        if (user != null && !user.isAnonymous) {
+                            Log.d(TAG, "User logged in: ${user.uid} (${user.provider}). Starting full sync...")
+                            triggerFullSync(user.uid)
+                        } else {
+                            Log.d(TAG, "User logged out or guest. Skipping cloud sync.")
+                        }
+                    }
+                } catch (e: Throwable) {
+                    Log.e(TAG, "CloudSyncManager auth observation error: ${e.message}")
                 }
             }
+        } catch (e: Throwable) {
+            Log.e(TAG, "CloudSyncManager init failed: ${e.message}", e)
         }
     }
 

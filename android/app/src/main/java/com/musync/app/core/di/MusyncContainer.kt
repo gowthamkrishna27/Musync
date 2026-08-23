@@ -29,16 +29,23 @@ class MusyncContainer(private val context: Context) {
      * Uses the publishable (anon) key; the secret key is only on the backend.
      */
     val supabaseClient: SupabaseClient by lazy {
-        createSupabaseClient(
-            supabaseUrl = "https://dvupnbteizzznvicxymp.supabase.co",
-            supabaseKey = "sb_publishable_ePr-fRue-oFUHquivCXP8g_xd0tbtz2"
-        ) {
-            install(Auth) {
-                // Deep-link scheme used for OAuth redirects (Google, etc.)
-                scheme = "musync"
-                host   = "login"
+        try {
+            createSupabaseClient(
+                supabaseUrl = "https://dvupnbteizzznvicxymp.supabase.co",
+                supabaseKey = "sb_publishable_ePr-fRue-oFUHquivCXP8g_xd0tbtz2"
+            ) {
+                install(Auth) {
+                    scheme = "musync"
+                    host   = "login"
+                }
+                install(Postgrest)
             }
-            install(Postgrest)
+        } catch (e: Throwable) {
+            android.util.Log.e("MusyncContainer", "Supabase client init error: ${e.message}", e)
+            createSupabaseClient(
+                supabaseUrl = "https://dvupnbteizzznvicxymp.supabase.co",
+                supabaseKey = "sb_publishable_ePr-fRue-oFUHquivCXP8g_xd0tbtz2"
+            ) {}
         }
     }
 

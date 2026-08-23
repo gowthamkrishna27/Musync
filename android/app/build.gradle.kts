@@ -82,8 +82,9 @@ dependencies {
     implementation("io.github.jan-tennert.supabase:auth-kt")          // Auth
     implementation("io.github.jan-tennert.supabase:postgrest-kt")      // PostgREST / Database
 
-    // Ktor Android HTTP engine required by Supabase SDK
-    implementation("io.ktor:ktor-client-android:2.3.12")
+    // Ktor HTTP engine required by Supabase 3.x SDK
+    implementation("io.ktor:ktor-client-okhttp:3.0.2")
+    implementation("io.ktor:ktor-client-core:3.0.2")
 
     // kotlinx.serialization JSON (required by Supabase PostgREST for data class encoding)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")

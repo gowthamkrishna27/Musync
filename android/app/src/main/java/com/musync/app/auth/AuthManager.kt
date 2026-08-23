@@ -69,33 +69,45 @@ class AuthManager(
     val syncStatus: StateFlow<CloudSyncStatus> = _syncStatus.asStateFlow()
 
     init {
-        // Observe Supabase auth session state changes
-        scope.launch {
-            supabase.auth.sessionStatus.collect { status ->
-                when (status) {
-                    is SessionStatus.Authenticated -> {
-                        val user = supabase.auth.currentUserOrNull()?.toMusyncUser()
-                        _currentUser.value = user
-                        Log.d(TAG, "AUTH: Authenticated uid=${user?.uid ?: "null"}")
+        try {
+            // Observe Supabase auth session state changes
+            scope.launch {
+                try {
+                    supabase.auth.sessionStatus.collect { status ->
+                        when (status) {
+                            is SessionStatus.Authenticated -> {
+                                val user = supabase.auth.currentUserOrNull()?.toMusyncUser()
+                                _currentUser.value = user
+                                Log.d(TAG, "AUTH: Authenticated uid=${user?.uid ?: "null"}")
+                            }
+                            is SessionStatus.NotAuthenticated -> {
+                                _currentUser.value = null
+                                Log.d(TAG, "AUTH: Not authenticated")
+                            }
+                            is SessionStatus.Initializing -> {
+                                Log.d(TAG, "AUTH: Loading session from storage...")
+                            }
+                            is SessionStatus.RefreshFailure -> {
+                                Log.w(TAG, "AUTH: Session refresh failed — ${status.cause}")
+                                // Keep the last known user so the app doesn't log out unexpectedly on flaky networks
+                            }
+                            else -> {}
+                        }
                     }
-                    is SessionStatus.NotAuthenticated -> {
-                        _currentUser.value = null
-                        Log.d(TAG, "AUTH: Not authenticated")
-                    }
-                    is SessionStatus.Initializing -> {
-                        Log.d(TAG, "AUTH: Loading session from storage...")
-                    }
-                    is SessionStatus.RefreshFailure -> {
-                        Log.w(TAG, "AUTH: Session refresh failed — ${status.cause}")
-                        // Keep the last known user so the app doesn't log out unexpectedly on flaky networks
-                    }
-                    else -> {}
+                } catch (e: Throwable) {
+                    Log.e(TAG, "AUTH: sessionStatus observation error: ${e.message}")
                 }
             }
-        }
-        // Set initial state immediately (avoids flash of logged-out state)
-        scope.launch(Dispatchers.IO) {
-            _currentUser.value = supabase.auth.currentUserOrNull()?.toMusyncUser()
+            // Set initial state immediately (avoids flash of logged-out state)
+            scope.launch(Dispatchers.IO) {
+                try {
+                    _currentUser.value = supabase.auth.currentUserOrNull()?.toMusyncUser()
+                } catch (e: Throwable) {
+                    Log.e(TAG, "AUTH: Initial currentUser fetch error: ${e.message}")
+                }
+            }
+        } catch (e: Throwable) {
+            Log.e(TAG, "AUTH: AuthManager init failed: ${e.message}", e)
         }
     }
 
