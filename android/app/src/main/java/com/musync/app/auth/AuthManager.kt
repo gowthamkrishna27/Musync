@@ -1,12 +1,16 @@
 package com.musync.app.auth
 
-import android.app.Activity
 import android.content.Context
 import android.util.Log
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.FirebaseAuthException
-import com.google.firebase.auth.FirebaseUser
-import com.google.firebase.auth.GoogleAuthProvider
+import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.providers.Google
+import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.providers.builtin.IDToken
+import io.github.jan.supabase.auth.status.SessionStatus
+import io.github.jan.supabase.auth.user.UserInfo
+import io.github.jan.supabase.exceptions.BadRequestRestException
+import io.github.jan.supabase.exceptions.RestException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -14,7 +18,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 enum class AuthProviderType {
     GOOGLE,
@@ -40,13 +45,13 @@ enum class CloudSyncStatus {
 }
 
 class AuthManager(
-    private val context: Context
+    private val context: Context,
+    private val supabase: SupabaseClient
 ) {
     companion object {
         private const val TAG = "AuthManager"
     }
 
-    private val auth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private val _currentUser = MutableStateFlow<MusyncUser?>(null)
@@ -62,13 +67,34 @@ class AuthManager(
     val syncStatus: StateFlow<CloudSyncStatus> = _syncStatus.asStateFlow()
 
     init {
-        // Observe Firebase Auth state
-        auth.addAuthStateListener { firebaseAuth ->
-            val user = firebaseAuth.currentUser
-            _currentUser.value = user?.toMusyncUser()
-            Log.d(TAG, "AUTH: Auth state changed: user=${user?.uid ?: "null"}")
+        // Observe Supabase auth session state changes
+        scope.launch {
+            supabase.auth.sessionStatus.collect { status ->
+                when (status) {
+                    is SessionStatus.Authenticated -> {
+                        val user = supabase.auth.currentUserOrNull()?.toMusyncUser()
+                        _currentUser.value = user
+                        Log.d(TAG, "AUTH: Authenticated uid=${user?.uid ?: "null"}")
+                    }
+                    is SessionStatus.NotAuthenticated -> {
+                        _currentUser.value = null
+                        Log.d(TAG, "AUTH: Not authenticated")
+                    }
+                    is SessionStatus.LoadingFromStorage -> {
+                        Log.d(TAG, "AUTH: Loading session from storage...")
+                    }
+                    is SessionStatus.RefreshFailure -> {
+                        Log.w(TAG, "AUTH: Session refresh failed — ${status.cause?.message}")
+                        // Keep the last known user so the app doesn't log out unexpectedly on flaky networks
+                    }
+                    else -> {}
+                }
+            }
         }
-        _currentUser.value = auth.currentUser?.toMusyncUser()
+        // Set initial state immediately (avoids flash of logged-out state)
+        scope.launch(Dispatchers.IO) {
+            _currentUser.value = supabase.auth.currentUserOrNull()?.toMusyncUser()
+        }
     }
 
     fun setSyncStatus(status: CloudSyncStatus) {
@@ -96,47 +122,24 @@ class AuthManager(
         _authLoading.value = true
         _authError.value = null
         return try {
-            val result = auth.signInWithEmailAndPassword(email.trim(), password).await()
-            val user = result.user?.toMusyncUser()
+            supabase.auth.signInWith(Email) {
+                this.email = email.trim()
+                this.password = password
+            }
+            val user = supabase.auth.currentUserOrNull()?.toMusyncUser()
                 ?: throw IllegalStateException("User not found after sign in")
             _currentUser.value = user
             _authLoading.value = false
             Result.success(user)
-        } catch (e: FirebaseAuthException) {
-            val code = e.errorCode
-            val msg = e.message ?: ""
-            Log.e(TAG, "AUTH: Email sign-in failed errorCode=$code msg=$msg", e)
-            if (msg.contains("INVALID_APP_ID", ignoreCase = true) || code.contains("INVALID_APP_ID", ignoreCase = true)) {
-                Log.w(TAG, "Firebase INVALID_APP_ID encountered, creating direct user session for $email")
-                val localUser = MusyncUser(
-                    uid = "user_${email.trim().hashCode()}",
-                    displayName = email.substringBefore("@"),
-                    email = email.trim(),
-                    photoUrl = null,
-                    provider = AuthProviderType.EMAIL,
-                    isAnonymous = false
-                )
-                setDirectUser(localUser)
-                return Result.success(localUser)
-            }
+        } catch (e: BadRequestRestException) {
             _authLoading.value = false
-            _authError.value = decodeFirebaseAuthError(code, msg, "Email Sign-In")
+            _authError.value = decodeSupabaseAuthError(e, "Email Sign-In")
+            Result.failure(e)
+        } catch (e: RestException) {
+            _authLoading.value = false
+            _authError.value = decodeSupabaseAuthError(e, "Email Sign-In")
             Result.failure(e)
         } catch (e: Exception) {
-            val msg = e.message ?: ""
-            if (msg.contains("INVALID_APP_ID", ignoreCase = true)) {
-                Log.w(TAG, "Firebase INVALID_APP_ID encountered, creating direct user session for $email")
-                val localUser = MusyncUser(
-                    uid = "user_${email.trim().hashCode()}",
-                    displayName = email.substringBefore("@"),
-                    email = email.trim(),
-                    photoUrl = null,
-                    provider = AuthProviderType.EMAIL,
-                    isAnonymous = false
-                )
-                setDirectUser(localUser)
-                return Result.success(localUser)
-            }
             _authLoading.value = false
             _authError.value = e.localizedMessage ?: "Email sign-in failed"
             Result.failure(e)
@@ -151,54 +154,38 @@ class AuthManager(
         _authLoading.value = true
         _authError.value = null
         return try {
-            val result = auth.createUserWithEmailAndPassword(email.trim(), password).await()
-            val firebaseUser = result.user
-                ?: throw IllegalStateException("User not created")
-            if (displayName.isNotBlank()) {
-                val profileUpdates = com.google.firebase.auth.UserProfileChangeRequest.Builder()
-                    .setDisplayName(displayName.trim())
-                    .build()
-                firebaseUser.updateProfile(profileUpdates).await()
+            supabase.auth.signUpWith(Email) {
+                this.email = email.trim()
+                this.password = password
+                if (displayName.isNotBlank()) {
+                    data {
+                        put("display_name", displayName.trim())
+                        put("name", displayName.trim())
+                    }
+                }
             }
-            val user = firebaseUser.toMusyncUser()
+            // After sign-up Supabase may require email confirmation; try to get current user
+            val user = supabase.auth.currentUserOrNull()?.toMusyncUser()
+                ?: MusyncUser(
+                    uid = "pending_${email.trim().hashCode()}",
+                    displayName = displayName.ifBlank { email.substringBefore("@") },
+                    email = email.trim(),
+                    photoUrl = null,
+                    provider = AuthProviderType.EMAIL,
+                    isAnonymous = false
+                )
             _currentUser.value = user
             _authLoading.value = false
             Result.success(user)
-        } catch (e: FirebaseAuthException) {
-            val code = e.errorCode
-            val msg = e.message ?: ""
-            Log.e(TAG, "AUTH: Email sign-up failed errorCode=$code msg=$msg", e)
-            if (msg.contains("INVALID_APP_ID", ignoreCase = true) || code.contains("INVALID_APP_ID", ignoreCase = true)) {
-                Log.w(TAG, "Firebase INVALID_APP_ID encountered, creating direct user session for $email")
-                val localUser = MusyncUser(
-                    uid = "user_${email.trim().hashCode()}",
-                    displayName = displayName.ifBlank { email.substringBefore("@") },
-                    email = email.trim(),
-                    photoUrl = null,
-                    provider = AuthProviderType.EMAIL,
-                    isAnonymous = false
-                )
-                setDirectUser(localUser)
-                return Result.success(localUser)
-            }
+        } catch (e: BadRequestRestException) {
             _authLoading.value = false
-            _authError.value = decodeFirebaseAuthError(code, msg, "Account creation")
+            _authError.value = decodeSupabaseAuthError(e, "Account creation")
+            Result.failure(e)
+        } catch (e: RestException) {
+            _authLoading.value = false
+            _authError.value = decodeSupabaseAuthError(e, "Account creation")
             Result.failure(e)
         } catch (e: Exception) {
-            val msg = e.message ?: ""
-            if (msg.contains("INVALID_APP_ID", ignoreCase = true)) {
-                Log.w(TAG, "Firebase INVALID_APP_ID encountered, creating direct user session for $email")
-                val localUser = MusyncUser(
-                    uid = "user_${email.trim().hashCode()}",
-                    displayName = displayName.ifBlank { email.substringBefore("@") },
-                    email = email.trim(),
-                    photoUrl = null,
-                    provider = AuthProviderType.EMAIL,
-                    isAnonymous = false
-                )
-                setDirectUser(localUser)
-                return Result.success(localUser)
-            }
             _authLoading.value = false
             _authError.value = e.localizedMessage ?: "Account creation failed"
             Result.failure(e)
@@ -207,27 +194,29 @@ class AuthManager(
 
     // ──────────────────────────────────────────────────────────────
     //  GOOGLE SIGN-IN
+    //  The Google ID token is obtained by AuthBottomSheet.kt using
+    //  the Google Sign-In SDK, then passed here for the Supabase exchange.
     // ──────────────────────────────────────────────────────────────
 
     suspend fun signInWithGoogleCredential(idToken: String): Result<MusyncUser> {
         _authLoading.value = true
         _authError.value = null
         return try {
-            Log.d(TAG, "AUTH: Google — Firebase credential exchange started")
-            val credential = GoogleAuthProvider.getCredential(idToken, null)
-            val authResult = auth.signInWithCredential(credential).await()
-            val user = authResult.user?.toMusyncUser()
-                ?: throw IllegalStateException("Firebase User is null after Google sign-in")
+            Log.d(TAG, "AUTH: Google — Supabase IDToken exchange started")
+            supabase.auth.signInWith(IDToken) {
+                provider = Google
+                this.idToken = idToken
+            }
+            val user = supabase.auth.currentUserOrNull()?.toMusyncUser()
+                ?: throw IllegalStateException("Supabase user is null after Google sign-in")
             _currentUser.value = user
             _authLoading.value = false
             Log.d(TAG, "AUTH: Google — success. uid=${user.uid}")
             Result.success(user)
-        } catch (e: FirebaseAuthException) {
-            val code = e.errorCode
-            val msg = e.message ?: ""
-            Log.e(TAG, "AUTH: Google — FirebaseAuthException errorCode=$code msg=$msg", e)
+        } catch (e: RestException) {
+            Log.e(TAG, "AUTH: Google — RestException: ${e.message}", e)
             _authLoading.value = false
-            _authError.value = decodeFirebaseAuthError(code, msg, "Google Sign-In")
+            _authError.value = decodeSupabaseAuthError(e, "Google Sign-In")
             Result.failure(e)
         } catch (e: Exception) {
             Log.e(TAG, "AUTH: Google — unexpected exception", e)
@@ -251,38 +240,28 @@ class AuthManager(
         _syncStatus.value = CloudSyncStatus.SYNCED
     }
 
-    private fun decodeFirebaseAuthError(errorCode: String, message: String = "", context: String): String {
-        Log.e(TAG, "AUTH: $context errorCode=$errorCode message=$message")
-        if (message.contains("INVALID_APP_ID", ignoreCase = true) || errorCode.contains("INVALID_APP_ID", ignoreCase = true)) {
-            return "Firebase App ID mismatch. Please re-download google-services.json from Firebase Console."
-        }
-        if (message.contains("CONFIGURATION_NOT_FOUND", ignoreCase = true) || message.contains("identity provider", ignoreCase = true)) {
-            return "$context is not enabled in Firebase Console. Enable it under Firebase -> Authentication -> Sign-in method."
-        }
-        return when (errorCode) {
-            "ERROR_INVALID_EMAIL"                        -> "Invalid email address."
-            "ERROR_WRONG_PASSWORD"                       -> "Incorrect password."
-            "ERROR_USER_NOT_FOUND"                       -> "No account found. Please sign up first."
-            "ERROR_EMAIL_ALREADY_IN_USE"                 -> "This email is already in use with another account."
-            "ERROR_ACCOUNT_EXISTS_WITH_DIFFERENT_CREDENTIAL" ->
-                "An account already exists with the same email using a different sign-in method."
-            "ERROR_WEAK_PASSWORD"                        -> "Password is too weak."
-            "ERROR_INVALID_CREDENTIAL"                   -> "Invalid credential. Please try again."
-            "ERROR_OPERATION_NOT_ALLOWED"                ->
-                "$context is not enabled in Firebase Console. Enable it under Authentication -> Sign-in method."
-            "ERROR_USER_DISABLED"                        -> "This account has been disabled."
-            "ERROR_TOO_MANY_REQUESTS"                    -> "Too many sign-in attempts. Please wait and try again."
-            "ERROR_NETWORK_REQUEST_FAILED"               -> "Network error. Check your internet connection."
-            "ERROR_WEB_INTERNAL_ERROR"                   ->
-                "GitHub OAuth configuration error. Ensure callback URL is set to https://musync-d9db5.firebaseapp.com/__/auth/handler in your GitHub OAuth App settings."
-            "ERROR_WEB_CONTEXT_ALREADY_PRESENTED"        -> "A sign-in is already in progress."
-            "ERROR_WEB_CONTEXT_CANCELLED"                -> "Sign-in was cancelled."
-            "ERROR_WEB_STORAGE_UNSUPPORTED"              -> "Browser storage is unavailable. Try clearing app data."
-            "ERROR_APP_NOT_AUTHORIZED"                   ->
-                "App not authorized. Check Firebase Console SHA-1 fingerprint."
-            "ERROR_API_NOT_AVAILABLE"                    -> "Firebase Auth API is unavailable."
-            "ERROR_INTERNAL_ERROR"                       -> "Internal Firebase error. Check Logcat for details."
-            else                                         -> "$context failed: ${message.ifBlank { errorCode }}"
+    private fun decodeSupabaseAuthError(e: Exception, context: String): String {
+        Log.e(TAG, "AUTH: $context error: ${e.message}")
+        val msg = e.message ?: ""
+        return when {
+            msg.contains("invalid_credentials", ignoreCase = true) ||
+            msg.contains("Invalid login credentials", ignoreCase = true) ->
+                "Invalid email or password."
+            msg.contains("email not confirmed", ignoreCase = true) ->
+                "Please confirm your email address before signing in."
+            msg.contains("user already registered", ignoreCase = true) ||
+            msg.contains("User already registered", ignoreCase = true) ->
+                "This email is already registered. Please sign in instead."
+            msg.contains("email_address_not_authorized", ignoreCase = true) ->
+                "This email is not authorized."
+            msg.contains("weak_password", ignoreCase = true) ->
+                "Password is too weak. Use at least 6 characters."
+            msg.contains("over_email_send_rate_limit", ignoreCase = true) ->
+                "Too many requests. Please wait before trying again."
+            msg.contains("network", ignoreCase = true) ||
+            msg.contains("timeout", ignoreCase = true) ->
+                "Network error. Check your internet connection."
+            else -> "$context failed: $msg"
         }
     }
 
@@ -294,14 +273,13 @@ class AuthManager(
         _authLoading.value = true
         _authError.value = null
         return try {
-            val result = auth.signInAnonymously().await()
-            val user = result.user?.toMusyncUser()
-                ?: createLocalGuestUser()
-            _currentUser.value = user
+            // Use a local guest session — no Supabase anonymous sign-in needed
+            val localGuest = createLocalGuestUser()
+            _currentUser.value = localGuest
             _authLoading.value = false
-            Result.success(user)
+            Result.success(localGuest)
         } catch (e: Exception) {
-            Log.w(TAG, "Firebase Anonymous sign-in unavailable (${e.message}), using local guest session")
+            Log.w(TAG, "Guest session error (${e.message}), using local guest session")
             val localGuest = createLocalGuestUser()
             _currentUser.value = localGuest
             _authLoading.value = false
@@ -326,32 +304,43 @@ class AuthManager(
     // ──────────────────────────────────────────────────────────────
 
     fun signOut() {
-        try {
-            Log.d(TAG, "AUTH: signing out")
-            auth.signOut()
-            _currentUser.value = null
-            _authError.value = null
-            _syncStatus.value = CloudSyncStatus.IDLE
-        } catch (e: Exception) {
-            Log.e(TAG, "AUTH: sign-out error", e)
+        scope.launch(Dispatchers.IO) {
+            try {
+                Log.d(TAG, "AUTH: signing out")
+                supabase.auth.signOut()
+            } catch (e: Exception) {
+                Log.w(TAG, "AUTH: sign-out remote error (ignored): ${e.message}")
+            } finally {
+                _currentUser.value = null
+                _authError.value = null
+                _syncStatus.value = CloudSyncStatus.IDLE
+            }
         }
     }
 
     suspend fun sendPasswordReset(email: String): Result<Unit> = runCatching {
-        auth.sendPasswordResetEmail(email.trim()).await()
+        supabase.auth.resetPasswordForEmail(
+            email = email.trim(),
+            redirectUrl = "musync://reset-password"
+        )
     }
 
     suspend fun updateProfileName(newName: String): Result<MusyncUser> = runCatching {
-        val user = auth.currentUser
-        if (user != null) {
-            val req = com.google.firebase.auth.UserProfileChangeRequest.Builder()
-                .setDisplayName(newName.trim())
-                .build()
-            user.updateProfile(req).await()
-            val updated = user.toMusyncUser()
+        val current = supabase.auth.currentUserOrNull()
+        if (current != null) {
+            supabase.auth.updateUser {
+                data {
+                    put("display_name", newName.trim())
+                    put("name", newName.trim())
+                }
+            }
+            val updated = supabase.auth.currentUserOrNull()?.toMusyncUser()
+                ?: _currentUser.value?.copy(displayName = newName.trim())
+                ?: throw IllegalStateException("No active user session")
             _currentUser.value = updated
             updated
         } else {
+            // Guest or local user: update in-memory only
             val cur = _currentUser.value ?: throw IllegalStateException("No active user session")
             val updated = cur.copy(displayName = newName.trim())
             setDirectUser(updated)
@@ -360,33 +349,54 @@ class AuthManager(
     }
 
     suspend fun updatePassword(newPass: String): Result<Unit> = runCatching {
-        val user = auth.currentUser ?: throw IllegalStateException("Not signed in to a Firebase account")
-        user.updatePassword(newPass.trim()).await()
+        supabase.auth.currentUserOrNull()
+            ?: throw IllegalStateException("Not signed in to a Supabase account")
+        supabase.auth.updateUser {
+            password = newPass.trim()
+        }
     }
 
     suspend fun deleteAccount(): Result<Unit> = runCatching {
-        auth.currentUser?.delete()?.await()
-        signOut()
+        // NOTE: Full account deletion requires the Supabase secret key (admin privilege).
+        // This operation is intentionally handled as a sign-out here. To fully delete the
+        // account, create a backend endpoint that uses SUPABASE_SECRET_KEY with supabase-admin.
+        Log.w(TAG, "AUTH: deleteAccount — signing out (server-side deletion requires admin API)")
+        supabase.auth.signOut()
+        _currentUser.value = null
+        _syncStatus.value = CloudSyncStatus.IDLE
     }
 
     // ──────────────────────────────────────────────────────────────
     //  HELPERS
     // ──────────────────────────────────────────────────────────────
 
-    private fun FirebaseUser.toMusyncUser(): MusyncUser {
-        val providerId = providerData.firstOrNull { it.providerId != "firebase" }?.providerId
-        val providerType = when (providerId) {
-            "google.com" -> AuthProviderType.GOOGLE
-            "password" -> AuthProviderType.EMAIL
-            else -> if (isAnonymous) AuthProviderType.GUEST else AuthProviderType.EMAIL
+    private fun UserInfo.toMusyncUser(): MusyncUser {
+        // Provider from app metadata (set by Supabase: "email", "google", "github", etc.)
+        val providerStr = appMetadata?.get("provider")?.jsonPrimitive?.contentOrNull ?: "email"
+        val providerType = when {
+            providerStr.contains("google") -> AuthProviderType.GOOGLE
+            providerStr == "email" -> AuthProviderType.EMAIL
+            else -> AuthProviderType.EMAIL
         }
+
+        // Display name from user metadata (set on sign-up or updated via updateUser)
+        val displayName = userMetadata?.get("display_name")?.jsonPrimitive?.contentOrNull
+            ?: userMetadata?.get("name")?.jsonPrimitive?.contentOrNull
+            ?: userMetadata?.get("full_name")?.jsonPrimitive?.contentOrNull
+            ?: email?.substringBefore("@")
+            ?: "Musync Listener"
+
+        // Avatar URL (Google / OAuth providers set this in user metadata)
+        val photoUrl = userMetadata?.get("avatar_url")?.jsonPrimitive?.contentOrNull
+            ?: userMetadata?.get("picture")?.jsonPrimitive?.contentOrNull
+
         return MusyncUser(
-            uid = uid,
-            displayName = displayName ?: email?.substringBefore("@") ?: "Musync Listener",
+            uid = id,
+            displayName = displayName,
             email = email,
-            photoUrl = photoUrl?.toString(),
+            photoUrl = photoUrl,
             provider = providerType,
-            isAnonymous = isAnonymous
+            isAnonymous = false
         )
     }
 }

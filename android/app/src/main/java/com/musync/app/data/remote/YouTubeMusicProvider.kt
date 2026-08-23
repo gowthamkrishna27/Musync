@@ -2,7 +2,6 @@ package com.musync.app.data.remote
 
 import android.util.Log
 import com.google.gson.Gson
-import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.musync.app.domain.model.Album
@@ -48,17 +47,8 @@ class YouTubeMusicProvider(
         const val CLOUD_URL = RAILWAY_URL
         const val DEFAULT_RENDER_URL = RAILWAY_URL
 
-        private val PIPED_INSTANCES = listOf(
-            "https://pipedapi.kavin.rocks",
-            "https://api.piped.privacydev.net",
-            "https://pipedapi.leptons.xyz"
-        )
-
-        private val INVIDIOUS_INSTANCES = listOf(
-            "https://inv.nadeko.net",
-            "https://invidious.nerdvpn.de",
-            "https://invidious.privacydev.net"
-        )
+        // NOTE: Piped and Invidious instance lists have been moved to the backend
+        // (MusicProxyService). The Android client no longer calls these gateways directly.
     }
 
     @Volatile
@@ -118,40 +108,25 @@ class YouTubeMusicProvider(
         }
     }
 
+    /**
+     * Search for tracks via the Musync backend.
+     *
+     * All fallback tiers (Piped, Invidious) are now handled server-side inside
+     * MusicProxyService — the client never calls third-party gateways directly.
+     */
     override suspend fun search(query: String): List<Track> = withContext(Dispatchers.IO) {
         val cleanQuery = query.trim()
         if (cleanQuery.isBlank()) return@withContext emptyList()
         val encoded = try { URLEncoder.encode(cleanQuery, "UTF-8") } catch (_: Exception) { cleanQuery }
 
-        // 1. Dynamic Endpoint (Local or Cloud or Custom)
-        val targetRenderUrl = getActiveBaseUrl()
+        val targetUrl = getActiveBaseUrl()
         try {
-            val url = "$targetRenderUrl/search?query=$encoded"
-            val tracks = fetchCustomYtMusic(url, customApiKey, targetRenderUrl)
+            val url = "$targetUrl/search?query=$encoded"
+            val tracks = fetchCustomYtMusic(url, customApiKey, targetUrl)
             if (tracks.isNotEmpty()) return@withContext tracks
         } catch (e: Exception) {
-            Log.w(TAG, "Dynamic endpoint $targetRenderUrl failed: ${e.message}")
+            Log.w(TAG, "Backend search failed: ${e.message}")
             verifiedWorkingUrl = null
-        }
-
-        // 2. Query Public Piped Instances
-        for (instance in PIPED_INSTANCES) {
-            try {
-                val url = "$instance/search?q=$encoded&filter=music_songs"
-                val tracks = fetchPipedSearch(url)
-                if (tracks.isNotEmpty()) return@withContext tracks
-            } catch (e: Exception) {
-                Log.w(TAG, "Piped instance $instance failed: ${e.message}")
-            }
-        }
-
-        // 3. Fallback: Invidious Search
-        for (instance in INVIDIOUS_INSTANCES) {
-            try {
-                val url = "$instance/api/v1/search?q=$encoded&type=video"
-                val tracks = fetchInvidiousSearch(url, instance)
-                if (tracks.isNotEmpty()) return@withContext tracks
-            } catch (_: Exception) {}
         }
 
         emptyList()
@@ -282,157 +257,6 @@ class YouTubeMusicProvider(
 
         // 2. Return direct high-availability server audio stream redirect
         "$targetRenderUrl/stream?id=$videoId&quality=$currentAudioQuality"
-    }
-
-    private fun fetchPipedSearch(urlStr: String): List<Track> {
-        val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
-        val req = Request.Builder()
-            .url(urlStr)
-            .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
-            .build()
-
-        val response = httpClient.newCall(req).execute()
-        if (!response.isSuccessful) return emptyList()
-
-        val jsonStr = response.body?.string() ?: return emptyList()
-        val root = gson.fromJson(jsonStr, JsonObject::class.java) ?: return emptyList()
-
-        val items = root.getAsJsonArray("items") ?: return emptyList()
-        val tracks = mutableListOf<Track>()
-
-        for (elem in items) {
-            if (!elem.isJsonObject) continue
-            val obj = elem.asJsonObject
-
-            val url = obj.get("url")?.asString ?: ""
-            val videoId = if (url.contains("v=")) url.substringAfter("v=").substringBefore("&") else url.removePrefix("/watch?v=")
-            if (videoId.isBlank()) continue
-
-            val title = obj.get("title")?.asString ?: "Unknown Title"
-            val uploaderName = obj.get("uploaderName")?.asString ?: "YouTube Music"
-            val durationSec = obj.get("duration")?.asLong ?: 200L
-            val thumbnail = obj.get("thumbnail")?.asString ?: "https://i.ytimg.com/vi/$videoId/mqdefault.jpg"
-
-            val artistObj = Artist(id = "yt_artist_${uploaderName.hashCode()}", name = uploaderName, imageUrl = thumbnail)
-            val albumObj = Album(id = "yt_album_${videoId.hashCode()}", name = title, artist = artistObj, artworkUrl = thumbnail)
-
-            // High-compatibility Direct audio stream
-            val directStreamUrl = "$targetRenderUrl/stream?id=$videoId"
-
-            tracks.add(
-                Track(
-                    id = "yt_$videoId",
-                    title = title,
-                    artist = artistObj,
-                    album = albumObj,
-                    durationMs = durationSec * 1000L,
-                    streamUrl = directStreamUrl,
-                    artworkUrl = thumbnail,
-                    genre = "Music",
-                    playCount = 0L
-                )
-            )
-        }
-        return tracks
-    }
-
-    private fun fetchInvidiousSearch(urlStr: String, instanceBase: String): List<Track> {
-        val req = Request.Builder()
-            .url(urlStr)
-            .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
-            .build()
-
-        val response = httpClient.newCall(req).execute()
-        if (!response.isSuccessful) return emptyList()
-
-        val jsonStr = response.body?.string() ?: return emptyList()
-        val items = gson.fromJson(jsonStr, JsonArray::class.java) ?: return emptyList()
-
-        val tracks = mutableListOf<Track>()
-        for (elem in items) {
-            if (!elem.isJsonObject) continue
-            val obj = elem.asJsonObject
-            val videoId = obj.get("videoId")?.asString ?: continue
-            val title = obj.get("title")?.asString ?: "Unknown Title"
-            val author = obj.get("author")?.asString ?: "YouTube Artist"
-            val lengthSec = obj.get("lengthSeconds")?.asLong ?: 200L
-            val thumbnail = "https://i.ytimg.com/vi/$videoId/mqdefault.jpg"
-
-            val artistObj = Artist(id = "yt_artist_${author.hashCode()}", name = author, imageUrl = thumbnail)
-            val albumObj = Album(id = "yt_album_${videoId.hashCode()}", name = title, artist = artistObj, artworkUrl = thumbnail)
-
-            val directStreamUrl = "$instanceBase/latest_version?id=$videoId&itag=140"
-
-            tracks.add(
-                Track(
-                    id = "yt_$videoId",
-                    title = title,
-                    artist = artistObj,
-                    album = albumObj,
-                    durationMs = lengthSec * 1000L,
-                    streamUrl = directStreamUrl,
-                    artworkUrl = thumbnail,
-                    genre = "Music",
-                    playCount = 0L
-                )
-            )
-        }
-        return tracks
-    }
-
-    private fun fetchPipedStreamDetails(urlStr: String, videoId: String): Track? {
-        val req = Request.Builder()
-            .url(urlStr)
-            .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36")
-            .build()
-
-        val response = httpClient.newCall(req).execute()
-        if (!response.isSuccessful) return null
-
-        val jsonStr = response.body?.string() ?: return null
-        val root = gson.fromJson(jsonStr, JsonObject::class.java) ?: return null
-
-        val title = root.get("title")?.asString ?: "Unknown Title"
-        val uploader = root.get("uploader")?.asString ?: "YouTube Artist"
-        val thumbnail = root.get("thumbnailUrl")?.asString ?: "https://i.ytimg.com/vi/$videoId/mqdefault.jpg"
-        val duration = root.get("duration")?.asLong ?: 200L
-
-        // Extract direct audio stream (Opus 160kbps or M4A 128kbps)
-        var streamUrl = ""
-        val audioStreams = root.getAsJsonArray("audioStreams")
-        if (audioStreams != null && audioStreams.size() > 0) {
-            var maxBitrate = 0
-            for (streamElem in audioStreams) {
-                if (!streamElem.isJsonObject) continue
-                val sObj = streamElem.asJsonObject
-                val bitrate = sObj.get("bitrate")?.asInt ?: 0
-                val sUrl = sObj.get("url")?.asString ?: ""
-                if (sUrl.isNotBlank() && bitrate >= maxBitrate) {
-                    maxBitrate = bitrate
-                    streamUrl = sUrl
-                }
-            }
-        }
-
-        if (streamUrl.isBlank()) {
-            val targetRenderUrl = customBaseUrl ?: DEFAULT_RENDER_URL
-            streamUrl = "$targetRenderUrl/stream?id=$videoId"
-        }
-
-        val artistObj = Artist(id = "yt_artist_${uploader.hashCode()}", name = uploader, imageUrl = thumbnail)
-        val albumObj = Album(id = "yt_album_${videoId.hashCode()}", name = title, artist = artistObj, artworkUrl = thumbnail)
-
-        return Track(
-            id = "yt_$videoId",
-            title = title,
-            artist = artistObj,
-            album = albumObj,
-            durationMs = duration * 1000L,
-            streamUrl = streamUrl,
-            artworkUrl = thumbnail,
-            genre = "Music",
-            playCount = 0L
-        )
     }
 
     suspend fun getLyrics(id: String): String? = withContext(Dispatchers.IO) {

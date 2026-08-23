@@ -1,0 +1,28 @@
+name: Deploy Musync Microservice to Hugging Face
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy-to-spaces:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Files
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetches full history required by Hugging Face's Git LFS server hooks
+
+      - name: Deploy and Sync Code
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # Configure isolated authentication identifiers
+          git config --global user.email "bot@musync.internal"
+          git config --global user.name "Musync CI Bot"
+          
+          # Inject remote target endpoint link mapping
+          # NOTE: Make sure to replace YOUR_HF_USERNAME and YOUR_SPACE_NAME with your exact Hugging Face parameters
+          git remote add hf https://user:$HF_TOKEN@huggingface.co/spaces/YOUR_HF_USERNAME/YOUR_SPACE_NAME
+          
+          # Force synchronization over write layers 
+          git push --force hf main

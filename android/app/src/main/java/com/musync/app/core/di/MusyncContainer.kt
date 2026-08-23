@@ -14,11 +14,33 @@ import com.musync.app.domain.repository.PlaylistRepository
 import com.musync.app.domain.repository.RecentlyPlayedRepository
 import com.musync.app.playback.PlaybackManager
 import com.musync.app.playback.recommendation.RealTimeRecommendationEngine
+import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.auth.Auth
+import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.postgrest.Postgrest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class MusyncContainer(private val context: Context) {
+
+    /**
+     * Supabase client — single instance shared across [authManager] and [cloudSyncManager].
+     * Uses the publishable (anon) key; the secret key is only on the backend.
+     */
+    val supabaseClient: SupabaseClient by lazy {
+        createSupabaseClient(
+            supabaseUrl = "https://dvupnbteizzznvicxymp.supabase.co",
+            supabaseKey = "sb_publishable_ePr-fRue-oFUHquivCXP8g_xd0tbtz2"
+        ) {
+            install(Auth) {
+                // Deep-link scheme used for OAuth redirects (Google, etc.)
+                scheme = "musync"
+                host   = "login"
+            }
+            install(Postgrest)
+        }
+    }
 
     val preferencesManager: PreferencesManager by lazy {
         PreferencesManager(context)
@@ -95,11 +117,11 @@ class MusyncContainer(private val context: Context) {
     }
 
     val authManager: com.musync.app.auth.AuthManager by lazy {
-        com.musync.app.auth.AuthManager(context)
+        com.musync.app.auth.AuthManager(context, supabaseClient)
     }
 
     val cloudSyncManager: com.musync.app.data.sync.CloudSyncManager by lazy {
-        com.musync.app.data.sync.CloudSyncManager(authManager, database)
+        com.musync.app.data.sync.CloudSyncManager(authManager, database, supabaseClient)
     }
 
     val musyncDownloadManager: com.musync.app.data.download.MusyncDownloadManager by lazy {

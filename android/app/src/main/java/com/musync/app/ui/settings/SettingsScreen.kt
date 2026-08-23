@@ -936,7 +936,7 @@ private fun SettingsDetailView(
                         onClick = {
                             showLegalDialog = LegalDialogConfig(
                                 title = "Open Source Licenses",
-                                content = "Musync is built with high-performance open-source technologies including Android Jetpack Compose, Media3 ExoPlayer, Kotlin Coroutines, Material 3, and Firebase Authentication."
+                                content = "Musync is built with high-performance open-source technologies including Android Jetpack Compose, Media3 ExoPlayer, Kotlin Coroutines, Material 3, and Supabase Auth."
                             )
                         }
                     )

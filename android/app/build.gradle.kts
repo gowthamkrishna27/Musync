@@ -2,8 +2,9 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
-    id("com.google.gms.google-services")
+    // com.google.gms.google-services removed — Firebase replaced by Supabase
 }
 
 android {
@@ -76,14 +77,22 @@ dependencies {
     implementation(composeBom)
     androidTestImplementation(composeBom)
 
-    // Firebase
-    implementation(platform("com.google.firebase:firebase-bom:33.9.0"))
-    implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-auth")
-    implementation("com.google.firebase:firebase-firestore")
+    // Supabase (replaces Firebase Auth + Firestore)
+    implementation(platform("io.github.jan-tennert.supabase:bom:2.6.1"))
+    implementation("io.github.jan-tennert.supabase:auth-kt")          // GoTrue / Auth
+    implementation("io.github.jan-tennert.supabase:postgrest-kt")      // PostgREST / Database
 
-    // Google Sign-In & Credentials
+    // Ktor Android HTTP engine required by Supabase SDK
+    implementation("io.ktor:ktor-client-android:2.3.12")
+
+    // kotlinx.serialization JSON (required by Supabase PostgREST for data class encoding)
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+
+    // Google Sign-In SDK (kept — used to obtain the Google ID token in AuthBottomSheet.kt)
+    // The Firebase exchange step is removed; Supabase handles the IDToken exchange instead.
     implementation("com.google.android.gms:play-services-auth:21.2.0")
+    // .await() extension for Google Sign-In Tasks (was transitively provided by Firebase before)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.fragment:fragment-ktx:1.8.5")

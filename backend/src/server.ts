@@ -15,6 +15,7 @@ import { RecommendationEngine } from "./recommendations/recommendationEngine";
 import { sessionService } from "./recommendations/sessionService";
 import { DiscoveryWorker } from "./discovery/discoveryWorker";
 import { youtubeService } from "./services/youtube/youtube.service";
+import { musicProxyService } from "./services/proxy/musicProxy.service";
 
 dotenv.config();
 
@@ -370,7 +371,7 @@ app.get(["/search", "/result/"], apiLimiter, async (req: Request, res: Response)
       return res.json(cached);
     }
 
-    // 1. Parallel Multi-Query Search with YouTube.js and YTMusic
+    // ── Tier 1: Parallel query via YouTube.js + ytmusic-api ────────────────
     const normalizedQuery = query.toLowerCase();
     const queryTokens = normalizedQuery.split(/\s+/).filter(t => t.length > 0);
 
@@ -399,12 +400,56 @@ app.get(["/search", "/result/"], apiLimiter, async (req: Request, res: Response)
       }
     }
 
-    // Combine and deduplicate by track ID and Title + Artist
+    // ── Tier 2: Piped fallback (server-side, client never calls Piped directly) ──
+    let pipedResults: any[] = [];
+    const tier1Count = ytjsResults.length + songResults.length + generalResults.length;
+    if (tier1Count < 5) {
+      try {
+        const proxyTracks = await musicProxyService.searchPiped(query);
+        // Map ProxyTrack → server track shape so formatTrack() can handle it
+        pipedResults = proxyTracks.map((t) => ({
+          videoId: t.videoId,
+          id: t.videoId,
+          title: t.title,
+          name: t.title,
+          artist: t.artist,
+          artists: [{ name: t.artist }],
+          album: t.album,
+          duration: t.duration,
+          thumbnails: [{ url: t.thumbnailUrl, width: 720, height: 404 }]
+        }));
+      } catch (_pe) {
+        pipedResults = [];
+      }
+    }
+
+    // ── Tier 3: Invidious fallback (only when Tier 1 + 2 are both insufficient) ──
+    let invidiousResults: any[] = [];
+    if (tier1Count + pipedResults.length < 5) {
+      try {
+        const proxyTracks = await musicProxyService.searchInvidious(query);
+        invidiousResults = proxyTracks.map((t) => ({
+          videoId: t.videoId,
+          id: t.videoId,
+          title: t.title,
+          name: t.title,
+          artist: t.artist,
+          artists: [{ name: t.artist }],
+          album: t.album,
+          duration: t.duration,
+          thumbnails: [{ url: t.thumbnailUrl, width: 720, height: 404 }]
+        }));
+      } catch (_ie) {
+        invidiousResults = [];
+      }
+    }
+
+    // ── Deduplicate across all tiers by ID and Title+Artist signature ─────────
     const seenIds = new Set<string>();
     const seenSignatures = new Set<string>();
     const allRawItems: any[] = [];
 
-    for (const item of [...ytjsResults, ...songResults, ...generalResults]) {
+    for (const item of [...ytjsResults, ...songResults, ...generalResults, ...pipedResults, ...invidiousResults]) {
       const id = item.videoId || item.id || "";
       if (!id || seenIds.has(id)) continue;
 
@@ -418,7 +463,7 @@ app.get(["/search", "/result/"], apiLimiter, async (req: Request, res: Response)
       allRawItems.push(item);
     }
 
-    // 2. Intelligent Relevance Scoring
+    // ── Intelligent Relevance Scoring ─────────────────────────────────────────
     const scoredItems = allRawItems.map((item) => {
       const title = (item.name || item.title || "").toLowerCase();
       const artist = (item.artist?.name || item.artists?.[0]?.name || item.author || (typeof item.artist === "string" ? item.artist : "")).toLowerCase();
@@ -949,6 +994,159 @@ app.get("/api/discover/rising", apiLimiter, async (req: Request, res: Response) 
   }
 });
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 22. Proxy: Artist top tracks
+// Returns the latest uploads/songs for a YouTube channel ID, resolved
+// server-side via Piped → Invidious fallback.  The Android client never calls
+// Piped or Invidious directly.
+// ─────────────────────────────────────────────────────────────────────────────
+app.get("/api/proxy/artist/:channelId", apiLimiter, async (req: Request, res: Response) => {
+  const channelId = req.params.channelId as string;
+  if (!channelId || channelId.trim().length < 5) {
+    return res.status(400).json({ error: "Missing or invalid channelId parameter" });
+  }
+
+  const reqHost = `${req.protocol}://${req.get("host")}`;
+  const cacheKey = `proxy:artist:${channelId}`;
+
+  try {
+    const cached = await cacheService.get<any[]>(cacheKey);
+    if (cached && cached.length > 0) {
+      return res.json({ channelId, tracks: cached });
+    }
+
+    const proxyTracks = await musicProxyService.getArtistTopTracks(channelId);
+    if (proxyTracks.length === 0) {
+      return res.status(404).json({ error: "No tracks found for this channel", channelId });
+    }
+
+    // Format to standard Musync track schema
+    const formatted = proxyTracks.map((t) => ({
+      videoId: t.videoId,
+      id: t.videoId,
+      title: t.title,
+      song: t.title,
+      singers: t.artist,
+      artist: t.artist,
+      album: t.album,
+      image_url: t.thumbnailUrl,
+      image: t.thumbnailUrl,
+      duration: String(t.duration),
+      duration_seconds: t.duration,
+      url: `${reqHost}/stream?id=${t.videoId}`,
+      media_url: `${reqHost}/stream?id=${t.videoId}`,
+      stream_url: `${reqHost}/stream?id=${t.videoId}`
+    }));
+
+    await cacheService.set(cacheKey, formatted, 3600); // 1-hour TTL
+    res.json({ channelId, tracks: formatted });
+  } catch (error: any) {
+    console.error(`[proxy/artist] Error for ${channelId}:`, error.message);
+    res.status(500).json({ error: error.message || "Failed to fetch artist tracks", channelId });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 23. Proxy: Playlist tracks
+// Fetches and normalises tracks from a YouTube playlist ID, resolved
+// server-side via Piped → Invidious fallback.
+// ─────────────────────────────────────────────────────────────────────────────
+app.get("/api/proxy/playlist/:playlistId", apiLimiter, async (req: Request, res: Response) => {
+  const playlistId = req.params.playlistId as string;
+  if (!playlistId || playlistId.trim().length < 5) {
+    return res.status(400).json({ error: "Missing or invalid playlistId parameter" });
+  }
+
+  const reqHost = `${req.protocol}://${req.get("host")}`;
+  const cacheKey = `proxy:playlist:${playlistId}`;
+
+  try {
+    const cached = await cacheService.get<any[]>(cacheKey);
+    if (cached && cached.length > 0) {
+      return res.json({ playlistId, tracks: cached });
+    }
+
+    const proxyTracks = await musicProxyService.getPlaylistTracks(playlistId);
+    if (proxyTracks.length === 0) {
+      return res.status(404).json({ error: "No tracks found for this playlist", playlistId });
+    }
+
+    const formatted = proxyTracks.map((t) => ({
+      videoId: t.videoId,
+      id: t.videoId,
+      title: t.title,
+      song: t.title,
+      singers: t.artist,
+      artist: t.artist,
+      album: t.album,
+      image_url: t.thumbnailUrl,
+      image: t.thumbnailUrl,
+      duration: String(t.duration),
+      duration_seconds: t.duration,
+      url: `${reqHost}/stream?id=${t.videoId}`,
+      media_url: `${reqHost}/stream?id=${t.videoId}`,
+      stream_url: `${reqHost}/stream?id=${t.videoId}`
+    }));
+
+    await cacheService.set(cacheKey, formatted, 3600); // 1-hour TTL
+    res.json({ playlistId, tracks: formatted });
+  } catch (error: any) {
+    console.error(`[proxy/playlist] Error for ${playlistId}:`, error.message);
+    res.status(500).json({ error: error.message || "Failed to fetch playlist tracks", playlistId });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 24. Proxy: Stream URL resolution (informational endpoint)
+// Returns the resolved CDN audio URL JSON without proxying the bytes.
+// Useful for client-side debugging and future adaptive streaming clients.
+// ─────────────────────────────────────────────────────────────────────────────
+app.get("/api/proxy/stream-resolve", apiLimiter, async (req: Request, res: Response) => {
+  const videoId = (req.query.id || req.query.videoId) as string;
+  const quality = (req.query.quality || "low") as string;
+
+  if (!videoId || videoId.trim().length < 3) {
+    return res.status(400).json({ error: "Missing video ID parameter (?id=...)" });
+  }
+
+  try {
+    const resolution = await StreamManager.resolveStream(videoId.trim(), quality);
+    if (resolution.entry?.url) {
+      return res.json({
+        success: true,
+        videoId,
+        quality,
+        source: resolution.source,
+        ext: resolution.entry.ext,
+        format: resolution.entry.format,
+        expiresAt: resolution.entry.expiresAt
+        // NOTE: the raw CDN URL is intentionally NOT returned here to prevent
+        // client-side direct CDN calls. Clients should always use /stream?id=...
+      });
+    }
+
+    // Last-resort: try Piped stream resolution
+    const pipedUrl = await musicProxyService.resolvePipedStreamUrl(videoId.trim());
+    if (pipedUrl) {
+      return res.json({
+        success: true,
+        videoId,
+        quality,
+        source: "piped-proxy"
+      });
+    }
+
+    res.status(502).json({
+      success: false,
+      videoId,
+      error: resolution.error || "Failed to resolve audio stream"
+    });
+  } catch (error: any) {
+    console.error(`[proxy/stream-resolve] Error for ${videoId}:`, error.message);
+    res.status(500).json({ error: error.message || "Stream resolution error", videoId });
+  }
+});
 
 // Start server and handle graceful shutdown
 let server: http.Server | null = null;
